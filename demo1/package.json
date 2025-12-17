@@ -1,12 +1,17 @@
 {
   "name": "een-oauth-demo1",
-  "version": "0.1.0",
+  "displayName": "EEN OAuth Demo",
+  "version": "0.0.2",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "stop": "lsof -ti :3333 | xargs kill -9 2>/dev/null || echo 'Port 3333 is free'",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed"
   },
   "dependencies": {
     "pinia": "^3.0.4",
@@ -14,8 +19,10 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@tailwindcss/vite": "^4.1.18",
     "@vitejs/plugin-vue": "^6.0.3",
-    "autoprefixer": "^10.4.23",
+    "dotenv": "^17.2.3",
     "tailwindcss": "^4.1.18",
     "vite": "^7.3.0"
   }

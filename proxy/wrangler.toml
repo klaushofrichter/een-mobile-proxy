@@ -8,11 +8,9 @@ enabled = true
 [vars]
 ENVIRONMENT = "production"
 
-# KV Namespace - will be created on first deploy
-# Uncomment and add the ID after running: wrangler kv:namespace create "EEN_OAUTH_SESSIONS"
-# [[kv_namespaces]]
-# binding = "EEN_OAUTH_SESSIONS"
-# id = "your-namespace-id-here"
+[[kv_namespaces]]
+binding = "EEN_OAUTH_SESSIONS"
+id = "b6ac1ea749dc43669fe0696903cb39f7"
 
 # Secrets (set via wrangler secret put):
 # - CLIENT_ID

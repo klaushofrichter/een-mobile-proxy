@@ -4,7 +4,7 @@
       <!-- Header -->
       <div class="flex justify-between items-center mb-8">
         <div>
-          <h1 class="text-2xl font-bold text-gray-900">OAuth Proxy Admin</h1>
+          <h1 class="text-2xl font-bold text-gray-900">{{ appTitle }}</h1>
           <p class="text-sm text-gray-500">Logged in as {{ authStore.userProfile?.email || 'Unknown' }}</p>
         </div>
         <button
@@ -40,7 +40,7 @@
           <div v-if="loadingVersion" class="animate-pulse h-6 bg-gray-200 rounded w-3/4"></div>
           <p v-else class="text-lg font-mono text-gray-900">{{ version || 'Unknown' }}</p>
           <button
-            class="mt-4 text-sm text-primary-600 hover:text-primary-800"
+            class="mt-4 text-sm text-blue-600 hover:text-blue-800"
             @click="fetchVersion"
           >
             Refresh
@@ -53,7 +53,7 @@
           <div v-if="loadingSessions" class="animate-pulse h-6 bg-gray-200 rounded w-16"></div>
           <p v-else class="text-3xl font-bold text-gray-900">{{ sessionCount ?? '—' }}</p>
           <button
-            class="mt-4 text-sm text-primary-600 hover:text-primary-800"
+            class="mt-4 text-sm text-blue-600 hover:text-blue-800"
             @click="fetchSessionCount"
           >
             Refresh
@@ -136,7 +136,14 @@
 
       <!-- Footer -->
       <p class="mt-8 text-center text-xs text-gray-500">
-        Admin App v{{ appVersion }}
+        <a
+          href="https://github.com/klaushofrichter/een-oauth-proxy/tree/develop"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="hover:text-blue-600 hover:underline"
+        >
+          v{{ appVersion }}
+        </a>
       </p>
     </div>
   </div>
@@ -164,6 +171,7 @@ const error = ref(null)
 const successMessage = ref(null)
 const showConfirmModal = ref(false)
 
+const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
 
 // Fetch proxy version
@@ -277,7 +285,7 @@ async function fetchUserProfile() {
 }
 
 onMounted(async () => {
-  document.title = 'EEN OAuth Admin - Dashboard'
+  document.title = `${appTitle.value} - Dashboard`
 
   // Fetch data in parallel
   await Promise.all([

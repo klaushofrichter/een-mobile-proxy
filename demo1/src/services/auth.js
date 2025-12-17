@@ -99,15 +99,25 @@ export async function handleAuthCallback(code) {
   authStore.setRefreshToken('present')
 
   if (data.httpsBaseUrl) {
-    // Parse httpsBaseUrl to extract hostname and port
-    try {
-      const url = new URL(data.httpsBaseUrl)
+    // httpsBaseUrl can be either a string URL or an object with hostname/port
+    if (typeof data.httpsBaseUrl === 'string') {
+      // Parse string URL to extract hostname and port
+      try {
+        const url = new URL(data.httpsBaseUrl)
+        authStore.setBaseUrl({
+          hostname: url.hostname,
+          port: url.port ? parseInt(url.port, 10) : 443
+        })
+      } catch (e) {
+        // If URL parsing fails, assume it's just a hostname
+        authStore.setBaseUrl({ hostname: data.httpsBaseUrl })
+      }
+    } else if (typeof data.httpsBaseUrl === 'object' && data.httpsBaseUrl !== null) {
+      // Already an object with hostname and possibly port
       authStore.setBaseUrl({
-        hostname: url.hostname,
-        port: url.port ? parseInt(url.port, 10) : 443
+        hostname: data.httpsBaseUrl.hostname || data.httpsBaseUrl.host,
+        port: data.httpsBaseUrl.port ? parseInt(data.httpsBaseUrl.port, 10) : 443
       })
-    } catch (e) {
-      authStore.setBaseUrl({ hostname: data.httpsBaseUrl })
     }
   }
 

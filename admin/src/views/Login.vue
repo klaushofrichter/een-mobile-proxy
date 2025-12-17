@@ -2,12 +2,12 @@
   <div class="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
     <div class="max-w-md w-full space-y-8">
       <div class="text-center">
-        <h1 class="text-3xl font-bold text-gray-900">EEN OAuth Admin</h1>
+        <h1 class="text-3xl font-bold text-gray-900">{{ appTitle }}</h1>
         <p class="mt-2 text-gray-600">Sign in to manage the OAuth proxy</p>
       </div>
 
       <div v-if="isProcessingCallback" class="text-center py-8">
-        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         <p class="mt-4 text-gray-600">Processing authentication...</p>
       </div>
 
@@ -22,6 +22,11 @@
       </div>
 
       <div v-else class="bg-white shadow rounded-lg p-8 space-y-6">
+        <p class="text-sm text-gray-600 text-center">
+          Click the button below to sign in. You will be redirected to Eagle Eye Networks
+          where you can enter your email and password.
+        </p>
+
         <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p class="text-sm text-yellow-700">
             Admin access is restricted to authorized users only.
@@ -30,7 +35,7 @@
         </div>
 
         <button
-          class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           @click="handleLogin"
         >
           Sign in with Eagle Eye Networks
@@ -38,7 +43,14 @@
       </div>
 
       <p class="text-center text-xs text-gray-500">
-        v{{ appVersion }}
+        <a
+          href="https://github.com/klaushofrichter/een-oauth-proxy/tree/develop"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="hover:text-blue-600 hover:underline"
+        >
+          v{{ appVersion }}
+        </a>
       </p>
     </div>
   </div>
@@ -58,6 +70,7 @@ const authStore = useAuthStore()
 const isProcessingCallback = ref(false)
 const error = ref(null)
 
+const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
 
 function handleLogin() {
@@ -65,6 +78,9 @@ function handleLogin() {
 }
 
 onMounted(async () => {
+  // Set browser tab title
+  document.title = appTitle.value
+
   // Check if this is an OAuth callback
   const code = route.query.code
 

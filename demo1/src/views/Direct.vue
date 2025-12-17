@@ -21,7 +21,7 @@
             type="password"
             required
             autocomplete="off"
-            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             placeholder="Enter your access token"
           />
         </div>
@@ -36,7 +36,7 @@
               v-model="hostname"
               type="text"
               required
-              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               placeholder="api.c021.eagleeyenetworks.com"
             />
           </div>
@@ -49,7 +49,7 @@
               v-model.number="port"
               type="number"
               required
-              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               placeholder="443"
             />
           </div>
@@ -58,7 +58,7 @@
         <div class="flex space-x-4">
           <button
             type="button"
-            class="flex-1 py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            class="flex-1 py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             @click="router.push('/')"
           >
             Back to Login
@@ -66,7 +66,7 @@
           <button
             type="submit"
             :disabled="isLoading"
-            class="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+            class="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
           >
             <span v-if="isLoading" class="flex items-center justify-center">
               <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
@@ -81,14 +81,21 @@
       </form>
 
       <p class="text-center text-xs text-gray-500">
-        v{{ appVersion }}
+        <a
+          href="https://github.com/klaushofrichter/een-oauth-proxy/tree/develop"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="hover:text-blue-600 hover:underline"
+        >
+          v{{ appVersion }}
+        </a>
       </p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getUserProfile } from '../services/user'
@@ -103,7 +110,12 @@ const port = ref(443)
 const error = ref(null)
 const isLoading = ref(false)
 
+const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
+
+onMounted(() => {
+  document.title = `${appTitle.value} - Direct Access`
+})
 
 async function handleSubmit() {
   if (!token.value || !hostname.value || !port.value) {

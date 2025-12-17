@@ -84,20 +84,28 @@ cd admin && npm install && cd ..
 
 Each subfolder has its own `.env.example` file. Copy and configure each one:
 
-**Proxy (`./proxy/.env`):**
+**Proxy (`./proxy`):**
+
+The proxy uses two different files for environment variables:
+- `.dev.vars` - Used by `wrangler dev` for local development
+- `.env` - Used by `scripts/deploy.js` for production deployment
+
+For local development:
 ```bash
 cd proxy
-cp .env.example .env
+cp .dev.vars.example .dev.vars
 ```
 
-Edit `proxy/.env`:
+Edit `proxy/.dev.vars`:
 ```env
 CLIENT_ID=your-een-client-id
 CLIENT_SECRET=your-een-client-secret
 ADMIN_EMAILS=admin@example.com
-ALLOWED_ORIGINS=https://klaushofrichter.github.io,http://localhost:5173
+ALLOWED_ORIGINS=https://klaushofrichter.github.io
 ENVIRONMENT=development
 ```
+
+For production deployment, also create `proxy/.env` with the same values (used by the deploy script to set Cloudflare secrets).
 
 **Demo App (`./demo1/.env`):**
 ```bash
@@ -133,15 +141,20 @@ The proxy uses Cloudflare KV to store session data. Create a namespace:
 
 ```bash
 cd proxy
-npx wrangler kv:namespace create "EEN_OAUTH_SESSIONS"
+npx wrangler kv namespace create EEN_OAUTH_SESSIONS
 ```
 
 This will output something like:
 ```
-{ binding = "EEN_OAUTH_SESSIONS", id = "abcd1234..." }
+🌀 Creating namespace with title "EEN_OAUTH_SESSIONS"
+✨ Success!
+To access your new KV Namespace in your Worker, add the following snippet to your configuration file:
+[[kv_namespaces]]
+binding = "EEN_OAUTH_SESSIONS"
+id = "b6ac1ea749dc43669fe0696903cb39f7"
 ```
 
-Update `proxy/wrangler.toml` with the namespace ID:
+Update `proxy/wrangler.toml` with the namespace ID from the output:
 ```toml
 [[kv_namespaces]]
 binding = "EEN_OAUTH_SESSIONS"
@@ -150,7 +163,9 @@ id = "abcd1234..."  # Use your actual ID
 
 ### Step 4: Run Locally
 
-Open three terminal windows:
+> **Note:** The Demo and Admin apps both use port 3333 to match the EEN OAuth redirect URI configuration. They **cannot run simultaneously** on the same machine. To test both locally, run one app locally and access the other via the hosted GitHub Pages version.
+
+Open two terminal windows:
 
 **Terminal 1 - Proxy (port 8787):**
 ```bash
@@ -158,22 +173,28 @@ cd proxy
 npm run dev
 ```
 
-**Terminal 2 - Demo App (port 5173):**
+**Terminal 2 - Demo App OR Admin App (port 3333):**
 ```bash
+# Run demo app
 cd demo1
 npm run dev
-```
 
-**Terminal 3 - Admin App (port 5174):**
-```bash
+# OR run admin app (stop demo first with: npm run stop)
 cd admin
 npm run dev
 ```
 
 Now you can access:
-- Demo App: http://localhost:5173
-- Admin App: http://localhost:5174
+- Local App: http://127.0.0.1:3333
 - Proxy: http://localhost:8787
+- Hosted Demo: https://klaushofrichter.github.io/een-oauth-proxy/demo1/
+- Hosted Admin: https://klaushofrichter.github.io/een-oauth-proxy/admin/
+
+To switch between apps locally:
+```bash
+cd demo1 && npm run stop   # Stop current app on port 3333
+cd admin && npm run dev    # Start the other app
+```
 
 ### Step 5: Run Tests
 
@@ -233,6 +254,8 @@ Or directly:
 
 ### Proxy Environment Variables
 
+**Note:** The proxy does NOT use the `VITE_` prefix because it's a Cloudflare Worker (not a Vite app). Wrangler reads these directly.
+
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `CLIENT_ID` | EEN OAuth Client ID | `PREVIEW-KLAUS-MOBILE` |
@@ -240,6 +263,10 @@ Or directly:
 | `ADMIN_EMAILS` | Comma-separated admin emails | `admin@example.com` |
 | `ALLOWED_ORIGINS` | Comma-separated CORS origins | `https://example.com` |
 | `ENVIRONMENT` | `development` or `production` | `development` |
+
+**Files:**
+- `proxy/.dev.vars` - Local development (used by `wrangler dev`)
+- `proxy/.env` - Production deployment (used by `scripts/deploy.js`)
 
 ### App Environment Variables
 
@@ -296,7 +323,7 @@ For example, if you modify files in `proxy/`, the `proxy/package.json` version w
 - The email must match exactly (case-insensitive)
 
 ### KV namespace not found
-- Run `npx wrangler kv:namespace create "EEN_OAUTH_SESSIONS"`
+- Run `npx wrangler kv namespace create EEN_OAUTH_SESSIONS`
 - Update `wrangler.toml` with the namespace ID
 
 ### OAuth callback fails

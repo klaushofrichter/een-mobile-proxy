@@ -3,7 +3,7 @@
     <div class="max-w-3xl mx-auto">
       <!-- Loading state -->
       <div v-if="loading && !userProfile" class="bg-white shadow rounded-lg p-8 text-center">
-        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         <p class="mt-4 text-gray-600">Loading your profile...</p>
       </div>
 
@@ -11,7 +11,7 @@
       <div v-else-if="error" class="bg-white shadow rounded-lg p-8 text-center">
         <p class="text-red-600">{{ error }}</p>
         <button
-          class="mt-4 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+          class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           @click="fetchUserProfile"
         >
           Retry
@@ -20,6 +20,19 @@
 
       <!-- Profile content -->
       <div v-else class="space-y-6">
+        <!-- Header row with title and version -->
+        <div class="flex justify-between items-center">
+          <h1 class="text-2xl font-bold text-gray-900">{{ appTitle }}</h1>
+          <a
+            href="https://github.com/klaushofrichter/een-oauth-proxy/tree/develop"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-sm text-gray-500 hover:text-blue-600 hover:underline"
+          >
+            v{{ appVersion }}
+          </a>
+        </div>
+
         <!-- User Profile Card -->
         <div class="bg-white shadow rounded-lg overflow-hidden">
           <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
@@ -65,7 +78,7 @@
                 class="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-sm"
               />
               <button
-                class="px-3 py-2 bg-primary-600 text-white text-sm rounded-md hover:bg-primary-700"
+                class="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
                 @click="copyToClipboard(authStore.hostname)"
               >
                 Copy
@@ -92,7 +105,7 @@
                 class="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-sm font-mono"
               />
               <button
-                class="px-3 py-2 bg-primary-600 text-white text-sm rounded-md hover:bg-primary-700"
+                class="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
                 @click="toggleAndCopyToken"
               >
                 {{ showToken ? 'Hide' : 'Show & Copy' }}
@@ -118,7 +131,7 @@
               <button
                 v-if="authStore.refreshTokenMarker"
                 :disabled="isRefreshing"
-                class="px-3 py-2 bg-primary-600 text-white text-sm rounded-md hover:bg-primary-700 disabled:opacity-50"
+                class="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
                 @click="handleRefresh"
               >
                 {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
@@ -129,8 +142,7 @@
 
         <!-- Actions Card -->
         <div class="bg-white shadow rounded-lg overflow-hidden">
-          <div class="px-4 py-5 sm:p-6 flex justify-between items-center">
-            <span class="text-sm text-gray-500">v{{ appVersion }}</span>
+          <div class="px-4 py-5 sm:p-6 flex justify-end">
             <button
               :disabled="isLoggingOut"
               class="px-4 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 disabled:opacity-50"
@@ -166,6 +178,7 @@ const forceUpdate = ref(0)
 let expirationInterval = null
 
 const userProfile = computed(() => authStore.userProfile)
+const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
 
 const tokenExpirationText = computed(() => {
@@ -279,7 +292,7 @@ async function handleLogout() {
 }
 
 onMounted(async () => {
-  document.title = 'EEN OAuth Demo - Profile'
+  document.title = `${appTitle.value} - Profile`
   await fetchUserProfile()
 
   // Update expiration display every second

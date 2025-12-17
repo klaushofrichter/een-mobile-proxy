@@ -73,7 +73,7 @@ const wranglerToml = readFileSync(join(projectRoot, 'wrangler.toml'), 'utf-8')
 if (!wranglerToml.includes('id = "') || wranglerToml.includes('# id = "')) {
   console.log('KV namespace not configured. Creating...')
 
-  const output = runSilent('npx wrangler kv:namespace create "EEN_OAUTH_SESSIONS"')
+  const output = runSilent('npx wrangler kv namespace create EEN_OAUTH_SESSIONS')
   if (output) {
     // Extract namespace ID from output
     const match = output.match(/id = "([^"]+)"/)
@@ -129,7 +129,7 @@ if (namespaceMatch) {
   const namespaceId = namespaceMatch[1]
   try {
     execSync(
-      `npx wrangler kv:key put --namespace-id="${namespaceId}" "DEPLOY_VERSION" "${versionString}"`,
+      `npx wrangler kv key put DEPLOY_VERSION "${versionString}" --namespace-id="${namespaceId}"`,
       {
         cwd: projectRoot,
         stdio: 'inherit'

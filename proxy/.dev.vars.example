@@ -1,0 +1,17 @@
+# EEN OAuth Proxy - Local Development Secrets
+# Copy this file to .dev.vars for local development with wrangler dev
+# This file is used by: npm run dev (wrangler dev)
+
+# EEN OAuth Credentials
+CLIENT_ID=your-een-client-id
+CLIENT_SECRET=your-een-client-secret
+
+# Admin users (comma-separated email addresses)
+ADMIN_EMAILS=admin@example.com
+
+# Allowed CORS origins (comma-separated URLs)
+# Note: localhost is automatically allowed in development mode
+ALLOWED_ORIGINS=https://klaushofrichter.github.io
+
+# Environment
+ENVIRONMENT=development

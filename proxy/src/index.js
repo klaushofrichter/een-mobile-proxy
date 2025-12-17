@@ -458,10 +458,8 @@ function validateOrigin(origin, env) {
   // In development, also allow localhost
   if (env.ENVIRONMENT === 'development') {
     allowedOrigins.push(
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      'http://localhost:3000',
-      'http://127.0.0.1:3000'
+      'http://localhost:3333',
+      'http://127.0.0.1:3333'
     )
   }
 
