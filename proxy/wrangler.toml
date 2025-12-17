@@ -1,0 +1,21 @@
+name = "een-oauth-proxy"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+[observability.logs]
+enabled = true
+
+[vars]
+ENVIRONMENT = "production"
+
+# KV Namespace - will be created on first deploy
+# Uncomment and add the ID after running: wrangler kv:namespace create "EEN_OAUTH_SESSIONS"
+# [[kv_namespaces]]
+# binding = "EEN_OAUTH_SESSIONS"
+# id = "your-namespace-id-here"
+
+# Secrets (set via wrangler secret put):
+# - CLIENT_ID
+# - CLIENT_SECRET
+# - ADMIN_EMAILS
+# - ALLOWED_ORIGINS

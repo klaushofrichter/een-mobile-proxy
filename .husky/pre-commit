@@ -1,0 +1,33 @@
+#!/bin/sh
+
+# Pre-commit hook to increment version in subfolders with staged changes
+
+increment_version() {
+    local folder=$1
+    local package_json="$folder/package.json"
+
+    if [ -f "$package_json" ]; then
+        echo "Incrementing version in $folder..."
+        cd "$folder"
+        npm version patch --no-git-tag-version
+        cd - > /dev/null
+        git add "$package_json"
+    fi
+}
+
+# Check if proxy folder has staged changes
+if git diff --cached --name-only | grep -q "^proxy/"; then
+    increment_version "proxy"
+fi
+
+# Check if demo1 folder has staged changes
+if git diff --cached --name-only | grep -q "^demo1/"; then
+    increment_version "demo1"
+fi
+
+# Check if admin folder has staged changes
+if git diff --cached --name-only | grep -q "^admin/"; then
+    increment_version "admin"
+fi
+
+exit 0

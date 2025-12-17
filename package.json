@@ -1,0 +1,15 @@
+{
+  "name": "een-oauth-proxy-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "EEN OAuth Proxy - Monorepo root",
+  "scripts": {
+    "prepare": "husky",
+    "deploy:pages": "./scripts/deploy-pages.sh",
+    "deploy:proxy": "cd proxy && npm run deploy"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0",
+    "husky": "^9.1.7"
+  }
+}
