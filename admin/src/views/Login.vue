@@ -61,6 +61,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getAuthUrl, handleAuthCallback } from '../services/auth'
+import { verifyAdminAccess } from '../services/admin'
 import packageJson from '../../package.json'
 
 const route = useRoute()
@@ -91,6 +92,17 @@ onMounted(async () => {
     try {
       await handleAuthCallback(code)
 
+      // Verify user has admin access before allowing dashboard access
+      const isAdmin = await verifyAdminAccess()
+      if (!isAdmin) {
+        // User authenticated but not an admin - clear auth state and show error
+        await authStore.logout()
+        error.value = 'Admin access required. Your email is not in the admin list.'
+        isProcessingCallback.value = false
+        router.replace({ path: '/' })
+        return
+      }
+
       // Redirect to dashboard
       router.replace({ path: '/dashboard' })
     } catch (e) {
@@ -102,8 +114,19 @@ onMounted(async () => {
       router.replace({ path: '/' })
     }
   } else if (authStore.isAuthenticated) {
-    // Already authenticated, redirect to dashboard
-    router.replace({ path: '/dashboard' })
+    // Already authenticated, verify still has admin access
+    try {
+      const isAdmin = await verifyAdminAccess()
+      if (!isAdmin) {
+        await authStore.logout()
+        error.value = 'Admin access required. Your email is not in the admin list.'
+        return
+      }
+      router.replace({ path: '/dashboard' })
+    } catch (e) {
+      // If verification fails, clear auth and stay on login
+      await authStore.logout()
+    }
   }
 })
 </script>

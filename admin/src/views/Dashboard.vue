@@ -8,7 +8,12 @@
           <p class="text-sm text-gray-500">Logged in as {{ authStore.userProfile?.email || 'Unknown' }}</p>
         </div>
         <div class="flex items-center space-x-4">
-          <span class="text-xs text-gray-400">Admin v{{ appVersion }}</span>
+          <a
+            href="https://github.com/klaushofrichter/een-oauth-proxy/tree/develop"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-xs text-gray-400 hover:text-blue-600 hover:underline"
+          >Admin v{{ appVersion }}</a>
           <button
             :disabled="isLoggingOut"
             class="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 disabled:opacity-50"

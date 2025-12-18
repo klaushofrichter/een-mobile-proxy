@@ -184,4 +184,37 @@ test.describe('Admin Login and Health', () => {
 
     console.log('\n✅ Wrong password test completed!\n')
   })
+
+  test('should reject non-admin users with proper error message', async ({ page }) => {
+    console.log('\n▶️ Running Test: Non-admin user rejection\n')
+    test.setTimeout(MAX_TEST_TIMEOUT * 2)
+
+    // Check if non-admin credentials are configured
+    const { hasNonAdminCredentials, attemptNonAdminLogin } = await import('./utils.js')
+    if (!hasNonAdminCredentials()) {
+      console.log('⚠️ SKIPPING: TEST_NON_ADMIN_USER and TEST_NON_ADMIN_PASSWORD not configured')
+      console.log('To run this test, add non-admin credentials to .env')
+      test.skip()
+      return
+    }
+
+    // Attempt login with non-admin user
+    const wasRejected = await attemptNonAdminLogin(page)
+
+    // Verify user was properly rejected
+    expect(wasRejected).toBe(true)
+
+    // Verify error message is displayed
+    const errorMessage = page.locator('.bg-red-50')
+    await expect(errorMessage).toBeVisible()
+    const errorText = await errorMessage.textContent()
+    expect(errorText.toLowerCase()).toContain('admin')
+    console.log('✅ Non-admin rejection error message displayed')
+
+    // Verify user is NOT on dashboard
+    expect(page.url()).not.toContain('/dashboard')
+    console.log('✅ Non-admin user cannot access dashboard')
+
+    console.log('\n✅ Non-admin user rejection test completed!\n')
+  })
 })

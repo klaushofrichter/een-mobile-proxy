@@ -26,16 +26,45 @@ export function isLocalProxy() {
 }
 
 /**
- * Get test credentials from environment
+ * Get admin test credentials from environment
+ * @returns {{ username: string, password: string }}
+ */
+export function getAdminCredentials() {
+  const username = process.env.ADMIN_TEST_USER
+  const password = process.env.ADMIN_TEST_PASSWORD
+  if (!username || !password) {
+    throw new Error('ADMIN_TEST_USER and ADMIN_TEST_PASSWORD must be set in .env')
+  }
+  return { username, password }
+}
+
+/**
+ * Get test credentials from environment (for backwards compatibility, returns admin credentials)
  * @returns {{ username: string, password: string }}
  */
 export function getTestCredentials() {
+  return getAdminCredentials()
+}
+
+/**
+ * Get non-admin test credentials from environment
+ * @returns {{ username: string, password: string } | null} Returns null if not configured
+ */
+export function getNonAdminCredentials() {
   const username = process.env.TEST_USER
   const password = process.env.TEST_PASSWORD
   if (!username || !password) {
-    throw new Error('TEST_USER and TEST_PASSWORD must be set in .env')
+    return null
   }
   return { username, password }
+}
+
+/**
+ * Check if non-admin test credentials are configured
+ * @returns {boolean}
+ */
+export function hasNonAdminCredentials() {
+  return getNonAdminCredentials() !== null
 }
 
 /**
@@ -51,12 +80,14 @@ export async function navigateToLogin(page) {
  * Handles the EEN OAuth login flow
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {string} [customPassword] - Optional custom password (for wrong password tests)
+ * @param {{ username: string, password: string }} [credentials] - Optional custom credentials
  */
-export async function loginWithEEN(page, customPassword = null) {
+export async function loginWithEEN(page, customPassword = null, credentials = null) {
   console.log('🔑 Starting EEN OAuth login')
 
-  const { username, password } = getTestCredentials()
-  const passwordToUse = customPassword !== null ? customPassword : password
+  const creds = credentials || getTestCredentials()
+  const username = creds.username
+  const passwordToUse = customPassword !== null ? customPassword : creds.password
 
   // Wait for redirect to EEN
   await page.waitForURL(/.*eagleeyenetworks.com.*/, { timeout: 15000 })
@@ -260,4 +291,56 @@ export async function dismissErrors(page) {
     await dismissButton.click()
     await page.waitForTimeout(500)
   }
+}
+
+/**
+ * Attempt to login as a non-admin user and verify rejection
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @returns {Promise<boolean>} true if user was properly rejected
+ */
+export async function attemptNonAdminLogin(page) {
+  const nonAdminCreds = getNonAdminCredentials()
+  if (!nonAdminCreds) {
+    throw new Error('TEST_NON_ADMIN_USER and TEST_NON_ADMIN_PASSWORD must be set in .env')
+  }
+
+  console.log('🔑 Attempting login as non-admin user')
+
+  // Navigate to login page
+  await navigateToLogin(page)
+
+  // Click sign in button
+  const loginButton = page.getByRole('button', { name: 'Sign in with Eagle Eye Networks' })
+  await loginButton.click()
+  console.log('👆 Clicked Sign in button')
+
+  // Complete EEN OAuth flow with non-admin credentials
+  await loginWithEEN(page, null, nonAdminCreds)
+
+  // Wait for the app to process the callback
+  // Should NOT redirect to dashboard, should stay on login with error
+  await page.waitForTimeout(5000)
+
+  // Check if we're on login page with an error
+  const currentUrl = page.url()
+  const onLoginPage = currentUrl === 'http://127.0.0.1:3333/' || currentUrl.endsWith('/')
+  const errorMessage = page.locator('.bg-red-50')
+  const hasError = await errorMessage.isVisible().catch(() => false)
+  const errorText = hasError ? await errorMessage.textContent() : ''
+
+  console.log(`📋 Current URL: ${currentUrl}`)
+  console.log(`📋 On login page: ${onLoginPage}`)
+  console.log(`📋 Has error: ${hasError}`)
+  console.log(`📋 Error text: ${errorText}`)
+
+  // User should be rejected - on login page with admin access error
+  const properlyRejected = onLoginPage && hasError && errorText.toLowerCase().includes('admin')
+
+  if (properlyRejected) {
+    console.log('✅ Non-admin user properly rejected')
+  } else if (currentUrl.includes('/dashboard')) {
+    console.log('❌ Non-admin user was able to access dashboard!')
+  }
+
+  return properlyRejected
 }

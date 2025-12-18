@@ -12,6 +12,32 @@ export function getProxyUrl() {
 }
 
 /**
+ * Verify current user has admin access
+ * @returns {Promise<boolean>} true if user is admin, false otherwise
+ * @throws {Error} if authentication failed or other error
+ */
+export async function verifyAdminAccess() {
+  const response = await fetch(`${PROXY_URL}/admin/version`, {
+    credentials: 'include'
+  })
+
+  if (response.status === 403) {
+    // User is authenticated but not an admin
+    return false
+  }
+
+  if (response.status === 401) {
+    throw new Error('Authentication required')
+  }
+
+  if (!response.ok) {
+    throw new Error('Failed to verify admin access')
+  }
+
+  return true
+}
+
+/**
  * Check proxy health (public endpoint, no auth required)
  */
 export async function getHealth() {
