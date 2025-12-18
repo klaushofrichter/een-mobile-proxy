@@ -453,6 +453,22 @@ For example, if you modify files in `proxy/`, the `proxy/package.json` version w
 - **Admin endpoints** require email verification against allowlist
 - **Automatic token expiration** via KV TTL
 
+### Token Lifecycle
+
+**Token Refresh (`/proxy/refreshAccessToken`):**
+- Issues a new access token using the stored refresh token
+- Does **NOT** invalidate existing access tokens
+- Both old and new access tokens remain valid until their natural expiration
+- This is standard OAuth 2.0 behavior - access tokens are stateless JWTs
+
+**Token Revocation (`/proxy/revoke`):**
+- Revokes the refresh token at EEN's OAuth server
+- Clears the server-side session from KV storage
+- EEN may invalidate associated access tokens upon refresh token revocation
+- After revocation, users cannot refresh tokens or obtain new access tokens
+
+**Important:** Access tokens are short-lived (typically 1 hour) and validated directly by EEN's API. The proxy does not track or validate access tokens - it only manages refresh tokens server-side.
+
 ## Troubleshooting
 
 ### "Forbidden: Invalid origin" error

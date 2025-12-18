@@ -88,18 +88,20 @@ section "Step 1: Starting Proxy"
 
 cd "$ROOT_DIR/proxy"
 
-# Check if proxy is already running
+# Stop any existing proxy to ensure fresh state
 if curl -s "http://localhost:8787/health" > /dev/null 2>&1; then
-    echo -e "${YELLOW}Proxy is already running on port 8787${NC}"
-else
-    echo "Starting proxy..."
-    npm run dev > /dev/null 2>&1 &
-    PROXY_STARTED=true
+    echo -e "${YELLOW}Stopping existing proxy on port 8787...${NC}"
+    lsof -ti :8787 | xargs kill -9 2>/dev/null || true
+    sleep 1
+fi
 
-    if ! wait_for_service "http://localhost:8787/health" "Proxy"; then
-        echo -e "${RED}Failed to start proxy${NC}"
-        exit 1
-    fi
+echo "Starting proxy..."
+npm run dev > /dev/null 2>&1 &
+PROXY_STARTED=true
+
+if ! wait_for_service "http://localhost:8787/health" "Proxy"; then
+    echo -e "${RED}Failed to start proxy${NC}"
+    exit 1
 fi
 
 #
