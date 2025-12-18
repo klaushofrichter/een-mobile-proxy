@@ -9,6 +9,8 @@
  *   POST /proxy/refreshAccessToken - Refresh access token using stored refresh token
  *   POST /proxy/revoke             - Revoke tokens and clear session
  *
+ *   GET    /health                 - Health check (public, no auth required)
+ *
  *   GET    /admin/version          - Get proxy version and deploy time
  *   GET    /admin/sessionsCount    - Count active sessions
  *   DELETE /admin/removeSessions   - Remove all sessions except current
@@ -18,7 +20,6 @@
 // EEN OAuth endpoints
 const EEN_TOKEN_URL = 'https://auth.eagleeyenetworks.com/oauth2/token'
 const EEN_REVOKE_URL = 'https://auth.eagleeyenetworks.com/oauth2/revoke'
-const EEN_USER_URL = 'https://api.eagleeyenetworks.com/api/v3.0/users/self'
 
 /**
  * Main request handler
@@ -85,9 +86,9 @@ async function routeRequest(url, request, env) {
     return handleAdminRevokeAll(request, env)
   }
 
-  // Health check
+  // Health check (public endpoint, no auth required)
   if (path === '/health' && request.method === 'GET') {
-    return jsonResponse({ status: 'ok' })
+    return handleHealth(env)
   }
 
   return new Response('Not Found', { status: 404 })
@@ -133,17 +134,36 @@ async function handleGetAccessToken(url, request, env) {
   const tokens = await tokenResponse.json()
 
   // Fetch user profile to get email for admin verification
+  // Use the httpsBaseUrl from token response (regional endpoint)
+  // httpsBaseUrl can be a string URL or an object {hostname, port}
   let userEmail = null
   try {
-    const userResponse = await fetch(EEN_USER_URL, {
+    let baseUrl = 'https://api.eagleeyenetworks.com'
+    if (tokens.httpsBaseUrl) {
+      if (typeof tokens.httpsBaseUrl === 'string') {
+        baseUrl = tokens.httpsBaseUrl
+      } else if (typeof tokens.httpsBaseUrl === 'object') {
+        // Handle object format: {hostname: "c001.eagleeyenetworks.com", port: 443}
+        const host = tokens.httpsBaseUrl.hostname || tokens.httpsBaseUrl.host
+        const port = tokens.httpsBaseUrl.port
+        baseUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
+      }
+    }
+    console.log('Fetching user profile from:', `${baseUrl}/api/v3.0/users/self`)
+    const userResponse = await fetch(`${baseUrl}/api/v3.0/users/self`, {
       headers: {
         Authorization: `Bearer ${tokens.access_token}`,
         Accept: 'application/json'
       }
     })
+    console.log('User profile response status:', userResponse.status)
     if (userResponse.ok) {
       const userData = await userResponse.json()
+      console.log('User data received, email:', userData.email)
       userEmail = userData.email
+    } else {
+      const errorText = await userResponse.text()
+      console.error('User profile fetch failed:', userResponse.status, errorText)
     }
   } catch (e) {
     console.error('Failed to fetch user email:', e)
@@ -167,7 +187,8 @@ async function handleGetAccessToken(url, request, env) {
   const responseData = {
     accessToken: tokens.access_token,
     expiresIn: tokens.expires_in,
-    httpsBaseUrl: tokens.httpsBaseUrl
+    httpsBaseUrl: tokens.httpsBaseUrl,
+    userEmail: userEmail  // Include email so frontend knows who's logged in
   }
 
   const response = jsonResponse(responseData)
@@ -282,6 +303,34 @@ async function handleRevoke(request, env) {
   )
 
   return response
+}
+
+// ============================================================================
+// Health Check Handler
+// ============================================================================
+
+/**
+ * Health check endpoint (public, no auth required)
+ * GET /health
+ */
+async function handleHealth(env) {
+  // Get version from KV if available, otherwise return package version
+  let version = 'unknown'
+  try {
+    const deployVersion = await env.EEN_OAUTH_SESSIONS.get('DEPLOY_VERSION')
+    if (deployVersion) {
+      version = deployVersion
+    }
+  } catch (e) {
+    // KV might not be available in some contexts
+    console.error('Failed to get version from KV:', e)
+  }
+
+  return jsonResponse({
+    status: 'ok',
+    version: version,
+    timestamp: new Date().toISOString()
+  })
 }
 
 // ============================================================================
@@ -546,6 +595,7 @@ function isAdminUser(userEmail, env) {
 
 /**
  * Check admin access for a request
+ * If userEmail is missing, attempts to fetch it from EEN API
  */
 async function checkAdminAccess(request, env) {
   const sessionId = getSessionIdFromCookie(request)
@@ -558,7 +608,66 @@ async function checkAdminAccess(request, env) {
     return { error: 'Session expired or invalid', status: 401 }
   }
 
-  const sessionData = JSON.parse(sessionDataStr)
+  let sessionData = JSON.parse(sessionDataStr)
+
+  // If userEmail is missing, try to fetch it from EEN
+  if (!sessionData.userEmail && sessionData.refreshToken) {
+    console.log('userEmail missing, fetching from EEN...')
+    try {
+      // First refresh to get access token and baseUrl
+      const tokenResponse = await fetch(EEN_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Basic ${btoa(`${env.CLIENT_ID}:${env.CLIENT_SECRET}`)}`
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: sessionData.refreshToken
+        })
+      })
+
+      if (tokenResponse.ok) {
+        const tokens = await tokenResponse.json()
+
+        // Parse httpsBaseUrl - can be string or object {hostname, port}
+        let baseUrl = 'https://api.eagleeyenetworks.com'
+        if (tokens.httpsBaseUrl) {
+          if (typeof tokens.httpsBaseUrl === 'string') {
+            baseUrl = tokens.httpsBaseUrl
+          } else if (typeof tokens.httpsBaseUrl === 'object') {
+            const host = tokens.httpsBaseUrl.hostname || tokens.httpsBaseUrl.host
+            const port = tokens.httpsBaseUrl.port
+            baseUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
+          }
+        }
+        console.log('On-demand fetch: using baseUrl:', baseUrl)
+
+        // Fetch user profile
+        const userResponse = await fetch(`${baseUrl}/api/v3.0/users/self`, {
+          headers: {
+            Authorization: `Bearer ${tokens.access_token}`,
+            Accept: 'application/json'
+          }
+        })
+
+        if (userResponse.ok) {
+          const userData = await userResponse.json()
+          console.log('Fetched user email on-demand:', userData.email)
+
+          // Update session with email
+          sessionData.userEmail = userData.email
+          sessionData.refreshToken = tokens.refresh_token || sessionData.refreshToken
+          await env.EEN_OAUTH_SESSIONS.put(sessionId, JSON.stringify(sessionData), {
+            expirationTtl: 86400 * 2  // 2 days
+          })
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch user email on-demand:', e)
+    }
+  }
+
   if (!isAdminUser(sessionData.userEmail, env)) {
     return { error: 'Admin access required', status: 403 }
   }

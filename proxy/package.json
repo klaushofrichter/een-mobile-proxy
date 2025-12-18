@@ -9,6 +9,7 @@
     "deploy": "node scripts/deploy.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:perf": "vitest run test/performance.test.js",
     "prepare": "cd .. && husky proxy/.husky"
   },
   "devDependencies": {

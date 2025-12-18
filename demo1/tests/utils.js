@@ -17,21 +17,29 @@ export async function navigateToLogin(page) {
 }
 
 /**
- * Handles the EEN OAuth login flow
- * @param {import('@playwright/test').Page} page - Playwright page object
+ * Get test credentials from environment
+ * @returns {{ username: string, password: string }}
  */
-export async function loginWithEEN(page) {
-  console.log('🔑 Starting EEN OAuth login')
-
-  // Load environment variables
+export function getTestCredentials() {
   dotenv.config()
-
   const username = process.env.TEST_USER
   const password = process.env.TEST_PASSWORD
-
   if (!username || !password) {
     throw new Error('TEST_USER and TEST_PASSWORD must be set in .env')
   }
+  return { username, password }
+}
+
+/**
+ * Handles the EEN OAuth login flow
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {string} [customPassword] - Optional custom password (for wrong password tests)
+ */
+export async function loginWithEEN(page, customPassword = null) {
+  console.log('🔑 Starting EEN OAuth login')
+
+  const { username, password } = getTestCredentials()
+  const passwordToUse = customPassword !== null ? customPassword : password
 
   // Wait for redirect to EEN
   await page.waitForURL(/.*eagleeyenetworks.com.*/, { timeout: 15000 })
@@ -49,7 +57,7 @@ export async function loginWithEEN(page) {
   // Fill password
   const passwordInput = page.locator('#authentication--input__password')
   await passwordInput.waitFor({ state: 'visible', timeout: 10000 })
-  await passwordInput.fill(password)
+  await passwordInput.fill(passwordToUse)
   console.log('🔒 Entered password')
 
   // Click sign in
@@ -101,4 +109,102 @@ export async function logoutFromApplication(page) {
   await page.waitForURL('/', { timeout: 15000 })
   await expect(page.getByRole('button', { name: 'Sign in with Eagle Eye Networks' })).toBeVisible()
   console.log('✅ Successfully logged out')
+}
+
+/**
+ * Capture credentials from the profile page
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @returns {Promise<{ token: string, hostname: string, port: string }>}
+ */
+export async function captureCredentialsFromProfile(page) {
+  console.log('📋 Capturing credentials from profile page')
+
+  // Wait for profile to load
+  await expect(page.locator('h3', { hasText: 'Credentials' })).toBeVisible({ timeout: 15000 })
+
+  // Get hostname from input
+  const hostnameInput = page.locator('label:has-text("Base URL") + input, label:has-text("Base URL") ~ input').first()
+  const hostname = await hostnameInput.inputValue()
+  console.log(`✅ Captured hostname: ${hostname}`)
+
+  // Get port from input
+  const portInput = page.locator('label:has-text("Port") + input, label:has-text("Port") ~ input').first()
+  const port = await portInput.inputValue()
+  console.log(`✅ Captured port: ${port}`)
+
+  // Click "Show & Copy" to reveal token
+  const showButton = page.getByRole('button', { name: /Show & Copy/i })
+  await showButton.click()
+  console.log('👆 Clicked Show & Copy')
+
+  // Wait a moment for the input type to change
+  await page.waitForTimeout(500)
+
+  // Get token value - find the input in the Access Token row
+  const tokenInput = page.locator('input[type="text"]').filter({ has: page.locator('..', { has: page.locator('label:has-text("Access Token")') }) })
+
+  // Alternative: get the input that follows the Access Token label
+  const tokenRow = page.locator('.flex.items-center').filter({ hasText: 'Access Token' })
+  const token = await tokenRow.locator('input').inputValue()
+  console.log(`✅ Captured token: ${token.substring(0, 20)}...`)
+
+  return { token, hostname, port }
+}
+
+/**
+ * Login using direct access with provided credentials
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {{ token: string, hostname: string, port: string }} credentials
+ */
+export async function loginWithDirectAccess(page, credentials) {
+  console.log('🔐 Starting direct access login')
+
+  // Navigate to direct access page
+  await page.goto('/direct')
+  await expect(page.getByRole('heading', { name: 'Direct Access' })).toBeVisible()
+  console.log('✅ On Direct Access page')
+
+  // Fill in credentials
+  await page.getByLabel('Access Token').fill(credentials.token)
+  console.log('✅ Entered access token')
+
+  await page.getByLabel('Base URL').fill(credentials.hostname)
+  console.log(`✅ Entered hostname: ${credentials.hostname}`)
+
+  await page.getByLabel('Port').fill(credentials.port.toString())
+  console.log(`✅ Entered port: ${credentials.port}`)
+
+  // Click Proceed
+  await page.getByRole('button', { name: 'Proceed' }).click()
+  console.log('👆 Clicked Proceed')
+}
+
+/**
+ * Refresh the token from the profile page
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ */
+export async function refreshTokenFromProfile(page) {
+  console.log('🔄 Refreshing token')
+
+  // Wait for profile to be loaded
+  await expect(page.locator('h3', { hasText: 'Credentials' })).toBeVisible({ timeout: 15000 })
+
+  // Click Refresh button
+  const refreshButton = page.getByRole('button', { name: 'Refresh' })
+  await refreshButton.click()
+  console.log('👆 Clicked Refresh button')
+
+  // Wait for refresh to complete (button text changes during refresh)
+  await expect(refreshButton).not.toHaveText('Refreshing...', { timeout: 15000 })
+  console.log('✅ Token refreshed')
+}
+
+/**
+ * Clear localStorage to reset app state
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ */
+export async function clearAppState(page) {
+  console.log('🧹 Clearing app state')
+  await page.evaluate(() => localStorage.clear())
+  console.log('✅ localStorage cleared')
 }

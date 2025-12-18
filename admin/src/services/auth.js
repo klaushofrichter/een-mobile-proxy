@@ -86,5 +86,10 @@ export async function handleAuthCallback(code) {
     }
   }
 
+  // Use userEmail from proxy response if available
+  if (data.userEmail) {
+    authStore.setUserProfile({ email: data.userEmail })
+  }
+
   return data
 }

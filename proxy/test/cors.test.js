@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { SELF } from 'cloudflare:test'
+import { fetchWithMetrics } from './test-utils.js'
 
 describe('CORS validation', () => {
   it('should reject requests from disallowed origins', async () => {
-    const response = await SELF.fetch('http://localhost/health', {
+    const response = await fetchWithMetrics('http://localhost/health', {
       headers: {
         Origin: 'https://malicious-site.com'
       }
@@ -15,7 +15,7 @@ describe('CORS validation', () => {
   })
 
   it('should allow requests from allowed origins', async () => {
-    const response = await SELF.fetch('http://localhost/health', {
+    const response = await fetchWithMetrics('http://localhost/health', {
       headers: {
         Origin: 'http://localhost:5173'
       }
@@ -26,7 +26,7 @@ describe('CORS validation', () => {
   })
 
   it('should handle CORS preflight requests', async () => {
-    const response = await SELF.fetch('http://localhost/proxy/getAccessToken', {
+    const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
       method: 'OPTIONS',
       headers: {
         Origin: 'http://localhost:5173',
@@ -42,7 +42,7 @@ describe('CORS validation', () => {
   })
 
   it('should allow requests without origin header', async () => {
-    const response = await SELF.fetch('http://localhost/health')
+    const response = await fetchWithMetrics('http://localhost/health')
 
     expect(response.status).toBe(200)
   })
@@ -50,7 +50,7 @@ describe('CORS validation', () => {
 
 describe('Health endpoint', () => {
   it('should return ok status', async () => {
-    const response = await SELF.fetch('http://localhost/health', {
+    const response = await fetchWithMetrics('http://localhost/health', {
       headers: {
         Origin: 'http://localhost:5173'
       }
@@ -64,7 +64,7 @@ describe('Health endpoint', () => {
 
 describe('404 handling', () => {
   it('should return 404 for unknown routes', async () => {
-    const response = await SELF.fetch('http://localhost/unknown-route', {
+    const response = await fetchWithMetrics('http://localhost/unknown-route', {
       headers: {
         Origin: 'http://localhost:5173'
       }

@@ -5,6 +5,11 @@
   "description": "EEN OAuth Proxy - Monorepo root",
   "scripts": {
     "prepare": "husky",
+    "test": "./scripts/run-all-tests.sh",
+    "test:proxy": "cd proxy && npm test",
+    "test:perf": "cd proxy && npm run test:perf",
+    "test:demo": "cd demo1 && npm test",
+    "test:admin": "cd admin && npm test",
     "deploy:pages": "./scripts/deploy-pages.sh",
     "deploy:proxy": "cd proxy && npm run deploy"
   },

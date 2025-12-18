@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { SELF, env } from 'cloudflare:test'
+import { env } from 'cloudflare:test'
+import { fetchWithMetrics } from './test-utils.js'
 
 describe('Admin endpoints', () => {
   const adminSessionId = 'admin-session-123'
@@ -38,7 +39,7 @@ describe('Admin endpoints', () => {
 
   describe('GET /admin/version', () => {
     it('should return 401 if not authenticated', async () => {
-      const response = await SELF.fetch('http://localhost/admin/version', {
+      const response = await fetchWithMetrics('http://localhost/admin/version', {
         headers: {
           Origin: 'http://localhost:5173'
         }
@@ -48,7 +49,7 @@ describe('Admin endpoints', () => {
     })
 
     it('should return 403 if not admin', async () => {
-      const response = await SELF.fetch('http://localhost/admin/version', {
+      const response = await fetchWithMetrics('http://localhost/admin/version', {
         headers: {
           Origin: 'http://localhost:5173',
           Cookie: `sessionId=${regularSessionId}`
@@ -61,7 +62,7 @@ describe('Admin endpoints', () => {
     })
 
     it('should return version for admin users', async () => {
-      const response = await SELF.fetch('http://localhost/admin/version', {
+      const response = await fetchWithMetrics('http://localhost/admin/version', {
         headers: {
           Origin: 'http://localhost:5173',
           Cookie: `sessionId=${adminSessionId}`
@@ -76,7 +77,7 @@ describe('Admin endpoints', () => {
 
   describe('GET /admin/sessionsCount', () => {
     it('should return 401 if not authenticated', async () => {
-      const response = await SELF.fetch('http://localhost/admin/sessionsCount', {
+      const response = await fetchWithMetrics('http://localhost/admin/sessionsCount', {
         headers: {
           Origin: 'http://localhost:5173'
         }
@@ -86,7 +87,7 @@ describe('Admin endpoints', () => {
     })
 
     it('should return session count for admin users', async () => {
-      const response = await SELF.fetch('http://localhost/admin/sessionsCount', {
+      const response = await fetchWithMetrics('http://localhost/admin/sessionsCount', {
         headers: {
           Origin: 'http://localhost:5173',
           Cookie: `sessionId=${adminSessionId}`
@@ -102,7 +103,7 @@ describe('Admin endpoints', () => {
 
   describe('DELETE /admin/removeSessions', () => {
     it('should return 403 if not admin', async () => {
-      const response = await SELF.fetch('http://localhost/admin/removeSessions', {
+      const response = await fetchWithMetrics('http://localhost/admin/removeSessions', {
         method: 'DELETE',
         headers: {
           Origin: 'http://localhost:5173',
@@ -114,7 +115,7 @@ describe('Admin endpoints', () => {
     })
 
     it('should remove other sessions but keep current', async () => {
-      const response = await SELF.fetch('http://localhost/admin/removeSessions', {
+      const response = await fetchWithMetrics('http://localhost/admin/removeSessions', {
         method: 'DELETE',
         headers: {
           Origin: 'http://localhost:5173',
@@ -143,7 +144,7 @@ describe('Admin endpoints', () => {
 
   describe('POST /admin/revokeAll', () => {
     it('should return 403 if not admin', async () => {
-      const response = await SELF.fetch('http://localhost/admin/revokeAll', {
+      const response = await fetchWithMetrics('http://localhost/admin/revokeAll', {
         method: 'POST',
         headers: {
           Origin: 'http://localhost:5173',
@@ -155,7 +156,7 @@ describe('Admin endpoints', () => {
     })
 
     it('should revoke all sessions including current', async () => {
-      const response = await SELF.fetch('http://localhost/admin/revokeAll', {
+      const response = await fetchWithMetrics('http://localhost/admin/revokeAll', {
         method: 'POST',
         headers: {
           Origin: 'http://localhost:5173',

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { SELF, env } from 'cloudflare:test'
+import { env } from 'cloudflare:test'
+import { fetchWithMetrics } from './test-utils.js'
 
 describe('OAuth endpoints', () => {
   beforeEach(async () => {
@@ -12,7 +13,7 @@ describe('OAuth endpoints', () => {
 
   describe('POST /proxy/getAccessToken', () => {
     it('should return 400 if code is missing', async () => {
-      const response = await SELF.fetch(
+      const response = await fetchWithMetrics(
         'http://localhost/proxy/getAccessToken?redirect_uri=http://localhost:5173',
         {
           method: 'POST',
@@ -28,7 +29,7 @@ describe('OAuth endpoints', () => {
     })
 
     it('should return 400 if redirect_uri is missing', async () => {
-      const response = await SELF.fetch('http://localhost/proxy/getAccessToken?code=test-code', {
+      const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken?code=test-code', {
         method: 'POST',
         headers: {
           Origin: 'http://localhost:5173'
@@ -43,7 +44,7 @@ describe('OAuth endpoints', () => {
 
   describe('POST /proxy/refreshAccessToken', () => {
     it('should return 401 if no session cookie', async () => {
-      const response = await SELF.fetch('http://localhost/proxy/refreshAccessToken', {
+      const response = await fetchWithMetrics('http://localhost/proxy/refreshAccessToken', {
         method: 'POST',
         headers: {
           Origin: 'http://localhost:5173'
@@ -56,7 +57,7 @@ describe('OAuth endpoints', () => {
     })
 
     it('should return 401 if session is invalid', async () => {
-      const response = await SELF.fetch('http://localhost/proxy/refreshAccessToken', {
+      const response = await fetchWithMetrics('http://localhost/proxy/refreshAccessToken', {
         method: 'POST',
         headers: {
           Origin: 'http://localhost:5173',
@@ -72,7 +73,7 @@ describe('OAuth endpoints', () => {
 
   describe('POST /proxy/revoke', () => {
     it('should return 401 if no session cookie', async () => {
-      const response = await SELF.fetch('http://localhost/proxy/revoke', {
+      const response = await fetchWithMetrics('http://localhost/proxy/revoke', {
         method: 'POST',
         headers: {
           Origin: 'http://localhost:5173'
@@ -85,7 +86,7 @@ describe('OAuth endpoints', () => {
     })
 
     it('should succeed and clear cookie even if session not found', async () => {
-      const response = await SELF.fetch('http://localhost/proxy/revoke', {
+      const response = await fetchWithMetrics('http://localhost/proxy/revoke', {
         method: 'POST',
         headers: {
           Origin: 'http://localhost:5173',

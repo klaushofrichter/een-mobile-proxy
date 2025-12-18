@@ -198,10 +198,151 @@ cd admin && npm run dev    # Start the other app
 
 ### Step 5: Run Tests
 
+See the [Testing](#testing) section below for comprehensive test documentation.
+
+## Testing
+
+This project includes comprehensive test suites for both the proxy and the frontend applications.
+
+### Proxy Tests (Vitest + Cloudflare Workers)
+
+The proxy includes unit, integration, and security tests using Vitest with the Cloudflare Workers test pool.
+
 ```bash
 cd proxy
-npm test
+npm test           # Run all tests
+npm run test:watch # Run tests in watch mode
 ```
+
+**Test Files:**
+
+| File | Description | Tests |
+|------|-------------|-------|
+| `test/cors.test.js` | CORS validation and origin checking | Origin allowlist, preflight requests, 404 handling |
+| `test/oauth.test.js` | OAuth endpoint testing | Token exchange, refresh, revocation |
+| `test/admin.test.js` | Admin endpoint testing | Authentication, authorization, session management |
+| `test/security.test.js` | Security vulnerability tests | Injection attacks, session manipulation, CORS bypass |
+| `test/integration.test.js` | Integration tests | EEN API communication, session persistence |
+
+**Security Tests Include:**
+- SQL/NoSQL injection attempts
+- XSS payload handling
+- Command injection attempts
+- Path traversal attacks
+- Session ID manipulation
+- CORS bypass attempts
+- HTTP method validation
+- Header injection prevention
+- Rate limiting awareness
+- JSON parsing edge cases
+
+### Admin App Tests (Playwright)
+
+The admin app includes end-to-end tests using Playwright.
+
+```bash
+cd admin
+npm test                    # Run all tests
+npm run test:ui             # Run with Playwright UI
+npx playwright test --debug # Run in debug mode
+```
+
+**Test Files:**
+
+| File | Description |
+|------|-------------|
+| `tests/admin-login.spec.js` | Login flow, health checks, logout |
+| `tests/admin-destructive.spec.js` | Admin operations (local proxy only) |
+
+**Test Configuration:**
+
+The admin tests require environment variables in `admin/.env`:
+```env
+TEST_USER=your-test-email@example.com
+TEST_PASSWORD=your-test-password
+VITE_PROXY_URL=http://localhost:8787
+```
+
+**Important:** Destructive tests (remove sessions, revoke all) only run against local proxy (`localhost` or `127.0.0.1`) to protect production data.
+
+### Demo App Tests (Playwright)
+
+The demo app includes end-to-end tests using Playwright.
+
+```bash
+cd demo1
+npm test                    # Run all tests
+npm run test:ui             # Run with Playwright UI
+```
+
+**Test Files:**
+
+| File | Description |
+|------|-------------|
+| `tests/happy-path.spec.js` | Complete login/logout flow |
+| `tests/auth-flows.spec.js` | Authentication edge cases |
+
+**Test Configuration:**
+
+The demo tests require environment variables in `demo1/.env`:
+```env
+TEST_USER=your-test-email@example.com
+TEST_PASSWORD=your-test-password
+VITE_PROXY_URL=http://localhost:8787
+```
+
+### Running All Tests
+
+From the root directory:
+
+```bash
+# Run all tests (proxy API + demo Playwright + admin Playwright)
+npm test
+
+# This script:
+# 1. Starts the proxy locally
+# 2. Runs proxy API tests (Vitest)
+# 3. Starts demo1 app, runs Playwright tests, stops app
+# 4. Starts admin app, runs Playwright tests, stops app
+# 5. Cleans up all processes
+```
+
+Run individual test suites:
+
+```bash
+# Proxy API tests only (no server needed)
+npm run test:proxy
+
+# Demo Playwright tests (requires proxy running)
+npm run test:demo
+
+# Admin Playwright tests (requires proxy running)
+npm run test:admin
+```
+
+Or run directly in each folder:
+
+```bash
+cd proxy && npm test
+cd demo1 && npm test
+cd admin && npm test
+```
+
+### Test Environment Setup
+
+1. **Proxy must be running** for Playwright tests:
+   ```bash
+   cd proxy && npm run dev
+   ```
+
+2. **Test credentials** must be configured:
+   - `TEST_USER`: A valid EEN account email
+   - `TEST_PASSWORD`: The account password
+   - The test user email must be in `ADMIN_EMAILS` for admin tests
+
+3. **Local proxy for destructive tests**:
+   - Admin destructive tests skip automatically if not using local proxy
+   - This prevents accidental data loss in production
 
 ## Deployment
 

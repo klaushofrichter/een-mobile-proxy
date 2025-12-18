@@ -7,13 +7,16 @@
           <h1 class="text-2xl font-bold text-gray-900">{{ appTitle }}</h1>
           <p class="text-sm text-gray-500">Logged in as {{ authStore.userProfile?.email || 'Unknown' }}</p>
         </div>
-        <button
-          :disabled="isLoggingOut"
-          class="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 disabled:opacity-50"
-          @click="handleLogout"
-        >
-          {{ isLoggingOut ? 'Logging out...' : 'Logout' }}
-        </button>
+        <div class="flex items-center space-x-4">
+          <span class="text-xs text-gray-400">Admin v{{ appVersion }}</span>
+          <button
+            :disabled="isLoggingOut"
+            class="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 disabled:opacity-50"
+            @click="handleLogout"
+          >
+            {{ isLoggingOut ? 'Logging out...' : 'Logout' }}
+          </button>
+        </div>
       </div>
 
       <!-- Error Banner -->
@@ -32,25 +35,68 @@
         </button>
       </div>
 
-      <!-- Stats Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <!-- Version Card -->
-        <div class="bg-white shadow rounded-lg p-6">
-          <h3 class="text-sm font-medium text-gray-500 mb-2">Proxy Version</h3>
-          <div v-if="loadingVersion" class="animate-pulse h-6 bg-gray-200 rounded w-3/4"></div>
-          <p v-else class="text-lg font-mono text-gray-900">{{ version || 'Unknown' }}</p>
-          <button
-            class="mt-4 text-sm text-blue-600 hover:text-blue-800"
-            @click="fetchVersion"
-          >
-            Refresh
-          </button>
+      <!-- Proxy Health Card -->
+      <div class="bg-white shadow rounded-lg p-6 mb-6">
+        <div class="flex justify-between items-start mb-4">
+          <div>
+            <h3 class="text-lg font-medium text-gray-900">Proxy Health</h3>
+            <p class="text-xs text-gray-500 font-mono mt-1">{{ proxyUrl }}</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <span v-if="healthAutoRefresh" class="text-xs text-gray-400">Auto-refresh: 1 min</span>
+            <button
+              :disabled="loadingHealth"
+              class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
+              @click="checkHealth"
+            >
+              {{ loadingHealth ? 'Checking...' : 'Check Health' }}
+            </button>
+          </div>
         </div>
 
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Status -->
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <p class="text-xs font-medium text-gray-500 mb-1">Status</p>
+            <div v-if="loadingHealth && !healthStatus" class="animate-pulse h-6 bg-gray-200 rounded w-16"></div>
+            <div v-else class="flex items-center">
+              <span
+                class="inline-block w-3 h-3 rounded-full mr-2"
+                :class="healthStatus === 'ok' ? 'bg-green-500' : 'bg-red-500'"
+              ></span>
+              <span class="font-medium" :class="healthStatus === 'ok' ? 'text-green-700' : 'text-red-700'">
+                {{ healthStatus === 'ok' ? 'Healthy' : (healthStatus || 'Unknown') }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Proxy Version -->
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <p class="text-xs font-medium text-gray-500 mb-1">Proxy Version</p>
+            <div v-if="loadingHealth && !proxyVersion" class="animate-pulse h-6 bg-gray-200 rounded w-20"></div>
+            <p v-else class="font-mono text-gray-900">{{ proxyVersion || 'Unknown' }}</p>
+          </div>
+
+          <!-- Last Checked -->
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <p class="text-xs font-medium text-gray-500 mb-1">Last Checked</p>
+            <div v-if="loadingHealth && !lastHealthCheck" class="animate-pulse h-6 bg-gray-200 rounded w-24"></div>
+            <p v-else class="text-gray-900">{{ lastHealthCheckText }}</p>
+          </div>
+        </div>
+
+        <!-- Health Error -->
+        <div v-if="healthError" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p class="text-sm text-red-700">{{ healthError }}</p>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <!-- Sessions Card -->
         <div class="bg-white shadow rounded-lg p-6">
           <h3 class="text-sm font-medium text-gray-500 mb-2">Active Sessions</h3>
-          <div v-if="loadingSessions" class="animate-pulse h-6 bg-gray-200 rounded w-16"></div>
+          <div v-if="loadingSessions" class="animate-pulse h-8 bg-gray-200 rounded w-16"></div>
           <p v-else class="text-3xl font-bold text-gray-900">{{ sessionCount ?? '—' }}</p>
           <button
             class="mt-4 text-sm text-blue-600 hover:text-blue-800"
@@ -58,6 +104,21 @@
           >
             Refresh
           </button>
+        </div>
+
+        <!-- Version Info Card -->
+        <div class="bg-white shadow rounded-lg p-6">
+          <h3 class="text-sm font-medium text-gray-500 mb-2">Version Info</h3>
+          <div class="space-y-2">
+            <div class="flex justify-between">
+              <span class="text-sm text-gray-600">Admin App:</span>
+              <span class="text-sm font-mono text-gray-900">v{{ appVersion }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-sm text-gray-600">Proxy:</span>
+              <span class="text-sm font-mono text-gray-900">{{ proxyVersion || 'Unknown' }}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -150,19 +211,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { getVersion, getSessionsCount, removeSessions, revokeAll } from '../services/admin'
+import { getHealth, getProxyUrl, getSessionsCount, removeSessions, revokeAll } from '../services/admin'
 import packageJson from '../../package.json'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 // State
-const version = ref(null)
 const sessionCount = ref(null)
-const loadingVersion = ref(false)
 const loadingSessions = ref(false)
 const isRemovingSessions = ref(false)
 const isRevokingAll = ref(false)
@@ -171,22 +230,64 @@ const error = ref(null)
 const successMessage = ref(null)
 const showConfirmModal = ref(false)
 
+// Health check state
+const healthStatus = ref(null)
+const proxyVersion = ref(null)
+const lastHealthCheck = ref(null)
+const loadingHealth = ref(false)
+const healthError = ref(null)
+const healthAutoRefresh = ref(true)
+
+// Auto-refresh interval
+let healthInterval = null
+const HEALTH_CHECK_INTERVAL = 60000 // 1 minute
+
 const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
+const proxyUrl = computed(() => getProxyUrl())
 
-// Fetch proxy version
-async function fetchVersion() {
-  loadingVersion.value = true
-  error.value = null
+const lastHealthCheckText = computed(() => {
+  if (!lastHealthCheck.value) return 'Never'
+  const now = Date.now()
+  const diff = now - lastHealthCheck.value
+  if (diff < 60000) return 'Just now'
+  const minutes = Math.floor(diff / 60000)
+  return `${minutes} min ago`
+})
+
+// Check proxy health
+async function checkHealth() {
+  loadingHealth.value = true
+  healthError.value = null
 
   try {
-    const data = await getVersion()
-    version.value = data.version
+    const data = await getHealth()
+    healthStatus.value = data.status
+    proxyVersion.value = data.version
+    lastHealthCheck.value = Date.now()
   } catch (e) {
-    error.value = e.message || 'Failed to fetch version'
+    healthStatus.value = 'error'
+    healthError.value = e.message || 'Health check failed'
+    lastHealthCheck.value = Date.now()
   } finally {
-    loadingVersion.value = false
+    loadingHealth.value = false
   }
+}
+
+// Start auto-refresh
+function startHealthAutoRefresh() {
+  if (healthInterval) return
+  healthInterval = setInterval(checkHealth, HEALTH_CHECK_INTERVAL)
+  healthAutoRefresh.value = true
+}
+
+// Stop auto-refresh
+function stopHealthAutoRefresh() {
+  if (healthInterval) {
+    clearInterval(healthInterval)
+    healthInterval = null
+  }
+  healthAutoRefresh.value = false
 }
 
 // Fetch session count
@@ -289,9 +390,16 @@ onMounted(async () => {
 
   // Fetch data in parallel
   await Promise.all([
-    fetchVersion(),
+    checkHealth(),
     fetchSessionCount(),
     fetchUserProfile()
   ])
+
+  // Start auto-refresh for health checks
+  startHealthAutoRefresh()
+})
+
+onUnmounted(() => {
+  stopHealthAutoRefresh()
 })
 </script>
