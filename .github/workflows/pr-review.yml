@@ -1,0 +1,49 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    branches:
+      - production
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run Claude Code Review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Get the diff for this PR
+          git diff origin/${{ github.base_ref }}...HEAD > pr_diff.txt
+
+          # Run Claude Code review
+          claude -p "Review this pull request diff for code quality, potential bugs, security issues, and best practices. Provide a summary suitable for a PR comment. Be concise but thorough. Here is the diff:" --input pr_diff.txt > review_output.txt || true
+
+          # Post review as PR comment
+          if [ -s review_output.txt ]; then
+            echo "## 🤖 Claude Code Review" > comment.md
+            echo "" >> comment.md
+            cat review_output.txt >> comment.md
+            gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
