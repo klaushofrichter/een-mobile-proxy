@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig(({ command }) => ({
   plugins: [vue(), tailwindcss()],
-  base: command === 'build' ? '/een-oauth-proxy/admin/' : '/',
+  base: command === 'build' ? '/een-oauth-proxy/' : '/',
   server: {
     host: '127.0.0.1',
     port: 3333,
