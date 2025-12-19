@@ -1,4 +1,5 @@
 <template>
+  <!-- Admin Dashboard with resizable panels, dark mode, and responsive layout -->
   <div :class="['min-h-screen py-4 px-4 transition-colors duration-200', isDarkMode ? 'bg-gray-900' : 'bg-gray-50']">
     <div class="max-w-5xl mx-auto">
       <!-- Header -->
