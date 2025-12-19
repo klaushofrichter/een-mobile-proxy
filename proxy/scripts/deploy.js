@@ -129,7 +129,7 @@ if (namespaceMatch) {
   const namespaceId = namespaceMatch[1]
   try {
     execSync(
-      `npx wrangler kv key put DEPLOY_VERSION "${versionString}" --namespace-id="${namespaceId}"`,
+      `npx wrangler kv key put DEPLOY_VERSION "${versionString}" --namespace-id="${namespaceId}" --remote`,
       {
         cwd: projectRoot,
         stdio: 'inherit'
