@@ -562,6 +562,7 @@ function getCorsHeaders(origin) {
 
 /**
  * Extract session ID from cookie header
+ * Returns null for missing or invalid session IDs
  */
 function getSessionIdFromCookie(request) {
   const cookieHeader = request.headers.get('Cookie')
@@ -571,6 +572,12 @@ function getSessionIdFromCookie(request) {
   for (const cookie of cookies) {
     const [name, value] = cookie.split('=')
     if (name === 'sessionId') {
+      // Validate session ID format (UUID = 36 chars, allow up to 50 for safety)
+      // KV keys have a 512 byte limit, reject anything too long
+      if (!value || value.length > 50) {
+        console.warn('Invalid session ID length:', value?.length)
+        return null
+      }
       return value
     }
   }

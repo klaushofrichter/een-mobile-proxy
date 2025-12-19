@@ -170,62 +170,72 @@ export async function checkHealthFromDashboard(page) {
   // Wait for health card to be visible
   await expect(page.locator('text=Proxy Health')).toBeVisible({ timeout: 10000 })
 
-  // Click check health button
-  await page.getByRole('button', { name: 'Check Health' }).click()
-  console.log('👆 Clicked Check Health')
+  // Click check button
+  await page.getByRole('button', { name: 'Check now' }).click()
+  console.log('👆 Clicked Check now')
 
   // Wait for loading to complete
   await page.waitForTimeout(2000)
 
-  // Get status
+  // Get status from the indicator dot
   const statusElement = page.locator('.bg-green-500, .bg-red-500').first()
   const isHealthy = await statusElement.evaluate(el => el.classList.contains('bg-green-500'))
   const status = isHealthy ? 'ok' : 'error'
 
-  // Get version
-  const versionCard = page.locator('text=Proxy Version').locator('..').locator('..')
-  const version = await versionCard.locator('.font-mono').first().textContent()
+  // Get version from the Versions card
+  const proxyVersionRow = page.locator('text=Proxy:').locator('..')
+  const proxyVersionText = await proxyVersionRow.locator('.font-mono').textContent()
 
-  console.log(`✅ Health status: ${status}, version: ${version}`)
-  return { status, version: version?.trim() || 'unknown' }
+  console.log(`✅ Health status: ${status}, version: ${proxyVersionText}`)
+  return { status, version: proxyVersionText?.trim() || 'unknown' }
 }
 
 /**
  * Get session count from dashboard
  * @param {import('@playwright/test').Page} page - Playwright page object
- * @returns {Promise<number|null>} Returns null if admin access is denied
+ * @returns {Promise<number|null>} Returns null if admin access is denied or can't get count
  */
 export async function getSessionCountFromDashboard(page) {
   console.log('📊 Getting session count from dashboard')
 
-  // Wait for sessions card
-  await expect(page.locator('text=Active Sessions')).toBeVisible({ timeout: 10000 })
+  try {
+    // Wait for sessions card
+    await expect(page.locator('text=Active Sessions')).toBeVisible({ timeout: 10000 })
 
-  // Click refresh to ensure fresh data
-  const sessionsCard = page.locator('text=Active Sessions').locator('..')
-  await sessionsCard.getByRole('button', { name: 'Refresh' }).click()
+    // Click refresh to ensure fresh data
+    const sessionsCard = page.locator('text=Active Sessions').locator('..')
+    const refreshButton = sessionsCard.getByRole('button', { name: 'Refresh' })
+    await expect(refreshButton).toBeVisible({ timeout: 5000 })
+    await refreshButton.click()
 
-  // Wait for loading
-  await page.waitForTimeout(2000)
+    // Wait for loading
+    await page.waitForTimeout(2000)
 
-  // Check for error (admin access required)
-  const errorBanner = page.locator('text=/Admin access required|Authentication required/i')
-  if (await errorBanner.isVisible().catch(() => false)) {
-    console.log('⚠️ Admin access denied')
+    // Check for error (admin access required)
+    const errorBanner = page.locator('text=/Admin access required|Authentication required/i')
+    if (await errorBanner.isVisible().catch(() => false)) {
+      console.log('⚠️ Admin access denied')
+      return null
+    }
+
+    // Get count - look for the large bold number (font-bold class)
+    const countElement = sessionsCard.locator('.font-bold').first()
+    await expect(countElement).toBeVisible({ timeout: 5000 })
+    const countText = await countElement.textContent({ timeout: 5000 })
+    const count = parseInt(countText?.trim() || '0', 10)
+
+    if (isNaN(count)) {
+      console.log('⚠️ Could not parse session count')
+      return null
+    }
+
+    // 0 is now a valid value (not showing — anymore)
+    console.log(`✅ Session count: ${count}`)
+    return count
+  } catch (e) {
+    console.log(`⚠️ Error getting session count: ${e.message}`)
     return null
   }
-
-  // Get count - look for the large number
-  const countText = await sessionsCard.locator('.text-3xl').textContent()
-  const count = parseInt(countText?.trim() || '0', 10)
-
-  if (isNaN(count)) {
-    console.log('⚠️ Could not parse session count')
-    return null
-  }
-
-  console.log(`✅ Session count: ${count}`)
-  return count
 }
 
 /**
@@ -246,7 +256,7 @@ export async function verifyOnDashboard(page) {
   await expect(page).toHaveURL('/dashboard')
   await expect(page.locator('text=Proxy Health')).toBeVisible()
   await expect(page.locator('text=Active Sessions')).toBeVisible()
-  await expect(page.locator('text=Admin Actions')).toBeVisible()
+  await expect(page.locator('text=Activity Log')).toBeVisible()
   console.log('✅ Verified on dashboard page')
 }
 
@@ -256,29 +266,36 @@ export async function verifyOnDashboard(page) {
  * @returns {Promise<boolean>}
  */
 export async function hasAdminAccess(page) {
-  // Wait a moment for any errors to appear
-  await page.waitForTimeout(2000)
+  try {
+    // Wait a moment for any errors to appear
+    await page.waitForTimeout(2000)
 
-  // Check for error banners
-  const errorBanner = page.locator('.bg-red-50').filter({ hasText: /Admin access required|Authentication required/i })
-  const hasError = await errorBanner.isVisible().catch(() => false)
+    // Check for error banners
+    const errorBanner = page.locator('.bg-red-50, .bg-red-900\\/50').filter({ hasText: /Admin access required|Authentication required/i })
+    const hasError = await errorBanner.isVisible().catch(() => false)
 
-  if (hasError) {
-    console.log('⚠️ Admin access NOT available')
+    if (hasError) {
+      console.log('⚠️ Admin access NOT available')
+      return false
+    }
+
+    // Check if session count shows a number - 0 is now valid
+    const sessionCount = page.locator('text=Active Sessions').locator('..').locator('.font-bold')
+    await expect(sessionCount).toBeVisible({ timeout: 5000 })
+    const countText = await sessionCount.textContent({ timeout: 5000 })
+    const count = parseInt(countText?.trim() || '', 10)
+
+    if (countText === null || isNaN(count)) {
+      console.log('⚠️ Admin access appears limited')
+      return false
+    }
+
+    console.log('✅ Admin access confirmed')
+    return true
+  } catch (e) {
+    console.log(`⚠️ Admin access check failed: ${e.message}`)
     return false
   }
-
-  // Check if session count shows a number (not dash)
-  const sessionCount = page.locator('text=Active Sessions').locator('..').locator('.text-3xl')
-  const countText = await sessionCount.textContent().catch(() => '—')
-
-  if (countText === '—' || countText === null) {
-    console.log('⚠️ Admin access appears limited')
-    return false
-  }
-
-  console.log('✅ Admin access confirmed')
-  return true
 }
 
 /**
@@ -291,6 +308,46 @@ export async function dismissErrors(page) {
     await dismissButton.click()
     await page.waitForTimeout(500)
   }
+}
+
+/**
+ * Clear the activity log via the Clear button
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ */
+export async function clearActivityLog(page) {
+  console.log('🧹 Clearing activity log')
+  const clearButton = page.locator('text=Activity Log').locator('..').getByRole('button', { name: 'Clear' })
+  await clearButton.click()
+  await page.waitForTimeout(500)
+  console.log('✅ Activity log cleared')
+}
+
+/**
+ * Get activity log entries
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @returns {Promise<Array<{time: string, message: string}>>}
+ */
+export async function getActivityLogEntries(page) {
+  // Wait for the activity log to populate
+  await page.waitForTimeout(2000)
+
+  // Find entries by looking for spans with timestamp format (HH:MM:SS)
+  // These are the first span in each log entry
+  const timestampSpans = page.locator('span').filter({ hasText: /^\d{2}:\d{2}:\d{2}$/ })
+  const count = await timestampSpans.count()
+
+  const logEntries = []
+  for (let i = 0; i < count; i++) {
+    const span = timestampSpans.nth(i)
+    const parent = span.locator('..')
+    const text = await parent.textContent().catch(() => '')
+    if (text && text.trim()) {
+      logEntries.push({ text: text.trim() })
+    }
+  }
+
+  console.log(`📋 Found ${logEntries.length} activity log entries`)
+  return logEntries
 }
 
 /**

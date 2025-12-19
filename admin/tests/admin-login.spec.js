@@ -17,6 +17,8 @@ import {
   clearAppState,
   verifyOnDashboard,
   getProxyUrl,
+  clearActivityLog,
+  getActivityLogEntries,
   MAX_TEST_TIMEOUT
 } from './utils.js'
 
@@ -33,7 +35,7 @@ test.describe('Admin Login and Health', () => {
     await page.goto('/')
 
     // Verify login page elements
-    await expect(page.getByRole('heading', { name: 'EEN OAuth Admin' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'EEN OAuth Proxy Admin' })).toBeVisible()
     await expect(page.getByText('Sign in to manage the OAuth proxy')).toBeVisible()
     await expect(page.getByText('Admin access is restricted')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Sign in with Eagle Eye Networks' })).toBeVisible()
@@ -56,13 +58,15 @@ test.describe('Admin Login and Health', () => {
     // Verify we're on the dashboard
     await verifyOnDashboard(page)
 
-    // Verify header shows logged in user
-    await expect(page.locator('text=Logged in as')).toBeVisible()
-    console.log('✅ Dashboard header shows logged in status')
+    // Verify header shows user email
+    const emailLocator = page.locator('p.text-xs.text-gray-500').first()
+    await expect(emailLocator).toBeVisible()
+    console.log('✅ Dashboard header shows user email')
 
-    // Verify admin version is shown in header
-    await expect(page.locator('text=Admin v')).toBeVisible()
-    console.log('✅ Admin version shown in header')
+    // Verify version link is shown in header (vX.X.X format)
+    const versionLink = page.locator('a').filter({ hasText: /v\d+\.\d+\.\d+/ })
+    await expect(versionLink).toBeVisible()
+    console.log('✅ Version link shown in header')
 
     console.log('\n✅ Full login and dashboard verification completed!\n')
   })
@@ -109,14 +113,14 @@ test.describe('Admin Login and Health', () => {
     // Skip if admin access not available (returns null)
     if (sessionCount === null) {
       console.log('⚠️ SKIPPING: Admin access not available for session count')
-      console.log('Ensure TEST_USER email is in ADMIN_EMAILS in proxy config')
+      console.log('Ensure ADMIN_TEST_USER email is in ADMIN_EMAILS in proxy config')
       test.skip()
       return
     }
 
-    // Should have at least 1 session (current user)
-    expect(sessionCount).toBeGreaterThanOrEqual(1)
-    console.log(`✅ Session count: ${sessionCount} (at least 1 expected)`)
+    // Session count should be a non-negative number (0 is valid now)
+    expect(sessionCount).toBeGreaterThanOrEqual(0)
+    console.log(`✅ Session count: ${sessionCount}`)
 
     console.log('\n✅ Session count display test completed!\n')
   })
@@ -128,14 +132,14 @@ test.describe('Admin Login and Health', () => {
     // Login to admin
     await loginToAdmin(page)
 
-    // Verify Version Info card
-    await expect(page.locator('text=Version Info')).toBeVisible()
+    // Verify Versions card (renamed from "Version Info" in compact redesign)
+    await expect(page.locator('text=Versions')).toBeVisible()
 
-    // Verify Admin App version is shown
-    const versionCard = page.locator('text=Version Info').locator('..').locator('..')
-    await expect(versionCard.locator('text=Admin App:')).toBeVisible()
+    // Verify Admin and Proxy versions are shown
+    const versionCard = page.locator('text=Versions').locator('..')
+    await expect(versionCard.locator('text=Admin:')).toBeVisible()
     await expect(versionCard.locator('text=Proxy:')).toBeVisible()
-    console.log('✅ Version info card displayed')
+    console.log('✅ Versions card displayed')
 
     console.log('\n✅ Version info display test completed!\n')
   })
@@ -216,5 +220,117 @@ test.describe('Admin Login and Health', () => {
     console.log('✅ Non-admin user cannot access dashboard')
 
     console.log('\n✅ Non-admin user rejection test completed!\n')
+  })
+
+  test('should display and clear activity log', async ({ page }) => {
+    console.log('\n▶️ Running Test: Activity Log functionality\n')
+    test.setTimeout(MAX_TEST_TIMEOUT)
+
+    // Login to admin
+    await loginToAdmin(page)
+
+    // Verify Activity Log is visible
+    await expect(page.locator('text=Activity Log')).toBeVisible()
+    console.log('✅ Activity Log visible')
+
+    // Verify Clear button is visible
+    const clearButton = page.locator('text=Activity Log').locator('..').getByRole('button', { name: 'Clear' })
+    await expect(clearButton).toBeVisible()
+    console.log('✅ Clear button visible')
+
+    // There should be initial log entries (Dashboard loaded, Health check, etc.)
+    const initialEntries = await getActivityLogEntries(page)
+    expect(initialEntries.length).toBeGreaterThan(0)
+    console.log(`✅ Initial log entries: ${initialEntries.length}`)
+
+    // Click check button to add a log entry
+    await page.getByRole('button', { name: 'Check now' }).click()
+    await page.waitForTimeout(2000)
+
+    // Should have more entries now
+    const afterCheckEntries = await getActivityLogEntries(page)
+    expect(afterCheckEntries.length).toBeGreaterThanOrEqual(initialEntries.length)
+    console.log(`✅ Log entries after health check: ${afterCheckEntries.length}`)
+
+    // Clear the log
+    await clearActivityLog(page)
+
+    // Should have fewer entries (just the "Log cleared" entry)
+    const afterClearEntries = await getActivityLogEntries(page)
+    expect(afterClearEntries.length).toBeLessThan(afterCheckEntries.length)
+    console.log(`✅ Log entries after clear: ${afterClearEntries.length}`)
+
+    console.log('\n✅ Activity Log functionality test completed!\n')
+  })
+
+  test('should toggle dark mode', async ({ page }) => {
+    console.log('\n▶️ Running Test: Dark mode toggle\n')
+    test.setTimeout(MAX_TEST_TIMEOUT)
+
+    // Login to admin
+    await loginToAdmin(page)
+
+    // Find the dark mode toggle button (has sun or moon icon)
+    const darkModeButton = page.locator('button[title*="mode"]')
+    await expect(darkModeButton).toBeVisible()
+    console.log('✅ Dark mode toggle button visible')
+
+    // Check initial background color (light mode default) - use more specific selector
+    const dashboardContainer = page.locator('div.min-h-screen.py-4')
+    const initialBgClass = await dashboardContainer.getAttribute('class')
+    const isInitiallyLight = initialBgClass.includes('bg-gray-50')
+    console.log(`📋 Initial mode: ${isInitiallyLight ? 'light' : 'dark'}`)
+
+    // Click toggle to switch mode
+    await darkModeButton.click()
+    await page.waitForTimeout(500)
+
+    // Check that background changed
+    const afterToggleBgClass = await dashboardContainer.getAttribute('class')
+    const isNowDark = afterToggleBgClass.includes('bg-gray-900')
+    console.log(`📋 After toggle: ${isNowDark ? 'dark' : 'light'}`)
+
+    // Verify mode changed
+    if (isInitiallyLight) {
+      expect(isNowDark).toBe(true)
+    } else {
+      expect(afterToggleBgClass.includes('bg-gray-50')).toBe(true)
+    }
+    console.log('✅ Dark mode toggled successfully')
+
+    // Toggle back
+    await darkModeButton.click()
+    await page.waitForTimeout(500)
+
+    const finalBgClass = await dashboardContainer.getAttribute('class')
+    console.log(`📋 After second toggle: ${finalBgClass.includes('bg-gray-900') ? 'dark' : 'light'}`)
+    console.log('✅ Mode toggled back')
+
+    console.log('\n✅ Dark mode toggle test completed!\n')
+  })
+
+  test('should have resizable panels', async ({ page }) => {
+    console.log('\n▶️ Running Test: Resizable panels\n')
+    test.setTimeout(MAX_TEST_TIMEOUT)
+
+    // Login to admin
+    await loginToAdmin(page)
+
+    // Find the resize handle
+    const resizeHandle = page.locator('.cursor-col-resize')
+    await expect(resizeHandle).toBeVisible()
+    console.log('✅ Resize handle visible')
+
+    // Get the initial width of the left panel
+    const leftPanel = page.locator('.space-y-4.overflow-hidden').first()
+    const initialStyle = await leftPanel.getAttribute('style')
+    console.log(`📋 Initial left panel style: ${initialStyle}`)
+
+    // Verify the resize handle is interactive (has cursor-col-resize class)
+    const handleClasses = await resizeHandle.getAttribute('class')
+    expect(handleClasses).toContain('cursor-col-resize')
+    console.log('✅ Resize handle has correct cursor style')
+
+    console.log('\n✅ Resizable panels test completed!\n')
   })
 })

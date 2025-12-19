@@ -95,6 +95,13 @@ if curl -s "http://localhost:8787/health" > /dev/null 2>&1; then
     sleep 1
 fi
 
+# Set version in local KV for development
+PROXY_VERSION=$(node -p "require('./package.json').version")
+DEPLOY_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+VERSION_STRING="een-oauth-proxy - ${PROXY_VERSION} - ${DEPLOY_TIME}"
+echo "Setting local DEPLOY_VERSION: ${VERSION_STRING}"
+npx wrangler kv key put DEPLOY_VERSION "${VERSION_STRING}" --binding=EEN_OAUTH_SESSIONS --local > /dev/null 2>&1 || true
+
 echo "Starting proxy..."
 npm run dev > /dev/null 2>&1 &
 PROXY_STARTED=true

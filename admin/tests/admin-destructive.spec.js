@@ -98,19 +98,20 @@ test.describe('Admin Destructive Operations (Local Proxy Only)', () => {
     const initialCount = await getSessionCountFromDashboard(page)
     console.log(`📊 Initial session count: ${initialCount}`)
 
-    // Click "Remove Sessions" button
-    const removeButton = page.getByRole('button', { name: 'Remove Sessions' })
+    // Click "Remove" button - find the row containing "Remove Other Sessions" then get the button
+    const removeRow = page.locator('div').filter({ hasText: /Remove Other Sessions/ }).filter({ has: page.getByRole('button', { name: 'Remove' }) }).first()
+    const removeButton = removeRow.getByRole('button', { name: 'Remove' })
     await expect(removeButton).toBeVisible()
     await removeButton.click()
-    console.log('👆 Clicked Remove Sessions')
+    console.log('👆 Clicked Remove')
 
-    // Wait for operation and success message
+    // Wait for operation
     await page.waitForTimeout(3000)
 
-    // Check for success message
-    const successBanner = page.locator('.bg-green-50')
-    await expect(successBanner).toBeVisible({ timeout: 10000 })
-    console.log('✅ Success message displayed')
+    // Check for success in activity log (success entries are text-green-500 in new design)
+    const successLog = page.locator('.text-green-500').filter({ hasText: /Removed.*session/i })
+    await expect(successLog).toBeVisible({ timeout: 10000 })
+    console.log('✅ Success message in activity log')
 
     // Verify session count is now 1 (current session)
     const newCount = await getSessionCountFromDashboard(page)
@@ -142,14 +143,15 @@ test.describe('Admin Destructive Operations (Local Proxy Only)', () => {
       return
     }
 
-    // Click "Revoke All" button
-    const revokeButton = page.getByRole('button', { name: 'Revoke All' })
+    // Click "Revoke All" button - find the row containing "Revoke All Tokens" then get the button
+    const revokeRow = page.locator('div').filter({ hasText: /Revoke All Tokens/ }).filter({ has: page.getByRole('button', { name: 'Revoke All' }) }).first()
+    const revokeButton = revokeRow.getByRole('button', { name: 'Revoke All' })
     await expect(revokeButton).toBeVisible()
     await revokeButton.click()
     console.log('👆 Clicked Revoke All')
 
     // Confirmation modal should appear
-    await expect(page.locator('text=Confirm Revoke All Tokens')).toBeVisible()
+    await expect(page.locator('text=Confirm Revoke All')).toBeVisible()
     console.log('✅ Confirmation modal displayed')
 
     // Click confirm in modal
@@ -187,12 +189,14 @@ test.describe('Admin Destructive Operations (Local Proxy Only)', () => {
       return
     }
 
-    // Click "Revoke All" button
-    await page.getByRole('button', { name: 'Revoke All' }).click()
+    // Click "Revoke All" button - find the row containing "Revoke All Tokens" then get the button
+    const revokeRow = page.locator('div').filter({ hasText: /Revoke All Tokens/ }).filter({ has: page.getByRole('button', { name: 'Revoke All' }) }).first()
+    const revokeButton = revokeRow.getByRole('button', { name: 'Revoke All' })
+    await revokeButton.click()
     console.log('👆 Clicked Revoke All')
 
     // Modal should appear
-    await expect(page.locator('text=Confirm Revoke All Tokens')).toBeVisible()
+    await expect(page.locator('text=Confirm Revoke All')).toBeVisible()
     console.log('✅ Confirmation modal displayed')
 
     // Click cancel
@@ -200,7 +204,7 @@ test.describe('Admin Destructive Operations (Local Proxy Only)', () => {
     console.log('👆 Clicked Cancel')
 
     // Modal should close
-    await expect(page.locator('text=Confirm Revoke All Tokens')).not.toBeVisible()
+    await expect(page.locator('text=Confirm Revoke All')).not.toBeVisible()
     await verifyOnDashboard(page)
     console.log('✅ Modal closed, still on dashboard')
 
@@ -221,18 +225,20 @@ test.describe('Admin Destructive Operations (Local Proxy Only)', () => {
     await loginToAdmin(page)
     await verifyOnDashboard(page)
 
-    // Admin Actions section should always be visible (even without admin access)
-    await expect(page.locator('text=Admin Actions')).toBeVisible()
-    await expect(page.locator('text=Manage sessions and tokens')).toBeVisible()
-    console.log('✅ Admin Actions section visible')
-
-    // Buttons should be visible
+    // Remove Other Sessions action should be visible
     await expect(page.locator('text=Remove Other Sessions')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Remove Sessions' })).toBeVisible()
+    await expect(page.locator('text=Log out other users')).toBeVisible()
+    const removeRow = page.locator('div').filter({ hasText: /Remove Other Sessions/ }).filter({ has: page.getByRole('button', { name: 'Remove' }) }).first()
+    const removeButton = removeRow.getByRole('button', { name: 'Remove' })
+    await expect(removeButton).toBeVisible()
     console.log('✅ Remove Other Sessions option visible')
 
-    await expect(page.locator('text=Revoke All Tokens (Emergency)')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Revoke All' })).toBeVisible()
+    // Revoke All Tokens action should be visible
+    await expect(page.locator('text=Revoke All Tokens')).toBeVisible()
+    await expect(page.locator('text=Emergency: logs out everyone including you')).toBeVisible()
+    const revokeRow = page.locator('div').filter({ hasText: /Revoke All Tokens/ }).filter({ has: page.getByRole('button', { name: 'Revoke All' }) }).first()
+    const revokeButton = revokeRow.getByRole('button', { name: 'Revoke All' })
+    await expect(revokeButton).toBeVisible()
     console.log('✅ Revoke All Tokens option visible')
 
     console.log('\n✅ Admin actions section test completed!\n')
