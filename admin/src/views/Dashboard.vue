@@ -54,7 +54,6 @@
                 <span :class="['text-xs font-mono', isDarkMode ? 'text-gray-500' : 'text-gray-400']">{{ proxyUrl }}</span>
               </div>
               <div class="flex items-center space-x-2">
-                <span v-if="healthAutoRefresh" :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']">{{ refreshCountdown }}s</span>
                 <button
                   :disabled="loadingHealth || refreshDisabledAfterRemove"
                   class="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50"
@@ -73,7 +72,12 @@
               </div>
               <div :class="['rounded p-2', isDarkMode ? 'bg-gray-700' : 'bg-gray-50']">
                 <p :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'">Checked</p>
-                <p :class="isDarkMode ? 'text-white' : 'text-gray-900'">{{ lastHealthCheckText }}</p>
+                <p :class="isDarkMode ? 'text-white' : 'text-gray-900'">
+                  {{ lastHealthCheckText }}
+                  <span v-if="healthAutoRefresh" :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+                    (again in {{ refreshCountdown }}s)
+                  </span>
+                </p>
               </div>
             </div>
             <div v-if="healthError" :class="['mt-2 p-2 rounded text-xs', isDarkMode ? 'bg-red-900/50 border border-red-700 text-red-400' : 'bg-red-50 border border-red-200 text-red-700']">
