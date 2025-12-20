@@ -45,13 +45,20 @@ jobs:
             const execFile = '${{ steps.claude-review.outputs.execution_file }}';
 
             if (!execFile || !fs.existsSync(execFile)) {
-              console.log('No execution file found');
+              core.warning('No execution file found - review comment will not be posted');
               return;
             }
 
-            const turns = JSON.parse(fs.readFileSync(execFile, 'utf8'));
+            let turns;
+            try {
+              turns = JSON.parse(fs.readFileSync(execFile, 'utf8'));
+            } catch (error) {
+              core.warning(`Failed to parse execution file: ${error.message}`);
+              return;
+            }
 
-            // Find the last assistant message with text content
+            // Find the last assistant message with text content (intentionally keeps only
+            // the final review text, not concatenating intermediate messages)
             let finalResult = '';
             for (const turn of turns) {
               if (turn.type === 'assistant' && turn.message?.content) {
@@ -64,7 +71,7 @@ jobs:
             }
 
             if (!finalResult) {
-              console.log('No final result found in execution output');
+              core.warning('No final result found in execution output');
               console.log('Turn types found:', turns.map(t => t.type));
               return;
             }
@@ -73,11 +80,14 @@ jobs:
             const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
             // Post as PR comment
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `## Claude Code Review\n\n${finalResult}\n\n---\n*Automated review by Claude Code* | [View full review details](${runUrl})`
-            });
-
-            console.log('Posted review comment to PR');
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `## Claude Code Review\n\n${finalResult}\n\n---\n*Automated review by Claude Code* | [View full review details](${runUrl})`
+              });
+              console.log('Posted review comment to PR');
+            } catch (error) {
+              core.setFailed(`Failed to post review comment: ${error.message}`);
+            }
