@@ -34,7 +34,7 @@
           </p>
         </div>
 
-        <div>
+        <div v-if="proxyOptions.length > 1">
           <label for="proxy-select" class="block text-sm font-medium text-gray-700 mb-1">
             Proxy Server
           </label>

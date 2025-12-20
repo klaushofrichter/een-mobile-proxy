@@ -391,6 +391,113 @@ Or directly:
 ./scripts/deploy-pages.sh
 ```
 
+## CI/CD and GitHub Actions
+
+### Branch Strategy
+
+This project uses two main branches:
+
+| Branch | Purpose |
+|--------|---------|
+| `develop` | Active development branch. All feature work happens here. |
+| `production` | Production-ready code. Protected branch with required checks. |
+
+### Branch Protection
+
+The `production` branch is protected with the following rules:
+
+- **Required status checks must pass before merging:**
+  - `review` - Claude Code AI review
+  - `test` - Playwright tests with local proxy
+  - `Analyze (javascript-typescript)` - CodeQL security analysis
+- **Require pull request before merging** - Direct pushes to production are blocked
+- **Administrators are subject to these rules** - No bypass allowed
+
+### GitHub Actions Workflows
+
+| Workflow | Trigger | Description |
+|----------|---------|-------------|
+| `pr-review.yml` | PR to production | AI code review using Claude Code Action |
+| `test-admin-pr.yml` | PR to production | Runs Playwright tests against local wrangler proxy |
+| `codeql.yml` | PR to production | Security vulnerability scanning |
+| `deploy-admin.yml` | Push to production | Deploys admin app to GitHub Pages |
+| `test-admin-deployed.yml` | After deploy | Tests the deployed admin app |
+| `release.yml` | After deployed tests pass | Creates GitHub release with version tag |
+| `sync-develop.yml` | PR merged to production | Auto-syncs develop branch with production |
+
+### Workflow Details
+
+**PR Test Workflow (`test-admin-pr.yml`):**
+- Starts a local wrangler proxy with test credentials
+- Runs full Playwright test suite against the local proxy
+- Required to pass before merging to production
+
+**Claude Code Review (`pr-review.yml`):**
+- Uses `anthropics/claude-code-action@v1` for AI-powered code review
+- Reviews code quality, potential bugs, security issues, and best practices
+- Posts review comments on the pull request
+
+**CodeQL Analysis (`codeql.yml`):**
+- Scans JavaScript/TypeScript for security vulnerabilities
+- Runs on PRs to production and can be triggered manually
+
+**Branch Sync (`sync-develop.yml`):**
+- Automatically merges production back into develop after PR merges
+- Prevents develop from becoming out-of-sync with production
+- **Note:** After a PR is merged, run `git pull` locally before making new commits
+
+**Deployment Pipeline:**
+1. PR merged to `production` triggers `deploy-admin.yml`
+2. Admin app deployed to GitHub Pages
+3. `test-admin-deployed.yml` runs tests against deployed app
+4. On success, `release.yml` creates a new GitHub release
+5. Slack notifications sent for deployments and releases
+
+### Required GitHub Secrets
+
+Configure these secrets in your repository settings (Settings > Secrets and variables > Actions):
+
+| Secret | Description | Used By |
+|--------|-------------|---------|
+| `VITE_EEN_CLIENT_ID` | EEN OAuth Client ID | PR tests, deployment |
+| `EEN_CLIENT_SECRET` | EEN OAuth Client Secret | PR tests (local proxy) |
+| `ADMIN_TEST_USER` | Test user email (must be in ADMIN_EMAILS) | Playwright tests |
+| `ADMIN_TEST_PASSWORD` | Test user password | Playwright tests |
+| `ANTHROPIC_API_KEY` | Anthropic API key for Claude Code reviews | PR review workflow |
+| `SLACK_WEBHOOK` | Slack incoming webhook URL for notifications | Deploy and release workflows |
+
+### Slack Notifications
+
+The project sends Slack notifications for:
+
+1. **Deployments** - When admin app is deployed to GitHub Pages
+2. **Releases** - When a new release is created
+
+To configure Slack notifications:
+
+1. Create a Slack app at https://api.slack.com/apps
+2. Enable "Incoming Webhooks" for your app
+3. Create a webhook for your desired channel
+4. Add the webhook URL as `SLACK_WEBHOOK` in GitHub repository secrets
+
+Notifications include:
+- Version numbers (admin and proxy)
+- Deployment/release timestamp
+- Links to the deployed app and release page
+- Action buttons for quick access
+
+### Additional Code Review (Optional)
+
+**GitHub Copilot:**
+- Can be enabled via repository rulesets
+- Provides additional AI-powered code review comments
+- Note: Copilot reviews are informational only and don't block merges
+
+To enable Copilot reviews:
+1. Go to Settings > Rules > Rulesets
+2. Create/edit a ruleset for the production branch
+3. Enable "Request pull request review from GitHub Copilot"
+
 ## Environment Variables Reference
 
 ### Proxy Environment Variables

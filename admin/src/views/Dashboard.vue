@@ -54,7 +54,6 @@
                 <span :class="['text-xs font-mono', isDarkMode ? 'text-gray-500' : 'text-gray-400']">{{ proxyUrl }}</span>
               </div>
               <div class="flex items-center space-x-2">
-                <span v-if="healthAutoRefresh" :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']">{{ refreshCountdown }}s</span>
                 <button
                   :disabled="loadingHealth || refreshDisabledAfterRemove"
                   class="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50"
@@ -73,7 +72,12 @@
               </div>
               <div :class="['rounded p-2', isDarkMode ? 'bg-gray-700' : 'bg-gray-50']">
                 <p :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'">Checked</p>
-                <p :class="isDarkMode ? 'text-white' : 'text-gray-900'">{{ lastHealthCheckText }}</p>
+                <p :class="isDarkMode ? 'text-white' : 'text-gray-900'">
+                  {{ lastHealthCheckText }}
+                  <span v-if="healthAutoRefresh" :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+                    (again in {{ refreshCountdown }}s)
+                  </span>
+                </p>
               </div>
             </div>
             <div v-if="healthError" :class="['mt-2 p-2 rounded text-xs', isDarkMode ? 'bg-red-900/50 border border-red-700 text-red-400' : 'bg-red-50 border border-red-200 text-red-700']">
@@ -106,14 +110,14 @@
 
           <!-- Actions -->
           <div :class="['shadow rounded-lg p-4 space-y-3', isDarkMode ? 'bg-gray-800' : 'bg-white']">
-            <div :class="['flex items-center justify-between p-3 rounded border', isDarkMode ? 'bg-orange-900/30 border-orange-700' : 'bg-orange-50 border-orange-200']">
+            <div :class="['flex items-center justify-between p-3 rounded border', isDarkMode ? 'bg-amber-900/30 border-amber-600' : 'bg-amber-50 border-amber-300']">
               <div>
-                <p :class="['text-sm font-medium', isDarkMode ? 'text-orange-400' : 'text-orange-900']">Remove Other Sessions</p>
-                <p :class="['text-xs', isDarkMode ? 'text-orange-500' : 'text-orange-700']">Log out other users</p>
+                <p :class="['text-sm font-medium', isDarkMode ? 'text-amber-400' : 'text-amber-800']">Remove Other Sessions</p>
+                <p :class="['text-xs', isDarkMode ? 'text-amber-500' : 'text-amber-600']">Log out other users</p>
               </div>
               <button
                 :disabled="isRemovingSessions"
-                class="px-3 py-1.5 bg-orange-600 text-white text-xs rounded hover:bg-orange-700 disabled:opacity-50"
+                class="px-3 py-1.5 bg-amber-500 text-white text-xs rounded hover:bg-amber-600 disabled:opacity-50"
                 @click="handleRemoveSessions"
               >
                 {{ isRemovingSessions ? '...' : 'Remove' }}
