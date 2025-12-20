@@ -92,11 +92,38 @@ export async function loginWithEEN(page, customPassword = null, credentials = nu
   // Wait for redirect to EEN
   await page.waitForURL(/.*eagleeyenetworks.com.*/, { timeout: 15000 })
   console.log('✅ Reached EEN signin page')
+  console.log(`📍 Current URL: ${page.url()}`)
 
-  // Fill email
+  // Wait a moment for page to fully load
+  await page.waitForTimeout(2000)
+
+  // Debug: log page title and check for common elements
+  const pageTitle = await page.title()
+  console.log(`📄 Page title: ${pageTitle}`)
+
+  // Fill email - try multiple selectors
   const emailInput = page.locator('#authentication--input__email')
-  await emailInput.waitFor({ state: 'visible', timeout: 15000 })
-  await emailInput.fill(username)
+  const emailInputAlt = page.locator('input[type="email"]')
+  const emailInputByPlaceholder = page.locator('input[placeholder*="email" i]')
+
+  let foundInput = null
+  for (const input of [emailInput, emailInputAlt, emailInputByPlaceholder]) {
+    if (await input.isVisible().catch(() => false)) {
+      foundInput = input
+      break
+    }
+  }
+
+  if (!foundInput) {
+    // Log page content for debugging
+    const bodyText = await page.locator('body').textContent().catch(() => 'Could not get body text')
+    console.log(`⚠️ Email input not found. Page content preview: ${bodyText.substring(0, 500)}`)
+    // Fall back to original selector with longer timeout
+    await emailInput.waitFor({ state: 'visible', timeout: 30000 })
+    foundInput = emailInput
+  }
+
+  await foundInput.fill(username)
   console.log('📧 Entered email')
 
   // Click next
