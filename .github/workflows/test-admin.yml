@@ -7,6 +7,7 @@ on:
       - develop
     paths:
       - 'admin/**'
+      - 'proxy/**'
       - '.github/workflows/test-admin.yml'
 
 jobs:
@@ -21,31 +22,69 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: admin/package-lock.json
+          cache-dependency-path: |
+            admin/package-lock.json
+            proxy/package-lock.json
 
-      - name: Install dependencies
+      - name: Install admin dependencies
         run: npm ci
         working-directory: admin
+
+      - name: Install proxy dependencies
+        run: npm ci
+        working-directory: proxy
 
       - name: Install Playwright browsers
         run: npx playwright install chromium
         working-directory: admin
 
+      - name: Create proxy dev vars
+        run: |
+          cat > .dev.vars << EOF
+          CLIENT_ID=${{ secrets.VITE_EEN_CLIENT_ID }}
+          CLIENT_SECRET=${{ secrets.EEN_CLIENT_SECRET }}
+          ADMIN_EMAILS=${{ secrets.ADMIN_TEST_USER }}
+          ALLOWED_ORIGINS=http://127.0.0.1:3333
+          EOF
+        working-directory: proxy
+
+      - name: Start local proxy
+        run: |
+          npx wrangler dev --port 8787 &
+          echo $! > /tmp/proxy.pid
+          # Wait for proxy to be ready
+          for i in {1..30}; do
+            if curl -s http://localhost:8787/health > /dev/null 2>&1; then
+              echo "Proxy is ready"
+              break
+            fi
+            echo "Waiting for proxy... ($i/30)"
+            sleep 2
+          done
+        working-directory: proxy
+
       - name: Build admin app
         run: npm run build
         working-directory: admin
         env:
-          VITE_PROXY_URL: 'https://een-oauth-proxy.klaushofrichter.workers.dev'
+          VITE_PROXY_URL: 'http://localhost:8787'
           VITE_EEN_CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
           VITE_REDIRECT_URI: 'http://127.0.0.1:3333'
 
-      - name: Run tests against Cloudflare proxy
+      - name: Run tests against local proxy
         run: npm test
         working-directory: admin
         env:
-          VITE_PROXY_URL: 'https://een-oauth-proxy.klaushofrichter.workers.dev'
+          VITE_PROXY_URL: 'http://localhost:8787'
           ADMIN_TEST_USER: ${{ secrets.ADMIN_TEST_USER }}
           ADMIN_TEST_PASSWORD: ${{ secrets.ADMIN_TEST_PASSWORD }}
+
+      - name: Stop local proxy
+        if: always()
+        run: |
+          if [ -f /tmp/proxy.pid ]; then
+            kill $(cat /tmp/proxy.pid) 2>/dev/null || true
+          fi
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
