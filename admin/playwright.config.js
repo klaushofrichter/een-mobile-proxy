@@ -33,5 +33,10 @@ export default defineConfig({
     url: 'http://127.0.0.1:3333',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
+    env: {
+      ...process.env,
+      // Ensure VITE_PROXY_URL is passed to the dev server
+      VITE_PROXY_URL: process.env.VITE_PROXY_URL || 'http://localhost:8787',
+    },
   },
 })
