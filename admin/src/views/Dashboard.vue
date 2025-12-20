@@ -397,6 +397,24 @@ async function fetchSessionCount(isManual = false) {
   }
 }
 
+// Wait for KV consistency using exponential backoff polling
+async function waitForKvConsistency(expectedCount) {
+  const maxAttempts = 5
+  for (let i = 0; i < maxAttempts; i++) {
+    const delay = 500 * Math.pow(2, i) // 500ms, 1s, 2s, 4s, 8s
+    await new Promise(resolve => setTimeout(resolve, delay))
+    try {
+      const fresh = await getSessionsCount()
+      if (fresh.sessionCount === expectedCount) {
+        return true // KV is consistent
+      }
+    } catch {
+      // Ignore errors during polling
+    }
+  }
+  return false // Gave up waiting
+}
+
 // Remove other sessions
 async function handleRemoveSessions() {
   isRemovingSessions.value = true
@@ -409,15 +427,14 @@ async function handleRemoveSessions() {
     // The API returns the accurate count after the operation completes.
     if (result.remainingSessions !== undefined) {
       sessionCount.value = result.remainingSessions
+      // Disable refresh and poll for KV consistency using exponential backoff
+      refreshDisabledAfterRemove.value = true
+      waitForKvConsistency(result.remainingSessions).finally(() => {
+        refreshDisabledAfterRemove.value = false
+      })
     } else {
       await fetchSessionCount(false)
     }
-    // Disable refresh briefly to prevent stale KV reads from eventual consistency.
-    // 3 seconds is conservative to handle slow KV propagation.
-    refreshDisabledAfterRemove.value = true
-    setTimeout(() => {
-      refreshDisabledAfterRemove.value = false
-    }, 3000)
   } catch (e) {
     addLogEntry(`Failed to remove sessions: ${e.message}`, 'error')
   } finally {

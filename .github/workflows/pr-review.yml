@@ -27,10 +27,11 @@ jobs:
           if [ -f "$PROMPT_FILE" ]; then
             FILE_SIZE=$(wc -c < "$PROMPT_FILE")
             if [ "$FILE_SIZE" -gt "$MAX_SIZE" ]; then
-              echo "::warning::claude-review.md exceeds ${MAX_SIZE} bytes, truncating"
+              echo "::error::claude-review.md exceeds ${MAX_SIZE} bytes (${FILE_SIZE} bytes). Please reduce file size to prevent instructions being cut off."
+              exit 1
             fi
             echo "extra_prompt<<EOF" >> $GITHUB_OUTPUT
-            head -c "$MAX_SIZE" "$PROMPT_FILE" >> $GITHUB_OUTPUT
+            cat "$PROMPT_FILE" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
           else
             # No custom prompts file found - continue with default prompts only
@@ -64,6 +65,23 @@ jobs:
             const fs = require('fs');
             const execFile = '${{ steps.claude-review.outputs.execution_file }}';
 
+            // Extract the last assistant text from conversation turns
+            // Uses reverse iteration with early break for better performance
+            function findLastAssistantText(turns) {
+              for (let i = turns.length - 1; i >= 0; i--) {
+                const turn = turns[i];
+                if (turn.type === 'assistant' && turn.message?.content) {
+                  const content = turn.message.content;
+                  for (let j = content.length - 1; j >= 0; j--) {
+                    if (content[j].type === 'text' && content[j].text) {
+                      return content[j].text;
+                    }
+                  }
+                }
+              }
+              return '';
+            }
+
             if (!execFile || !fs.existsSync(execFile)) {
               core.warning('No execution file found - review comment will not be posted');
               return;
@@ -77,22 +95,7 @@ jobs:
               return;
             }
 
-            // Find the last assistant message with text content (intentionally keeps only
-            // the final review text, not concatenating intermediate messages)
-            // Uses reverse iteration with early break for better performance
-            let finalResult = '';
-            for (let i = turns.length - 1; i >= 0 && !finalResult; i--) {
-              const turn = turns[i];
-              if (turn.type === 'assistant' && turn.message?.content) {
-                const content = turn.message.content;
-                for (let j = content.length - 1; j >= 0; j--) {
-                  if (content[j].type === 'text' && content[j].text) {
-                    finalResult = content[j].text;
-                    break;
-                  }
-                }
-              }
-            }
+            const finalResult = findLastAssistantText(turns);
 
             if (!finalResult) {
               core.warning('No final result found in execution output');

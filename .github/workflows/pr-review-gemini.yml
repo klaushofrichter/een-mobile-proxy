@@ -27,10 +27,11 @@ jobs:
           if [ -f "$PROMPT_FILE" ]; then
             FILE_SIZE=$(wc -c < "$PROMPT_FILE")
             if [ "$FILE_SIZE" -gt "$MAX_SIZE" ]; then
-              echo "::warning::claude-review.md exceeds ${MAX_SIZE} bytes, truncating"
+              echo "::error::claude-review.md exceeds ${MAX_SIZE} bytes (${FILE_SIZE} bytes). Please reduce file size to prevent instructions being cut off."
+              exit 1
             fi
             echo "extra_prompt<<EOF" >> $GITHUB_OUTPUT
-            head -c "$MAX_SIZE" "$PROMPT_FILE" >> $GITHUB_OUTPUT
+            cat "$PROMPT_FILE" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
           else
             # No custom prompts file found - continue with default prompts only
