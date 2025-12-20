@@ -260,6 +260,29 @@ describe('Integration - Version Management', () => {
     const data = await response.json()
     expect(data.version).toBe('unknown')
   })
+
+  it('should respond to HEAD requests for health endpoint', async () => {
+    // HEAD requests are used by monitoring services like UptimeRobot
+    const version = '1.0.0-head-test'
+    await env.EEN_OAUTH_SESSIONS.put('DEPLOY_VERSION', version)
+
+    const response = await fetchWithMetrics('http://localhost/health', {
+      method: 'HEAD',
+      headers: { Origin: 'http://localhost:5173' }
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Type')).toBe('application/json')
+  })
+
+  it('should respond to HEAD requests without Origin header', async () => {
+    // Monitoring services typically don't send Origin headers
+    const response = await fetchWithMetrics('http://localhost/health', {
+      method: 'HEAD'
+    })
+
+    expect(response.status).toBe(200)
+  })
 })
 
 describe('Integration - Admin Operations', () => {
