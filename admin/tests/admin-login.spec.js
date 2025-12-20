@@ -244,7 +244,7 @@ test.describe('Admin Login and Health', () => {
     console.log(`✅ Initial log entries: ${initialEntries.length}`)
 
     // Click check button to add a log entry
-    await page.getByRole('button', { name: 'Check now' }).click()
+    await page.getByRole('button', { name: 'Update now' }).click()
     await page.waitForTimeout(2000)
 
     // Should have more entries now
