@@ -2,13 +2,43 @@
  * Admin service for proxy management
  */
 
-const PROXY_URL = import.meta.env.VITE_PROXY_URL || 'http://localhost:8787'
+const STORAGE_KEY = 'een_proxy_url'
+const ENV_PROXY_URL = import.meta.env.VITE_PROXY_URL
+const DEFAULT_PROXY_URL = ENV_PROXY_URL || 'http://localhost:8787'
+
+// Base predefined proxy options
+const BASE_PROXY_OPTIONS = [
+  { label: 'Local (localhost:8787)', value: 'http://localhost:8787' },
+  { label: 'Cloudflare (Workers)', value: 'https://een-oauth-proxy.klaushofrichter.workers.dev' }
+]
 
 /**
- * Get the configured proxy URL
+ * Get available proxy options (includes env variable URL if different from predefined)
+ */
+export function getProxyOptions() {
+  const options = [...BASE_PROXY_OPTIONS]
+
+  // Add env variable URL if it's different from predefined options
+  if (ENV_PROXY_URL && !options.some((opt) => opt.value === ENV_PROXY_URL)) {
+    options.unshift({ label: `Env (${ENV_PROXY_URL})`, value: ENV_PROXY_URL })
+  }
+
+  return options
+}
+
+/**
+ * Get the configured proxy URL (from localStorage or default)
  */
 export function getProxyUrl() {
-  return PROXY_URL
+  const stored = localStorage.getItem(STORAGE_KEY)
+  return stored || DEFAULT_PROXY_URL
+}
+
+/**
+ * Set the proxy URL (stores in localStorage)
+ */
+export function setProxyUrl(url) {
+  localStorage.setItem(STORAGE_KEY, url)
 }
 
 /**
@@ -17,7 +47,7 @@ export function getProxyUrl() {
  * @throws {Error} if authentication failed or other error
  */
 export async function verifyAdminAccess() {
-  const response = await fetch(`${PROXY_URL}/admin/version`, {
+  const response = await fetch(`${getProxyUrl()}/admin/version`, {
     credentials: 'include'
   })
 
@@ -45,7 +75,7 @@ export async function getHealth() {
   const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
 
   try {
-    const response = await fetch(`${PROXY_URL}/health`, {
+    const response = await fetch(`${getProxyUrl()}/health`, {
       signal: controller.signal
     })
 
@@ -69,7 +99,7 @@ export async function getHealth() {
  * Get proxy version
  */
 export async function getVersion() {
-  const response = await fetch(`${PROXY_URL}/admin/version`, {
+  const response = await fetch(`${getProxyUrl()}/admin/version`, {
     credentials: 'include'
   })
 
@@ -85,7 +115,7 @@ export async function getVersion() {
  * Get session count
  */
 export async function getSessionsCount() {
-  const response = await fetch(`${PROXY_URL}/admin/sessionsCount`, {
+  const response = await fetch(`${getProxyUrl()}/admin/sessionsCount`, {
     credentials: 'include'
   })
 
@@ -101,7 +131,7 @@ export async function getSessionsCount() {
  * Remove all sessions except current
  */
 export async function removeSessions() {
-  const response = await fetch(`${PROXY_URL}/admin/removeSessions`, {
+  const response = await fetch(`${getProxyUrl()}/admin/removeSessions`, {
     method: 'DELETE',
     credentials: 'include'
   })
@@ -118,7 +148,7 @@ export async function removeSessions() {
  * Revoke all tokens (emergency)
  */
 export async function revokeAll() {
-  const response = await fetch(`${PROXY_URL}/admin/revokeAll`, {
+  const response = await fetch(`${getProxyUrl()}/admin/revokeAll`, {
     method: 'POST',
     credentials: 'include'
   })

@@ -34,6 +34,22 @@
           </p>
         </div>
 
+        <div>
+          <label for="proxy-select" class="block text-sm font-medium text-gray-700 mb-1">
+            Proxy Server
+          </label>
+          <select
+            id="proxy-select"
+            :value="selectedProxy"
+            @change="handleProxyChange"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option v-for="option in proxyOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
+
         <button
           class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           @click="handleLogin"
@@ -61,7 +77,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getAuthUrl, handleAuthCallback } from '../services/auth'
-import { verifyAdminAccess } from '../services/admin'
+import { verifyAdminAccess, getProxyOptions, getProxyUrl, setProxyUrl } from '../services/admin'
 import packageJson from '../../package.json'
 
 const route = useRoute()
@@ -71,8 +87,17 @@ const authStore = useAuthStore()
 const isProcessingCallback = ref(false)
 const error = ref(null)
 
+const proxyOptions = getProxyOptions()
+const selectedProxy = ref(getProxyUrl())
+
 const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
+
+function handleProxyChange(event) {
+  const url = event.target.value
+  setProxyUrl(url)
+  selectedProxy.value = url
+}
 
 function handleLogin() {
   window.location.href = getAuthUrl()

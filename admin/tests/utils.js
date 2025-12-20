@@ -171,8 +171,8 @@ export async function checkHealthFromDashboard(page) {
   await expect(page.locator('text=Proxy Health')).toBeVisible({ timeout: 10000 })
 
   // Click check button
-  await page.getByRole('button', { name: 'Check now' }).click()
-  console.log('👆 Clicked Check now')
+  await page.getByRole('button', { name: 'Update now' }).click()
+  console.log('👆 Clicked Update now')
 
   // Wait for loading to complete
   await page.waitForTimeout(2000)
@@ -202,14 +202,16 @@ export async function getSessionCountFromDashboard(page) {
     // Wait for sessions card
     await expect(page.locator('text=Active Sessions')).toBeVisible({ timeout: 10000 })
 
-    // Click refresh to ensure fresh data
-    const sessionsCard = page.locator('text=Active Sessions').locator('..')
-    const refreshButton = sessionsCard.getByRole('button', { name: 'Refresh' })
-    await expect(refreshButton).toBeVisible({ timeout: 5000 })
-    await refreshButton.click()
+    // Click "Update now" to ensure fresh data (updates both health and session count)
+    const updateButton = page.getByRole('button', { name: 'Update now' })
+    await expect(updateButton).toBeVisible({ timeout: 5000 })
+    await updateButton.click()
 
     // Wait for loading
     await page.waitForTimeout(2000)
+
+    // Go up two levels: span -> flex div -> card container
+    const sessionsCard = page.locator('text=Active Sessions').locator('../..')
 
     // Check for error (admin access required)
     const errorBanner = page.locator('text=/Admin access required|Authentication required/i')
@@ -218,8 +220,8 @@ export async function getSessionCountFromDashboard(page) {
       return null
     }
 
-    // Get count - look for the large bold number (font-bold class)
-    const countElement = sessionsCard.locator('.font-bold').first()
+    // Get count - look for the large bold number (text-2xl font-bold)
+    const countElement = sessionsCard.locator('.text-2xl.font-bold').first()
     await expect(countElement).toBeVisible({ timeout: 5000 })
     const countText = await countElement.textContent({ timeout: 5000 })
     const count = parseInt(countText?.trim() || '0', 10)
@@ -280,7 +282,8 @@ export async function hasAdminAccess(page) {
     }
 
     // Check if session count shows a number - 0 is now valid
-    const sessionCount = page.locator('text=Active Sessions').locator('..').locator('.font-bold')
+    // Go up two levels: span -> flex div -> card container
+    const sessionCount = page.locator('text=Active Sessions').locator('../..').locator('.text-2xl.font-bold')
     await expect(sessionCount).toBeVisible({ timeout: 5000 })
     const countText = await sessionCount.textContent({ timeout: 5000 })
     const count = parseInt(countText?.trim() || '', 10)

@@ -56,11 +56,11 @@
               <div class="flex items-center space-x-2">
                 <span v-if="healthAutoRefresh" :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']">{{ refreshCountdown }}s</span>
                 <button
-                  :disabled="loadingHealth"
+                  :disabled="loadingHealth || refreshDisabledAfterRemove"
                   class="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50"
-                  @click="manualHealthCheck"
+                  @click="manualUpdate"
                 >
-                  {{ loadingHealth ? '...' : 'Check now' }}
+                  {{ loadingHealth ? '...' : 'Update now' }}
                 </button>
               </div>
             </div>
@@ -86,7 +86,6 @@
             <div :class="['shadow rounded-lg p-4', isDarkMode ? 'bg-gray-800' : 'bg-white']">
               <div class="flex justify-between items-center">
                 <span :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Active Sessions</span>
-                <button :class="['text-xs', isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800']" @click="manualSessionRefresh">Refresh</button>
               </div>
               <p :class="['text-2xl font-bold mt-1', isDarkMode ? 'text-white' : 'text-gray-900']">{{ sessionCount ?? 0 }}</p>
             </div>
@@ -260,6 +259,7 @@ function stopResize() {
 const sessionCount = ref(null)
 const loadingSessions = ref(false)
 const isRemovingSessions = ref(false)
+const refreshDisabledAfterRemove = ref(false)
 const isRevokingAll = ref(false)
 const isLoggingOut = ref(false)
 const showConfirmModal = ref(false)
@@ -337,9 +337,11 @@ async function checkHealth(isManual = false) {
   }
 }
 
-function manualHealthCheck() {
-  checkHealth(true)
+async function manualUpdate() {
   refreshCountdown.value = HEALTH_CHECK_INTERVAL / 1000
+  // Fetch both without individual logging, then log combined result
+  await Promise.all([checkHealth(false), fetchSessionCount(false)])
+  addLogEntry(`Health: ${healthStatus.value}, Sessions: ${sessionCount.value ?? 0}`, healthStatus.value === 'ok' ? 'success' : 'error')
 }
 
 // Start auto-refresh with countdown
@@ -391,10 +393,6 @@ async function fetchSessionCount(isManual = false) {
   }
 }
 
-function manualSessionRefresh() {
-  fetchSessionCount(true)
-}
-
 // Remove other sessions
 async function handleRemoveSessions() {
   isRemovingSessions.value = true
@@ -403,7 +401,17 @@ async function handleRemoveSessions() {
   try {
     const result = await removeSessions()
     addLogEntry(`Removed ${result.deletedSessions} session(s)`, 'success')
-    await fetchSessionCount(false)
+    // Use the returned count directly to avoid KV eventual consistency delay
+    if (result.remainingSessions !== undefined) {
+      sessionCount.value = result.remainingSessions
+    } else {
+      await fetchSessionCount(false)
+    }
+    // Disable refresh briefly to prevent stale KV reads
+    refreshDisabledAfterRemove.value = true
+    setTimeout(() => {
+      refreshDisabledAfterRemove.value = false
+    }, 2000)
   } catch (e) {
     addLogEntry(`Failed to remove sessions: ${e.message}`, 'error')
   } finally {
