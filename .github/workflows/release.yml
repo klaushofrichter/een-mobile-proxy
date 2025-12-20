@@ -80,7 +80,7 @@ jobs:
         if: steps.check_release.outputs.exists == 'false'
         run: |
           RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/${{ steps.versions.outputs.release_tag }}"
-          RELEASE_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          RELEASE_TIME=$(TZ='America/Chicago' date +"%Y-%m-%d %H:%M:%S CT")
 
           curl -X POST "${{ secrets.SLACK_WEBHOOK }}" \
             -H "Content-Type: application/json" \
