@@ -27,8 +27,16 @@ jobs:
 
       - name: Sync develop with production
         run: |
-          # Ensure develop branch exists locally (fetch if not checked out)
-          git fetch origin develop:develop || git checkout -b develop origin/develop
+          # Verify develop branch exists on remote
+          if ! git ls-remote --heads origin develop | grep -q develop; then
+            echo "::error::develop branch does not exist on remote"
+            exit 1
+          fi
+
+          # Fetch develop branch locally
+          if ! git fetch origin develop:develop 2>/dev/null; then
+            git checkout -b develop origin/develop
+          fi
           git checkout develop
 
           # Merge with conflict detection

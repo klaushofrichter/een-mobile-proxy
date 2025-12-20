@@ -418,6 +418,7 @@ The `production` branch is protected with the following rules:
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
 | `pr-review.yml` | PR to production | AI code review using Claude Code Action |
+| `pr-review-gemini.yml` | PR to production | AI security review using Google Gemini |
 | `test-admin-pr.yml` | PR to production | Runs Playwright tests against local wrangler proxy |
 | `codeql.yml` | PR to production | Security vulnerability scanning |
 | `deploy-admin.yml` | Push to production | Deploys admin app to GitHub Pages |
@@ -436,6 +437,13 @@ The `production` branch is protected with the following rules:
 - Uses `anthropics/claude-code-action@v1` for AI-powered code review
 - Reviews code quality, potential bugs, security issues, and best practices
 - Posts review comments on the pull request
+
+**Gemini Security Review (`pr-review-gemini.yml`):**
+- Uses Google Gemini API for security-focused code review
+- Focuses on security vulnerabilities, input validation, error handling, and reliability
+- Provides risk assessment (Low/Medium/High/Critical) with recommended actions
+- Complements Claude review with security-specific analysis
+- Both reviews use custom prompts from `.github/claude-review.md`
 
 **CodeQL Analysis (`codeql.yml`):**
 - Scans JavaScript/TypeScript for security vulnerabilities
@@ -463,7 +471,8 @@ Configure these secrets in your repository settings (Settings > Secrets and vari
 | `EEN_CLIENT_SECRET` | EEN OAuth Client Secret | PR tests (local proxy) |
 | `ADMIN_TEST_USER` | Test user email (must be in ADMIN_EMAILS) | Playwright tests |
 | `ADMIN_TEST_PASSWORD` | Test user password | Playwright tests |
-| `ANTHROPIC_API_KEY` | Anthropic API key for Claude Code reviews | PR review workflow |
+| `ANTHROPIC_API_KEY` | Anthropic API key for Claude Code reviews | Claude PR review workflow |
+| `GEMINI_API_KEY` | Google Gemini API key for security reviews | Gemini PR review workflow |
 | `SLACK_WEBHOOK` | Slack incoming webhook URL for notifications | Deploy and release workflows |
 
 ### Slack Notifications
