@@ -63,8 +63,11 @@ jobs:
           echo "✅ .dev.vars created"
           echo "=== .dev.vars contents (masked) ==="
           sed 's/=.*/=***/' .dev.vars
-          echo "=== CLIENT_SECRET length check ==="
-          echo "Length: ${#CLIENT_SECRET}"
+          echo "=== Secret hash verification (compare with local) ==="
+          echo "CLIENT_ID length: ${#CLIENT_ID}"
+          echo "CLIENT_ID SHA256: $(printf '%s' "$CLIENT_ID" | sha256sum | cut -d' ' -f1)"
+          echo "CLIENT_SECRET length: ${#CLIENT_SECRET}"
+          echo "CLIENT_SECRET SHA256: $(printf '%s' "$CLIENT_SECRET" | sha256sum | cut -d' ' -f1)"
         working-directory: proxy
         env:
           CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
