@@ -43,102 +43,80 @@ jobs:
         run: |
           # Get the diff between base and head
           git diff origin/${{ github.base_ref }}...HEAD > pr_diff.txt
-          # Truncate if too large (Gemini has token limits)
-          head -c 100000 pr_diff.txt > pr_diff_truncated.txt
-          echo "diff_file=pr_diff_truncated.txt" >> $GITHUB_OUTPUT
 
-      - name: Get changed files list
-        id: changed-files
-        run: |
+          # Truncate if too large (Gemini has token limits)
+          if [ $(wc -c < pr_diff.txt) -gt 100000 ]; then
+            echo "::warning::Diff truncated to 100KB for Gemini review"
+            head -c 100000 pr_diff.txt > pr_diff_truncated.txt
+          else
+            cp pr_diff.txt pr_diff_truncated.txt
+          fi
+
+          # Get changed files list
           git diff --name-only origin/${{ github.base_ref }}...HEAD > changed_files.txt
           echo "Changed files:"
           cat changed_files.txt
 
+          # Store content as outputs for the action
+          echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+          cat changed_files.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "diff_content<<EOF" >> $GITHUB_OUTPUT
+          cat pr_diff_truncated.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Run Gemini Code Review
         id: gemini-review
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          # Build the prompt - Gemini focuses on security and reliability
-          REVIEW_PROMPT="Please review this pull request with a focus on CODE SECURITY and RELIABILITY.
+        uses: google-github-actions/run-gemini-cli@v0
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          gemini_model: "gemini-3-flash-preview"
+          prompt: |
+            Please review this pull request with a focus on CODE SECURITY and PERFORMANCE.
 
-          Specifically analyze:
-          1. Security vulnerabilities (injection attacks, XSS, CSRF, authentication/authorization issues)
-          2. Input validation and sanitization
-          3. Error handling and edge cases
-          4. Resource leaks and memory management
-          5. Race conditions and concurrency issues
-          6. Dependency security concerns
-          7. Secrets or credentials exposure
-          8. API security best practices
+            Specifically analyze:
+            1. Security vulnerabilities (injection attacks, XSS, CSRF, authentication/authorization issues)
+            2. Input validation and sanitization
+            3. Performance bottlenecks and optimization opportunities
+            4. Resource leaks and memory management
+            5. Error handling and edge cases
+            6. Race conditions and concurrency issues
+            7. Secrets or credentials exposure
+            8. API security best practices
 
-          Be concise but thorough. Focus on actionable security and reliability feedback.
+            Be concise but thorough. Focus on actionable security and performance feedback.
 
-          At the end, provide a clear \"Security Assessment\" section with:
-          - Risk level (Low/Medium/High/Critical)
-          - Summary of findings
-          - Recommended actions
+            At the end, provide a clear "Security & Performance Assessment" section with:
+            - Risk level (Low/Medium/High/Critical)
+            - Summary of findings
+            - Recommended actions
 
-          ${{ steps.read-prompts.outputs.extra_prompt }}
+            ${{ steps.read-prompts.outputs.extra_prompt }}
 
-          Here are the changed files:
-          $(cat changed_files.txt)
+            Here are the changed files:
+            ${{ steps.get-diff.outputs.changed_files }}
 
-          Here is the diff:
-          $(cat pr_diff_truncated.txt)"
-
-          # Escape the prompt for JSON
-          ESCAPED_PROMPT=$(echo "$REVIEW_PROMPT" | jq -Rs .)
-
-          # Call Gemini API
-          RESPONSE=$(curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"contents\": [{
-                \"parts\": [{
-                  \"text\": $ESCAPED_PROMPT
-                }]
-              }],
-              \"generationConfig\": {
-                \"temperature\": 0.2,
-                \"maxOutputTokens\": 8192
-              }
-            }")
-
-          # Extract the review text from response
-          REVIEW_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
-
-          if [ -z "$REVIEW_TEXT" ]; then
-            echo "::warning::Failed to get review from Gemini API (informational only)"
-            echo "API Response: $RESPONSE"
-            echo "Gemini review unavailable - see workflow logs for details." > gemini_review.txt
-          else
-            # Save review to file for the next step
-            echo "$REVIEW_TEXT" > gemini_review.txt
-            echo "Review generated successfully"
-          fi
+            Here is the diff:
+            ${{ steps.get-diff.outputs.diff_content }}
 
       - name: Post Review Comment
+        if: always()
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require('fs');
-
-            const reviewFile = 'gemini_review.txt';
-            if (!fs.existsSync(reviewFile)) {
-              core.warning('Review file not found (informational only)');
-              return;
-            }
-
-            const reviewText = fs.readFileSync(reviewFile, 'utf8');
-            if (!reviewText.trim()) {
-              core.warning('Review text is empty (informational only)');
-              return;
-            }
+            // Get the output from the Gemini action
+            const geminiOutput = `${{ steps.gemini-review.outputs.output }}`;
 
             // Get the workflow run URL
             const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            let reviewText = geminiOutput;
+            if (!reviewText || !reviewText.trim()) {
+              core.warning('Gemini review output is empty (informational only)');
+              reviewText = 'Gemini review unavailable - see workflow logs for details.';
+            }
 
             // Post as PR comment
             try {
@@ -146,7 +124,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: `## Gemini Security Review\n\n${reviewText}\n\n---\n*Automated security review by Google Gemini (informational)* | [View full review details](${runUrl})`
+                body: `## Gemini Security & Performance Review\n\n${reviewText}\n\n---\n*Automated security review by Google Gemini (informational)* | [View full review details](${runUrl})`
               });
               console.log('Posted Gemini review comment to PR');
             } catch (error) {

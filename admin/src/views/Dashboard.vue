@@ -264,6 +264,7 @@ const sessionCount = ref(null)
 const loadingSessions = ref(false)
 const isRemovingSessions = ref(false)
 const refreshDisabledAfterRemove = ref(false)
+const isPollingKv = ref(false) // Guard against concurrent KV polling
 const isRevokingAll = ref(false)
 const isLoggingOut = ref(false)
 const showConfirmModal = ref(false)
@@ -399,20 +400,35 @@ async function fetchSessionCount(isManual = false) {
 
 // Wait for KV consistency using exponential backoff polling
 async function waitForKvConsistency(expectedCount) {
-  const maxAttempts = 5
-  for (let i = 0; i < maxAttempts; i++) {
-    const delay = 500 * Math.pow(2, i) // 500ms, 1s, 2s, 4s, 8s
-    await new Promise(resolve => setTimeout(resolve, delay))
-    try {
-      const fresh = await getSessionsCount()
-      if (fresh.sessionCount === expectedCount) {
-        return true // KV is consistent
-      }
-    } catch {
-      // Ignore errors during polling
-    }
+  // Guard against concurrent polling operations
+  if (isPollingKv.value) {
+    return false
   }
-  return false // Gave up waiting
+  isPollingKv.value = true
+
+  const maxAttempts = 5
+  try {
+    for (let i = 0; i < maxAttempts; i++) {
+      const delay = 500 * Math.pow(2, i) // 500ms, 1s, 2s, 4s, 8s
+      await new Promise(resolve => setTimeout(resolve, delay))
+      try {
+        const fresh = await getSessionsCount()
+        if (fresh.sessionCount === expectedCount) {
+          return true // KV is consistent
+        }
+      } catch (error) {
+        // Log network/auth errors but continue polling for transient issues
+        if (error.message?.includes('401') || error.message?.includes('403')) {
+          addLogEntry('Auth error during KV sync', 'error')
+          return false // Stop polling on auth errors
+        }
+        // For network errors, continue polling - they may be transient
+      }
+    }
+    return false // Gave up waiting
+  } finally {
+    isPollingKv.value = false
+  }
 }
 
 // Remove other sessions

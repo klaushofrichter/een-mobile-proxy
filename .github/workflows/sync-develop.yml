@@ -27,23 +27,50 @@ jobs:
 
       - name: Sync develop with production
         run: |
+          set -e
+
           # Verify develop branch exists on remote
+          echo "Checking if develop branch exists on remote..."
           if ! git ls-remote --heads origin develop | grep -q develop; then
-            echo "::error::develop branch does not exist on remote"
+            echo "::error::develop branch does not exist on remote. Please create it first."
             exit 1
           fi
 
-          # Fetch develop branch locally
-          if ! git fetch origin develop:develop 2>/dev/null; then
-            git checkout -b develop origin/develop
+          # Fetch develop branch locally with explicit error handling
+          echo "Fetching develop branch..."
+          if ! git fetch origin develop 2>&1; then
+            echo "::error::Failed to fetch develop branch from origin. Check network/permissions."
+            exit 1
           fi
-          git checkout develop
+
+          # Checkout develop branch
+          echo "Checking out develop branch..."
+          if git show-ref --verify --quiet refs/heads/develop; then
+            git checkout develop
+          else
+            if ! git checkout -b develop origin/develop; then
+              echo "::error::Failed to checkout develop branch. The branch may be corrupted."
+              exit 1
+            fi
+          fi
+
+          # Ensure we're up to date with remote
+          git reset --hard origin/develop
 
           # Merge with conflict detection
+          echo "Merging production into develop..."
           if ! git merge origin/production -m "Auto-sync: Merge production into develop after PR #${{ github.event.pull_request.number }}"; then
             echo "::error::Merge conflict detected. Manual intervention required."
+            echo "::error::Please merge production into develop locally and resolve conflicts."
             git merge --abort
             exit 1
           fi
 
-          git push origin develop
+          # Push changes
+          echo "Pushing to origin/develop..."
+          if ! git push origin develop; then
+            echo "::error::Failed to push to develop. Check if branch is protected or if there are permission issues."
+            exit 1
+          fi
+
+          echo "Successfully synced develop with production"
