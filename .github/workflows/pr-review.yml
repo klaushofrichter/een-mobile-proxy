@@ -69,12 +69,15 @@ jobs:
               return;
             }
 
+            // Get the workflow run URL
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
             // Post as PR comment
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `## Claude Code Review\n\n${finalResult}\n\n---\n*Automated review by Claude Code*`
+              body: `## Claude Code Review\n\n${finalResult}\n\n---\n*Automated review by Claude Code* | [View full review details](${runUrl})`
             });
 
             console.log('Posted review comment to PR');
