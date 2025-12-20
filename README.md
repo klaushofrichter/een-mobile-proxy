@@ -420,23 +420,36 @@ Or directly:
 
 ## API Endpoints
 
-### OAuth Endpoints (Public)
+### Public Endpoints (No Authentication Required)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/proxy/getAccessToken` | POST | Exchange authorization code for tokens |
-| `/proxy/refreshAccessToken` | POST | Refresh access token |
-| `/proxy/revoke` | POST | Revoke tokens and clear session |
-| `/health` | GET | Health check |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET, HEAD | `/health` | Health check - returns status, version, and timestamp. HEAD method supported for monitoring services like UptimeRobot. |
 
-### Admin Endpoints (Require Admin Authentication)
+### OAuth Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/admin/version` | GET | Get proxy version and deploy time |
-| `/admin/sessionsCount` | GET | Get count of active sessions |
-| `/admin/removeSessions` | DELETE | Remove all sessions except current |
-| `/admin/revokeAll` | POST | Revoke all tokens (emergency) |
+| Method | Endpoint | Auth Required | Description |
+|--------|----------|---------------|-------------|
+| POST | `/proxy/getAccessToken` | No (uses OAuth code) | Exchange authorization code for access token. Returns access token, stores refresh token server-side. |
+| POST | `/proxy/refreshAccessToken` | Session cookie | Refresh access token using stored refresh token. |
+| POST | `/proxy/revoke` | Session cookie | Revoke tokens at EEN and clear server-side session. |
+
+### Admin Endpoints (Admin User Required)
+
+These endpoints require:
+1. A valid session cookie (`sessionId`)
+2. The session's `userEmail` must be in the `ADMIN_EMAILS` environment variable
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/version` | Get proxy version and deploy time |
+| GET | `/admin/sessionsCount` | Count active sessions stored in KV |
+| DELETE | `/admin/removeSessions` | Remove all sessions except current user's session |
+| POST | `/admin/revokeAll` | Emergency: revoke all tokens at EEN and delete all sessions |
+
+**Authentication Error Responses:**
+- `401 Unauthorized` - No session cookie or session expired/invalid
+- `403 Forbidden` - User is authenticated but email is not in `ADMIN_EMAILS` list
 
 ## Version Management
 
