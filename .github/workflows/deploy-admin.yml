@@ -41,6 +41,8 @@ jobs:
         working-directory: admin
         env:
           VITE_PROXY_URL: ${{ vars.VITE_PROXY_URL || 'https://een-oauth-proxy.klaushofrichter.workers.dev' }}
+          VITE_EEN_CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
+          VITE_REDIRECT_URI: 'https://klaushofrichter.github.io/een-oauth-proxy/'
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
