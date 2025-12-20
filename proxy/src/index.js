@@ -9,7 +9,7 @@
  *   POST /proxy/refreshAccessToken - Refresh access token using stored refresh token
  *   POST /proxy/revoke             - Revoke tokens and clear session
  *
- *   GET    /health                 - Health check (public, no auth required)
+ *   GET|HEAD /health              - Health check (public, no auth required)
  *
  *   GET    /admin/version          - Get proxy version and deploy time
  *   GET    /admin/sessionsCount    - Count active sessions
@@ -87,7 +87,8 @@ async function routeRequest(url, request, env) {
   }
 
   // Health check (public endpoint, no auth required)
-  if (path === '/health' && request.method === 'GET') {
+  // Accept both GET and HEAD (for monitoring services like UptimeRobot)
+  if (path === '/health' && (request.method === 'GET' || request.method === 'HEAD')) {
     return handleHealth(env)
   }
 

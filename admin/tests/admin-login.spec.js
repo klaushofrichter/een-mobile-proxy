@@ -88,10 +88,12 @@ test.describe('Admin Login and Health', () => {
     expect(health.status).toBe('ok')
     console.log(`✅ Proxy health is OK`)
 
-    // Verify proxy URL is displayed
-    const proxyUrl = getProxyUrl()
-    await expect(page.locator(`text=${proxyUrl}`)).toBeVisible()
-    console.log(`✅ Proxy URL displayed: ${proxyUrl}`)
+    // Verify a proxy URL is displayed (either localhost or Cloudflare)
+    // The actual URL depends on environment configuration
+    const proxyUrlElement = page.locator('.font-mono').filter({ hasText: /localhost:8787|een-oauth-proxy\.klaushofrichter\.workers\.dev/ })
+    await expect(proxyUrlElement.first()).toBeVisible()
+    const displayedUrl = await proxyUrlElement.first().textContent()
+    console.log(`✅ Proxy URL displayed: ${displayedUrl}`)
 
     // Verify "Healthy" status indicator
     await expect(page.locator('text=Healthy')).toBeVisible()
