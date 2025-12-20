@@ -31,6 +31,7 @@ jobs:
       - name: Run Claude Code Review
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Get the diff for this PR
           git diff origin/${{ github.base_ref }}...HEAD > pr_diff.txt
@@ -45,5 +46,3 @@ jobs:
             cat review_output.txt >> comment.md
             gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md
           fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
