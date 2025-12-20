@@ -106,14 +106,14 @@
 
           <!-- Actions -->
           <div :class="['shadow rounded-lg p-4 space-y-3', isDarkMode ? 'bg-gray-800' : 'bg-white']">
-            <div :class="['flex items-center justify-between p-3 rounded border', isDarkMode ? 'bg-orange-900/30 border-orange-700' : 'bg-orange-50 border-orange-200']">
+            <div :class="['flex items-center justify-between p-3 rounded border', isDarkMode ? 'bg-amber-900/30 border-amber-600' : 'bg-amber-50 border-amber-300']">
               <div>
-                <p :class="['text-sm font-medium', isDarkMode ? 'text-orange-400' : 'text-orange-900']">Remove Other Sessions</p>
-                <p :class="['text-xs', isDarkMode ? 'text-orange-500' : 'text-orange-700']">Log out other users</p>
+                <p :class="['text-sm font-medium', isDarkMode ? 'text-amber-400' : 'text-amber-800']">Remove Other Sessions</p>
+                <p :class="['text-xs', isDarkMode ? 'text-amber-500' : 'text-amber-600']">Log out other users</p>
               </div>
               <button
                 :disabled="isRemovingSessions"
-                class="px-3 py-1.5 bg-orange-600 text-white text-xs rounded hover:bg-orange-700 disabled:opacity-50"
+                class="px-3 py-1.5 bg-amber-500 text-white text-xs rounded hover:bg-amber-600 disabled:opacity-50"
                 @click="handleRemoveSessions"
               >
                 {{ isRemovingSessions ? '...' : 'Remove' }}
