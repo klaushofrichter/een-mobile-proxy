@@ -56,14 +56,20 @@ jobs:
       - name: Create proxy dev vars
         run: |
           echo "=== Creating .dev.vars ==="
-          echo "CLIENT_ID=${{ secrets.VITE_EEN_CLIENT_ID }}" > .dev.vars
-          echo "CLIENT_SECRET=${{ secrets.EEN_CLIENT_SECRET }}" >> .dev.vars
-          echo "ADMIN_EMAILS=${{ secrets.ADMIN_TEST_USER }}" >> .dev.vars
-          echo "ALLOWED_ORIGINS=http://127.0.0.1:3333" >> .dev.vars
+          printf '%s\n' "CLIENT_ID=$CLIENT_ID" > .dev.vars
+          printf '%s\n' "CLIENT_SECRET=$CLIENT_SECRET" >> .dev.vars
+          printf '%s\n' "ADMIN_EMAILS=$ADMIN_EMAILS" >> .dev.vars
+          printf '%s\n' "ALLOWED_ORIGINS=http://127.0.0.1:3333" >> .dev.vars
           echo "✅ .dev.vars created"
           echo "=== .dev.vars contents (masked) ==="
           sed 's/=.*/=***/' .dev.vars
+          echo "=== CLIENT_SECRET length check ==="
+          echo "Length: ${#CLIENT_SECRET}"
         working-directory: proxy
+        env:
+          CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.EEN_CLIENT_SECRET }}
+          ADMIN_EMAILS: ${{ secrets.ADMIN_TEST_USER }}
 
       - name: Start local proxy
         run: |
