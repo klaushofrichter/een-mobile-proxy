@@ -49,13 +49,13 @@ jobs:
               return;
             }
 
-            const content = JSON.parse(fs.readFileSync(execFile, 'utf8'));
+            const turns = JSON.parse(fs.readFileSync(execFile, 'utf8'));
 
-            // Find the last assistant message with the final result
+            // Find the last assistant message with text content
             let finalResult = '';
-            for (const turn of content.turns || []) {
-              if (turn.role === 'assistant' && turn.content) {
-                for (const block of turn.content) {
+            for (const turn of turns) {
+              if (turn.type === 'assistant' && turn.message?.content) {
+                for (const block of turn.message.content) {
                   if (block.type === 'text' && block.text) {
                     finalResult = block.text;
                   }
@@ -65,6 +65,7 @@ jobs:
 
             if (!finalResult) {
               console.log('No final result found in execution output');
+              console.log('Turn types found:', turns.map(t => t.type));
               return;
             }
 
