@@ -19,6 +19,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Read additional review prompts
+        id: read-prompts
+        run: |
+          if [ -f ".github/claude-review.md" ]; then
+            echo "extra_prompt<<EOF" >> $GITHUB_OUTPUT
+            cat .github/claude-review.md >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "extra_prompt=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@v1
@@ -35,6 +46,8 @@ jobs:
             Be concise but thorough. Focus on actionable feedback.
 
             At the end, provide a clear "Final Result" section summarizing your review.
+
+            ${{ steps.read-prompts.outputs.extra_prompt }}
 
       - name: Extract and Post Review Comment
         uses: actions/github-script@v7
