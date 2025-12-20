@@ -79,12 +79,16 @@ jobs:
 
             // Find the last assistant message with text content (intentionally keeps only
             // the final review text, not concatenating intermediate messages)
+            // Uses reverse iteration with early break for better performance
             let finalResult = '';
-            for (const turn of turns) {
+            for (let i = turns.length - 1; i >= 0 && !finalResult; i--) {
+              const turn = turns[i];
               if (turn.type === 'assistant' && turn.message?.content) {
-                for (const block of turn.message.content) {
-                  if (block.type === 'text' && block.text) {
-                    finalResult = block.text;
+                const content = turn.message.content;
+                for (let j = content.length - 1; j >= 0; j--) {
+                  if (content[j].type === 'text' && content[j].text) {
+                    finalResult = content[j].text;
+                    break;
                   }
                 }
               }
