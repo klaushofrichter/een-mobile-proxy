@@ -1,17 +1,16 @@
-name: Test Admin App
+name: Test Deployed Admin App
 
 on:
-  pull_request:
-    branches:
-      - production
-      - develop
-    paths:
-      - 'admin/**'
-      - '.github/workflows/test-admin.yml'
+  workflow_run:
+    workflows: ["Deploy Admin to GitHub Pages"]
+    types:
+      - completed
+  workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,14 +29,6 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install chromium
         working-directory: admin
-
-      - name: Build admin app
-        run: npm run build
-        working-directory: admin
-        env:
-          VITE_PROXY_URL: 'https://een-oauth-proxy.klaushofrichter.workers.dev'
-          VITE_EEN_CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
-          VITE_REDIRECT_URI: 'http://127.0.0.1:3333'
 
       - name: Run tests against Cloudflare proxy
         run: npm test
