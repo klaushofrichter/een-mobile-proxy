@@ -409,7 +409,7 @@ The `production` branch is protected with the following rules:
 - **Required status checks must pass before merging:**
   - `review` - Claude Code AI review
   - `test` - Playwright tests with local proxy
-  - `Analyze` - CodeQL security analysis
+  - `Analyze (javascript-typescript)` - CodeQL security analysis
 - **Require pull request before merging** - Direct pushes to production are blocked
 - **Administrators are subject to these rules** - No bypass allowed
 
@@ -419,10 +419,11 @@ The `production` branch is protected with the following rules:
 |----------|---------|-------------|
 | `pr-review.yml` | PR to production | AI code review using Claude Code Action |
 | `test-admin-pr.yml` | PR to production | Runs Playwright tests against local wrangler proxy |
-| `codeql.yml` | Push/PR to production, weekly | Security vulnerability scanning |
+| `codeql.yml` | PR to production | Security vulnerability scanning |
 | `deploy-admin.yml` | Push to production | Deploys admin app to GitHub Pages |
 | `test-admin-deployed.yml` | After deploy | Tests the deployed admin app |
 | `release.yml` | After deployed tests pass | Creates GitHub release with version tag |
+| `sync-develop.yml` | PR merged to production | Auto-syncs develop branch with production |
 
 ### Workflow Details
 
@@ -438,8 +439,12 @@ The `production` branch is protected with the following rules:
 
 **CodeQL Analysis (`codeql.yml`):**
 - Scans JavaScript/TypeScript for security vulnerabilities
-- Uses `security-extended` query suite for comprehensive analysis
-- Runs on pushes, PRs, and weekly scheduled scans
+- Runs on PRs to production and can be triggered manually
+
+**Branch Sync (`sync-develop.yml`):**
+- Automatically merges production back into develop after PR merges
+- Prevents develop from becoming out-of-sync with production
+- **Note:** After a PR is merged, run `git pull` locally before making new commits
 
 **Deployment Pipeline:**
 1. PR merged to `production` triggers `deploy-admin.yml`
