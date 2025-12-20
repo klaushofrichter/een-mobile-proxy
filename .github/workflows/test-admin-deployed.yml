@@ -31,10 +31,12 @@ jobs:
         working-directory: admin
 
       - name: Run tests against Cloudflare proxy
-        run: npm test
+        run: npx playwright test -x
         working-directory: admin
         env:
           VITE_PROXY_URL: 'https://een-oauth-proxy.klaushofrichter.workers.dev'
+          VITE_EEN_CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
+          VITE_REDIRECT_URI: 'http://127.0.0.1:3333'
           ADMIN_TEST_USER: ${{ secrets.ADMIN_TEST_USER }}
           ADMIN_TEST_PASSWORD: ${{ secrets.ADMIN_TEST_PASSWORD }}
 
