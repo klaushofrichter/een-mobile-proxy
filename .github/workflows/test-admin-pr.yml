@@ -68,7 +68,7 @@ jobs:
       - name: Start local proxy
         run: |
           echo "=== Starting wrangler dev ==="
-          npx wrangler dev --port 8787 --local &
+          npx wrangler dev --port 8787 --local > /tmp/proxy.log 2>&1 &
           PROXY_PID=$!
           echo $PROXY_PID > /tmp/proxy.pid
           echo "Proxy PID: $PROXY_PID"
@@ -87,6 +87,8 @@ jobs:
           # Final check
           if ! curl -s http://localhost:8787/health > /dev/null 2>&1; then
             echo "❌ Proxy failed to start"
+            echo "=== Proxy logs ==="
+            cat /tmp/proxy.log || true
             exit 1
           fi
         working-directory: proxy
@@ -98,6 +100,15 @@ jobs:
           echo ""
           echo "=== Proxy Process ==="
           ps aux | grep wrangler || true
+          echo ""
+          echo "=== Test OAuth Token Endpoint (expect error - no valid code) ==="
+          curl -v -X POST http://localhost:8787/oauth/token \
+            -H "Content-Type: application/json" \
+            -H "Origin: http://127.0.0.1:3333" \
+            -d '{"code":"test_invalid_code","redirect_uri":"http://127.0.0.1:3333"}' 2>&1 || true
+          echo ""
+          echo "=== Current Proxy Logs ==="
+          cat /tmp/proxy.log || true
 
       - name: Run tests against local proxy
         run: |
@@ -114,6 +125,12 @@ jobs:
           VITE_REDIRECT_URI: 'http://127.0.0.1:3333'
           ADMIN_TEST_USER: ${{ secrets.ADMIN_TEST_USER }}
           ADMIN_TEST_PASSWORD: ${{ secrets.ADMIN_TEST_PASSWORD }}
+
+      - name: Show proxy logs
+        if: always()
+        run: |
+          echo "=== Proxy Logs ==="
+          cat /tmp/proxy.log || echo "No proxy logs found"
 
       - name: Stop local proxy
         if: always()
