@@ -27,6 +27,15 @@ jobs:
 
       - name: Sync develop with production
         run: |
+          # Ensure develop branch exists locally (fetch if not checked out)
+          git fetch origin develop:develop || git checkout -b develop origin/develop
           git checkout develop
-          git merge origin/production -m "Auto-sync: Merge production into develop after PR #${{ github.event.pull_request.number }}"
+
+          # Merge with conflict detection
+          if ! git merge origin/production -m "Auto-sync: Merge production into develop after PR #${{ github.event.pull_request.number }}"; then
+            echo "::error::Merge conflict detected. Manual intervention required."
+            git merge --abort
+            exit 1
+          fi
+
           git push origin develop

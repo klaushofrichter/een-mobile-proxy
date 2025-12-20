@@ -405,17 +405,19 @@ async function handleRemoveSessions() {
   try {
     const result = await removeSessions()
     addLogEntry(`Removed ${result.deletedSessions} session(s)`, 'success')
-    // Use the returned count directly to avoid KV eventual consistency delay
+    // Use the returned count directly to avoid KV eventual consistency issues.
+    // The API returns the accurate count after the operation completes.
     if (result.remainingSessions !== undefined) {
       sessionCount.value = result.remainingSessions
     } else {
       await fetchSessionCount(false)
     }
-    // Disable refresh briefly to prevent stale KV reads
+    // Disable refresh briefly to prevent stale KV reads from eventual consistency.
+    // 3 seconds is conservative to handle slow KV propagation.
     refreshDisabledAfterRemove.value = true
     setTimeout(() => {
       refreshDisabledAfterRemove.value = false
-    }, 2000)
+    }, 3000)
   } catch (e) {
     addLogEntry(`Failed to remove sessions: ${e.message}`, 'error')
   } finally {
