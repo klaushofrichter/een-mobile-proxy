@@ -9,6 +9,7 @@ on:
       - 'admin/**'
       - 'proxy/**'
       - '.github/workflows/test-admin-pr.yml'
+  workflow_dispatch:
 
 jobs:
   test:
