@@ -127,16 +127,20 @@ jobs:
             // Sanitize the output to prevent XSS/injection in GitHub comments
             function sanitizeForGitHubComment(text) {
               if (!text) return '';
-              return text
-                // Remove raw HTML tags that could execute scripts
-                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '[script removed]')
-                .replace(/<iframe\b[^>]*>/gi, '[iframe removed]')
-                .replace(/<object\b[^>]*>/gi, '[object removed]')
-                .replace(/<embed\b[^>]*>/gi, '[embed removed]')
-                // Escape HTML entities in non-code blocks
-                .replace(/(?<!`)<(?!\/?(code|pre|a|b|i|em|strong|h[1-6]|ul|ol|li|p|br|hr|blockquote|table|tr|td|th|thead|tbody|img)\b)/gi, '&lt;')
-                // Limit length to prevent DoS
-                .substring(0, 65000);
+              // Limit length first to prevent DoS on regex operations
+              let sanitized = text.substring(0, 65000);
+              // Remove dangerous HTML tags (simple patterns to avoid ReDoS)
+              sanitized = sanitized.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '[script removed]');
+              sanitized = sanitized.replace(/<script[^>]*>/gi, '[script removed]');
+              sanitized = sanitized.replace(/<\/script>/gi, '');
+              sanitized = sanitized.replace(/<iframe[^>]*>/gi, '[iframe removed]');
+              sanitized = sanitized.replace(/<object[^>]*>/gi, '[object removed]');
+              sanitized = sanitized.replace(/<embed[^>]*>/gi, '[embed removed]');
+              sanitized = sanitized.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '[style removed]');
+              sanitized = sanitized.replace(/<link[^>]*>/gi, '[link removed]');
+              // Remove on* event handlers
+              sanitized = sanitized.replace(/\s+on\w+\s*=/gi, ' data-removed=');
+              return sanitized;
             }
 
             let reviewText = sanitizeForGitHubComment(geminiOutput);

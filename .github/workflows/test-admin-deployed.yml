@@ -55,3 +55,132 @@ jobs:
           name: test-screenshots
           path: admin/test-results/
           retention-days: 7
+
+      - name: Notify Slack - Success
+        if: success()
+        run: |
+          TEST_TIME=$(TZ='America/Chicago' date +"%Y-%m-%d %H:%M:%S CT")
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          curl -X POST "${{ secrets.SLACK_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d @- << EOF
+          {
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "✅ Production Tests PASSED",
+                  "emoji": true
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Status:*\nAll tests passed"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Completed:*\n${TEST_TIME}"
+                  }
+                ]
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "📋 View Results",
+                      "emoji": true
+                    },
+                    "url": "${RUN_URL}",
+                    "style": "primary"
+                  }
+                ]
+              },
+              {
+                "type": "context",
+                "elements": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "Tested via GitHub Actions • Workflow: Test Deployed Admin App"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          echo "✅ Slack success notification sent"
+
+      - name: Notify Slack - Failure
+        if: failure()
+        run: |
+          TEST_TIME=$(TZ='America/Chicago' date +"%Y-%m-%d %H:%M:%S CT")
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          curl -X POST "${{ secrets.SLACK_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d @- << EOF
+          {
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "🚨 Production Tests FAILED",
+                  "emoji": true
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*⚠️ ATTENTION REQUIRED: Tests failed after production deployment!*"
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Status:*\n❌ FAILED"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Time:*\n${TEST_TIME}"
+                  }
+                ]
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "🔍 View Failure Details",
+                      "emoji": true
+                    },
+                    "url": "${RUN_URL}",
+                    "style": "danger"
+                  }
+                ]
+              },
+              {
+                "type": "context",
+                "elements": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "Tested via GitHub Actions • Workflow: Test Deployed Admin App"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          echo "🚨 Slack failure notification sent"

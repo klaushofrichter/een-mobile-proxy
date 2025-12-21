@@ -21,6 +21,22 @@
 const EEN_TOKEN_URL = 'https://auth.eagleeyenetworks.com/oauth2/token'
 const EEN_REVOKE_URL = 'https://auth.eagleeyenetworks.com/oauth2/revoke'
 
+// TTL bounds (in seconds)
+const MIN_REFRESH_TOKEN_TTL = 0
+const MAX_REFRESH_TOKEN_TTL = 2592000 // 30 days
+const DEFAULT_REFRESH_TOKEN_TTL = 86400 // 1 day
+
+/**
+ * Get validated refresh token TTL from environment
+ * @param {Object} env - Environment bindings
+ * @returns {number} - TTL in seconds (bounded between 0 and 30 days)
+ */
+function getRefreshTokenTtl(env) {
+  const parsed = parseInt(env.REFRESH_TOKEN_TTL, 10)
+  if (isNaN(parsed)) return DEFAULT_REFRESH_TOKEN_TTL
+  return Math.max(MIN_REFRESH_TOKEN_TTL, Math.min(parsed, MAX_REFRESH_TOKEN_TTL))
+}
+
 /**
  * Main request handler
  */
@@ -179,7 +195,7 @@ async function handleGetAccessToken(url, request, env) {
   }
 
   // Store in KV with TTL matching token expiry (plus configurable buffer for refresh)
-  const refreshTokenTtl = parseInt(env.REFRESH_TOKEN_TTL, 10) || 86400
+  const refreshTokenTtl = getRefreshTokenTtl(env)
   const ttl = (tokens.expires_in || 3600) + refreshTokenTtl
   await env.EEN_OAUTH_SESSIONS.put(sessionId, JSON.stringify(sessionData), {
     expirationTtl: ttl
@@ -251,7 +267,7 @@ async function handleRefreshAccessToken(request, env) {
     refreshToken: tokens.refresh_token || sessionData.refreshToken
   }
 
-  const refreshTokenTtl = parseInt(env.REFRESH_TOKEN_TTL, 10) || 86400
+  const refreshTokenTtl = getRefreshTokenTtl(env)
   const ttl = (tokens.expires_in || 3600) + refreshTokenTtl
   await env.EEN_OAUTH_SESSIONS.put(sessionId, JSON.stringify(updatedSessionData), {
     expirationTtl: ttl

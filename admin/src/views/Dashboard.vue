@@ -445,7 +445,8 @@ async function waitForKvConsistency(expectedCount) {
             return false
           }
           // Log network errors but continue polling - they may be transient
-          addLogEntry(`KV sync retry ${i + 1}/${KV_POLL_MAX_ATTEMPTS}: ${error?.message || 'Network error'}`, 'info')
+          const errorMsg = error?.message || (typeof error === 'string' ? error : 'Network error')
+          addLogEntry(`KV sync retry ${i + 1}/${KV_POLL_MAX_ATTEMPTS}: ${errorMsg}`, 'info')
         }
       }
       return false // Gave up waiting

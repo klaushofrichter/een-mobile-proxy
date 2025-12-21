@@ -15,6 +15,22 @@ const ALLOWED_PROXY_HOSTS = [
   'een-oauth-proxy.klaushofrichter.workers.dev'
 ]
 
+// Validate and extract ENV_PROXY_URL hostname at module initialization
+let ENV_PROXY_HOSTNAME = null
+if (ENV_PROXY_URL) {
+  try {
+    const parsed = new URL(ENV_PROXY_URL)
+    // Only trust ENV_PROXY_URL if it's HTTPS (or localhost for dev)
+    if (parsed.protocol === 'https:' || parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+      ENV_PROXY_HOSTNAME = parsed.hostname
+    } else {
+      console.warn('ENV_PROXY_URL must use HTTPS in production, ignoring:', ENV_PROXY_URL)
+    }
+  } catch {
+    console.warn('Invalid ENV_PROXY_URL format, ignoring:', ENV_PROXY_URL)
+  }
+}
+
 /**
  * Check if running in production (GitHub Pages)
  * Uses both Vite's build mode and strict hostname check
@@ -65,12 +81,9 @@ function isValidProxyUrl(url) {
       return true
     }
 
-    // Also allow ENV_PROXY_URL hostname if configured
-    if (ENV_PROXY_URL) {
-      const envHostname = new URL(ENV_PROXY_URL).hostname
-      if (hostname === envHostname) {
-        return true
-      }
+    // Also allow validated ENV_PROXY_URL hostname if configured
+    if (ENV_PROXY_HOSTNAME && hostname === ENV_PROXY_HOSTNAME) {
+      return true
     }
 
     return false
