@@ -398,6 +398,20 @@ async function fetchSessionCount(isManual = false) {
   }
 }
 
+// Check if error is an authentication/authorization error
+function isAuthError(error) {
+  if (!error) return false
+  // Check error message for status codes
+  const message = error.message || ''
+  if (message.includes('401') || message.includes('403')) return true
+  // Check for common auth error text
+  if (message.toLowerCase().includes('unauthorized')) return true
+  if (message.toLowerCase().includes('forbidden')) return true
+  // Check error status property if available
+  if (error.status === 401 || error.status === 403) return true
+  return false
+}
+
 // Wait for KV consistency using exponential backoff polling
 async function waitForKvConsistency(expectedCount) {
   // Guard against concurrent polling operations
@@ -417,10 +431,10 @@ async function waitForKvConsistency(expectedCount) {
           return true // KV is consistent
         }
       } catch (error) {
-        // Log network/auth errors but continue polling for transient issues
-        if (error.message?.includes('401') || error.message?.includes('403')) {
+        // Stop polling on auth errors - session may have expired
+        if (isAuthError(error)) {
           addLogEntry('Auth error during KV sync', 'error')
-          return false // Stop polling on auth errors
+          return false
         }
         // For network errors, continue polling - they may be transient
       }
@@ -445,7 +459,13 @@ async function handleRemoveSessions() {
       sessionCount.value = result.remainingSessions
       // Disable refresh and poll for KV consistency using exponential backoff
       refreshDisabledAfterRemove.value = true
-      waitForKvConsistency(result.remainingSessions).finally(() => {
+      waitForKvConsistency(result.remainingSessions).then((consistent) => {
+        if (consistent) {
+          addLogEntry('KV storage synchronized', 'success')
+        } else {
+          addLogEntry('KV sync timeout - display may be stale', 'info')
+        }
+      }).finally(() => {
         refreshDisabledAfterRemove.value = false
       })
     } else {

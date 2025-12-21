@@ -44,6 +44,12 @@ jobs:
           # Get the diff between base and head
           git diff origin/${{ github.base_ref }}...HEAD > pr_diff.txt
 
+          # Verify diff was generated
+          if [ ! -f pr_diff.txt ]; then
+            echo "::error::Failed to generate diff file"
+            exit 1
+          fi
+
           # Truncate if too large (Gemini has token limits)
           if [ $(wc -c < pr_diff.txt) -gt 100000 ]; then
             echo "::warning::Diff truncated to 100KB for Gemini review"
