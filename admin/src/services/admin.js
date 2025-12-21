@@ -148,10 +148,11 @@ export function setProxyUrl(url) {
 /**
  * Get proxy URL or throw an error if not configured
  * Use this for API calls to ensure we don't make requests to "null/..."
+ * Exported for consistency with demo1 and potential external use
  * @returns {string} - The proxy URL
  * @throws {Error} if proxy URL is not configured
  */
-function getProxyUrlOrThrow() {
+export function getProxyUrlOrThrow() {
   const url = getProxyUrl()
   if (!url) {
     throw new Error('Proxy URL not configured. Set VITE_PROXY_URL in your environment.')
