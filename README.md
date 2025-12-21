@@ -464,7 +464,7 @@ The `production` branch is protected with the following rules:
 
 ### Required GitHub Secrets
 
-Configure these secrets in your repository settings (Settings > Secrets and variables > Actions):
+Configure these secrets in your repository settings (Settings > Secrets and variables > Actions > **Secrets** tab):
 
 | Secret | Description | Used By |
 |--------|-------------|---------|
@@ -475,6 +475,19 @@ Configure these secrets in your repository settings (Settings > Secrets and vari
 | `ANTHROPIC_API_KEY` | Anthropic API key for Claude Code reviews | Claude PR review workflow |
 | `GEMINI_API_KEY` | Google Gemini API key for security reviews | Gemini PR review workflow |
 | `SLACK_WEBHOOK` | Slack incoming webhook URL for notifications | Deploy and release workflows |
+
+### Required GitHub Variables
+
+Configure these variables in your repository settings (Settings > Secrets and variables > Actions > **Variables** tab):
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `VITE_PROXY_URL` | URL of the deployed Cloudflare proxy | `https://your-proxy.workers.dev` |
+
+**Important:** `VITE_PROXY_URL` must be set as a **Variable** (not a Secret) because:
+- The `test-admin-deployed.yml` workflow uses `${{ vars.VITE_PROXY_URL }}` to test against the production proxy
+- Without this variable, tests fall back to `localhost:8787` which doesn't exist in GitHub Actions
+- The workflow will fail early with a clear error if this variable is not configured
 
 ### Slack Notifications
 

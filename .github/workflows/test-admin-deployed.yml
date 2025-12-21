@@ -30,6 +30,14 @@ jobs:
         run: npx playwright install chromium
         working-directory: admin
 
+      - name: Check VITE_PROXY_URL is configured
+        run: |
+          if [ -z "${{ vars.VITE_PROXY_URL }}" ]; then
+            echo "::error::VITE_PROXY_URL repository variable is not set. Please add it in Settings → Secrets and variables → Actions → Variables"
+            exit 1
+          fi
+          echo "✅ VITE_PROXY_URL is configured: ${{ vars.VITE_PROXY_URL }}"
+
       - name: Run tests against Cloudflare proxy
         run: npx playwright test -x
         working-directory: admin
