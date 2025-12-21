@@ -264,6 +264,7 @@ const sessionCount = ref(null)
 const loadingSessions = ref(false)
 const isRemovingSessions = ref(false)
 const refreshDisabledAfterRemove = ref(false)
+const isPollingKv = ref(false) // Guard against concurrent KV polling
 const isRevokingAll = ref(false)
 const isLoggingOut = ref(false)
 const showConfirmModal = ref(false)
@@ -397,22 +398,51 @@ async function fetchSessionCount(isManual = false) {
   }
 }
 
+// Check if error is an authentication/authorization error
+function isAuthError(error) {
+  if (!error) return false
+  // Check error message for status codes
+  const message = error.message || ''
+  if (message.includes('401') || message.includes('403')) return true
+  // Check for common auth error text
+  if (message.toLowerCase().includes('unauthorized')) return true
+  if (message.toLowerCase().includes('forbidden')) return true
+  // Check error status property if available
+  if (error.status === 401 || error.status === 403) return true
+  return false
+}
+
 // Wait for KV consistency using exponential backoff polling
 async function waitForKvConsistency(expectedCount) {
-  const maxAttempts = 5
-  for (let i = 0; i < maxAttempts; i++) {
-    const delay = 500 * Math.pow(2, i) // 500ms, 1s, 2s, 4s, 8s
-    await new Promise(resolve => setTimeout(resolve, delay))
-    try {
-      const fresh = await getSessionsCount()
-      if (fresh.sessionCount === expectedCount) {
-        return true // KV is consistent
-      }
-    } catch {
-      // Ignore errors during polling
-    }
+  // Guard against concurrent polling operations
+  if (isPollingKv.value) {
+    return false
   }
-  return false // Gave up waiting
+  isPollingKv.value = true
+
+  const maxAttempts = 5
+  try {
+    for (let i = 0; i < maxAttempts; i++) {
+      const delay = 500 * Math.pow(2, i) // 500ms, 1s, 2s, 4s, 8s
+      await new Promise(resolve => setTimeout(resolve, delay))
+      try {
+        const fresh = await getSessionsCount()
+        if (fresh.sessionCount === expectedCount) {
+          return true // KV is consistent
+        }
+      } catch (error) {
+        // Stop polling on auth errors - session may have expired
+        if (isAuthError(error)) {
+          addLogEntry('Auth error during KV sync', 'error')
+          return false
+        }
+        // For network errors, continue polling - they may be transient
+      }
+    }
+    return false // Gave up waiting
+  } finally {
+    isPollingKv.value = false
+  }
 }
 
 // Remove other sessions
@@ -429,7 +459,13 @@ async function handleRemoveSessions() {
       sessionCount.value = result.remainingSessions
       // Disable refresh and poll for KV consistency using exponential backoff
       refreshDisabledAfterRemove.value = true
-      waitForKvConsistency(result.remainingSessions).finally(() => {
+      waitForKvConsistency(result.remainingSessions).then((consistent) => {
+        if (consistent) {
+          addLogEntry('KV storage synchronized', 'success')
+        } else {
+          addLogEntry('KV sync timeout - display may be stale', 'info')
+        }
+      }).finally(() => {
         refreshDisabledAfterRemove.value = false
       })
     } else {

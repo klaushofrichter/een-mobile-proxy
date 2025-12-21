@@ -74,7 +74,7 @@ jobs:
 
       - name: Notify Slack
         run: |
-          DEPLOY_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          DEPLOY_TIME=$(TZ='America/Chicago' date +"%Y-%m-%d %H:%M:%S CT")
           APP_URL="https://klaushofrichter.github.io/een-oauth-proxy"
 
           curl -X POST "${{ secrets.SLACK_WEBHOOK }}" \
