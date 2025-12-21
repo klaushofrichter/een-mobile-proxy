@@ -29,6 +29,8 @@ const DEFAULT_REFRESH_TOKEN_TTL = 86400 // 1 day
 /**
  * Conditional debug logging - only logs in development environment
  * Prevents sensitive information leakage in production
+ * @param {Object} env - Environment bindings
+ * @param {...any} args - Arguments to log
  */
 function debugLog(env, ...args) {
   if (env.ENVIRONMENT === 'development') {
@@ -36,6 +38,12 @@ function debugLog(env, ...args) {
   }
 }
 
+/**
+ * Conditional error logging - only logs in development environment
+ * Prevents sensitive information leakage in production
+ * @param {Object} env - Environment bindings
+ * @param {...any} args - Arguments to log
+ */
 function debugError(env, ...args) {
   if (env.ENVIRONMENT === 'development') {
     console.error(...args)
@@ -84,8 +92,9 @@ export default {
       return addCorsHeaders(response, corsResult.origin)
     } catch (error) {
       debugError(env, 'Request error:', error)
+      // Never expose internal error details to clients - use generic message
       const errorResponse = new Response(
-        JSON.stringify({ error: error.message || 'Internal server error' }),
+        JSON.stringify({ error: 'Internal server error' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       )
       return addCorsHeaders(errorResponse, corsResult.origin)
@@ -147,6 +156,16 @@ async function handleGetAccessToken(url, request, env) {
 
   if (!code || !redirectUri) {
     return jsonResponse({ error: 'Missing code or redirect_uri' }, 400)
+  }
+
+  // Validate code parameter (prevent injection and DoS via large payloads)
+  if (code.length > 2000) {
+    return jsonResponse({ error: 'Invalid code: too long' }, 400)
+  }
+
+  // Validate redirect_uri (prevent open redirect and injection)
+  if (redirectUri.length > 2000) {
+    return jsonResponse({ error: 'Invalid redirect_uri: too long' }, 400)
   }
 
   // Exchange code for tokens with EEN
@@ -603,7 +622,8 @@ function getCorsHeaders(origin) {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
-    'Referrer-Policy': 'strict-origin-when-cross-origin'
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'
   }
 }
 
@@ -612,8 +632,8 @@ function getCorsHeaders(origin) {
  * Returns null for missing or invalid session IDs
  */
 // Session ID format: alphanumeric, hyphens, underscores only (prevents injection)
-// Length: 1-50 characters (UUIDs are 36 chars, allow some flexibility)
-const SESSION_ID_REGEX = /^[a-zA-Z0-9_-]{1,50}$/
+// Minimum 20 characters to prevent brute force attacks (UUIDs are 36 chars)
+const SESSION_ID_REGEX = /^[a-zA-Z0-9_-]{20,50}$/
 
 function getSessionIdFromCookie(request) {
   const cookieHeader = request.headers.get('Cookie')

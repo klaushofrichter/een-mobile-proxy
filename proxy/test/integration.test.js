@@ -133,7 +133,7 @@ describe('Integration - EEN API Communication', () => {
     })
 
     it('should clear session cookie on revoke', async () => {
-      const sessionId = 'revoke-test-session'
+      const sessionId = 'revoke-test-session-12345'
       await env.EEN_OAUTH_SESSIONS.put(
         sessionId,
         JSON.stringify({

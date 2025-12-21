@@ -395,4 +395,151 @@ describe('Security - Response Headers', () => {
     expect(response.headers.get('X-Powered-By')).toBeNull()
     expect(response.headers.get('Server')).toBeNull()
   })
+
+  it('should include security headers on all responses', async () => {
+    const response = await fetchWithMetrics('http://localhost/health', {
+      headers: { Origin: 'http://localhost:5173' }
+    })
+
+    // Verify all security headers are present
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
+    expect(response.headers.get('X-Frame-Options')).toBe('DENY')
+    expect(response.headers.get('Content-Security-Policy')).toContain("default-src 'none'")
+    expect(response.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'")
+    expect(response.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin')
+    expect(response.headers.get('Strict-Transport-Security')).toContain('max-age=31536000')
+    expect(response.headers.get('Strict-Transport-Security')).toContain('includeSubDomains')
+  })
+
+  it('should include security headers on error responses', async () => {
+    const response = await fetchWithMetrics('http://localhost/unknown-path', {
+      headers: { Origin: 'http://localhost:5173' }
+    })
+
+    expect(response.status).toBe(404)
+    // Security headers should still be present on error responses
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
+    expect(response.headers.get('X-Frame-Options')).toBe('DENY')
+  })
+})
+
+describe('Security - Input Length Validation', () => {
+  it('should reject code parameter exceeding 2000 characters', async () => {
+    const longCode = 'a'.repeat(2001)
+    const response = await fetchWithMetrics(
+      `http://localhost/proxy/getAccessToken?code=${longCode}&redirect_uri=http://localhost:5173`,
+      {
+        method: 'POST',
+        headers: { Origin: 'http://localhost:5173' }
+      }
+    )
+
+    expect(response.status).toBe(400)
+    const data = await response.json()
+    expect(data.error).toContain('too long')
+  })
+
+  it('should reject redirect_uri parameter exceeding 2000 characters', async () => {
+    const longUri = 'http://localhost/' + 'a'.repeat(2001)
+    const response = await fetchWithMetrics(
+      `http://localhost/proxy/getAccessToken?code=test&redirect_uri=${encodeURIComponent(longUri)}`,
+      {
+        method: 'POST',
+        headers: { Origin: 'http://localhost:5173' }
+      }
+    )
+
+    expect(response.status).toBe(400)
+    const data = await response.json()
+    expect(data.error).toContain('too long')
+  })
+
+  it('should accept code parameter within 2000 characters', async () => {
+    const validCode = 'a'.repeat(2000)
+    const response = await fetchWithMetrics(
+      `http://localhost/proxy/getAccessToken?code=${validCode}&redirect_uri=http://localhost:5173`,
+      {
+        method: 'POST',
+        headers: { Origin: 'http://localhost:5173' }
+      }
+    )
+
+    // Should not be rejected for length (may fail for invalid code at EEN)
+    expect(response.status).not.toBe(400)
+  })
+})
+
+describe('Security - CSRF Protection', () => {
+  it('should reject POST request without Origin header', async () => {
+    const response = await fetchWithMetrics(
+      'http://localhost/proxy/getAccessToken?code=test&redirect_uri=http://localhost:5173',
+      {
+        method: 'POST'
+        // No Origin header
+      }
+    )
+
+    expect(response.status).toBe(403)
+    const text = await response.text()
+    expect(text).toContain('Origin header required')
+  })
+
+  it('should reject DELETE request without Origin header', async () => {
+    const response = await fetchWithMetrics('http://localhost/admin/removeSessions', {
+      method: 'DELETE',
+      headers: {
+        Cookie: 'sessionId=test-session'
+      }
+      // No Origin header
+    })
+
+    expect(response.status).toBe(403)
+    const text = await response.text()
+    expect(text).toContain('Origin header required')
+  })
+
+  it('should allow POST request with valid Origin header', async () => {
+    const response = await fetchWithMetrics(
+      'http://localhost/proxy/getAccessToken?code=test&redirect_uri=http://localhost:5173',
+      {
+        method: 'POST',
+        headers: { Origin: 'http://localhost:5173' }
+      }
+    )
+
+    // Should not be blocked by CSRF protection (may fail for other reasons like invalid code)
+    expect(response.status).not.toBe(403)
+  })
+
+  it('should allow DELETE request with valid Origin header', async () => {
+    const response = await fetchWithMetrics('http://localhost/admin/removeSessions', {
+      method: 'DELETE',
+      headers: {
+        Origin: 'http://localhost:5173',
+        Cookie: 'sessionId=test-session'
+      }
+    })
+
+    // Should not be blocked by CSRF protection (may fail for auth reasons)
+    // 401 = no auth, not 403 = CSRF blocked
+    expect(response.status).toBe(401)
+  })
+
+  it('should allow GET request without Origin header', async () => {
+    const response = await fetchWithMetrics('http://localhost/health', {
+      method: 'GET'
+      // No Origin header - should be allowed for GET
+    })
+
+    expect(response.status).toBe(200)
+  })
+
+  it('should allow HEAD request without Origin header', async () => {
+    const response = await fetchWithMetrics('http://localhost/health', {
+      method: 'HEAD'
+      // No Origin header - should be allowed for HEAD
+    })
+
+    expect(response.status).toBe(200)
+  })
 })
