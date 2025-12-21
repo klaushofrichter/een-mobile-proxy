@@ -27,6 +27,22 @@ const MAX_REFRESH_TOKEN_TTL = 2592000 // 30 days
 const DEFAULT_REFRESH_TOKEN_TTL = 86400 // 1 day
 
 /**
+ * Conditional debug logging - only logs in development environment
+ * Prevents sensitive information leakage in production
+ */
+function debugLog(env, ...args) {
+  if (env.ENVIRONMENT === 'development') {
+    console.log(...args)
+  }
+}
+
+function debugError(env, ...args) {
+  if (env.ENVIRONMENT === 'development') {
+    console.error(...args)
+  }
+}
+
+/**
  * Get validated refresh token TTL from environment
  * @param {Object} env - Environment bindings
  * @returns {number} - TTL in seconds (bounded between 0 and 30 days)
@@ -56,12 +72,18 @@ export default {
       return handleCorsPreflightRequest(corsResult.origin)
     }
 
+    // CSRF protection: Require Origin header for state-changing requests
+    // Requests without Origin (e.g., curl) are blocked for POST/DELETE to prevent CSRF
+    if ((request.method === 'POST' || request.method === 'DELETE') && !origin) {
+      return new Response('Forbidden: Origin header required', { status: 403 })
+    }
+
     try {
       // Route requests
       const response = await routeRequest(url, request, env)
       return addCorsHeaders(response, corsResult.origin)
     } catch (error) {
-      console.error('Request error:', error)
+      debugError(env, 'Request error:', error)
       const errorResponse = new Response(
         JSON.stringify({ error: error.message || 'Internal server error' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -144,7 +166,7 @@ async function handleGetAccessToken(url, request, env) {
 
   if (!tokenResponse.ok) {
     const errorText = await tokenResponse.text()
-    console.error('EEN token error:', errorText)
+    debugError(env, 'EEN token error:', errorText)
     return jsonResponse({ error: 'Token exchange failed' }, tokenResponse.status)
   }
 
@@ -166,24 +188,24 @@ async function handleGetAccessToken(url, request, env) {
         baseUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
       }
     }
-    console.log('Fetching user profile from:', `${baseUrl}/api/v3.0/users/self`)
+    debugLog(env, 'Fetching user profile from:', `${baseUrl}/api/v3.0/users/self`)
     const userResponse = await fetch(`${baseUrl}/api/v3.0/users/self`, {
       headers: {
         Authorization: `Bearer ${tokens.access_token}`,
         Accept: 'application/json'
       }
     })
-    console.log('User profile response status:', userResponse.status)
+    debugLog(env, 'User profile response status:', userResponse.status)
     if (userResponse.ok) {
       const userData = await userResponse.json()
-      console.log('User data received, email:', userData.email)
+      debugLog(env, 'User data received')
       userEmail = userData.email
     } else {
       const errorText = await userResponse.text()
-      console.error('User profile fetch failed:', userResponse.status, errorText)
+      debugError(env, 'User profile fetch failed:', userResponse.status, errorText)
     }
   } catch (e) {
-    console.error('Failed to fetch user email:', e)
+    debugError(env, 'Failed to fetch user email:', e)
   }
 
   // Generate session ID and store refresh token
@@ -253,7 +275,7 @@ async function handleRefreshAccessToken(request, env) {
 
   if (!tokenResponse.ok) {
     const errorText = await tokenResponse.text()
-    console.error('EEN refresh error:', errorText)
+    debugError(env, 'EEN refresh error:', errorText)
     // Clear invalid session
     await env.EEN_OAUTH_SESSIONS.delete(sessionId)
     return jsonResponse({ error: 'Token refresh failed' }, tokenResponse.status)
@@ -307,7 +329,7 @@ async function handleRevoke(request, env) {
         })
       })
     } catch (e) {
-      console.error('Failed to revoke token at EEN:', e)
+      debugError(env, 'Failed to revoke token at EEN:', e)
     }
 
     // Delete session from KV
@@ -342,7 +364,7 @@ async function handleHealth(env) {
     }
   } catch (e) {
     // KV might not be available in some contexts
-    console.error('Failed to get version from KV:', e)
+    debugError(env, 'Failed to get version from KV:', e)
   }
 
   return jsonResponse({
@@ -483,7 +505,7 @@ async function handleAdminRevokeAll(request, env) {
       // Delete session from KV
       await env.EEN_OAUTH_SESSIONS.delete(key.name)
     } catch (e) {
-      console.error(`Failed to revoke session ${key.name}:`, e)
+      debugError(env, `Failed to revoke session ${key.name}:`, e)
       errorCount++
     }
   }
@@ -567,15 +589,21 @@ function addCorsHeaders(response, origin) {
 }
 
 /**
- * Get CORS headers
+ * Get CORS and security headers
  */
 function getCorsHeaders(origin) {
   return {
+    // CORS headers
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
     'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Max-Age': '86400'
+    'Access-Control-Max-Age': '86400',
+    // Security headers
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
+    'Referrer-Policy': 'strict-origin-when-cross-origin'
   }
 }
 
@@ -642,7 +670,7 @@ async function checkAdminAccess(request, env) {
 
   // If userEmail is missing, try to fetch it from EEN
   if (!sessionData.userEmail && sessionData.refreshToken) {
-    console.log('userEmail missing, fetching from EEN...')
+    debugLog(env, 'userEmail missing, fetching from EEN...')
     try {
       // First refresh to get access token and baseUrl
       const tokenResponse = await fetch(EEN_TOKEN_URL, {
@@ -671,7 +699,7 @@ async function checkAdminAccess(request, env) {
             baseUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
           }
         }
-        console.log('On-demand fetch: using baseUrl:', baseUrl)
+        debugLog(env, 'On-demand fetch: using baseUrl:', baseUrl)
 
         // Fetch user profile
         const userResponse = await fetch(`${baseUrl}/api/v3.0/users/self`, {
@@ -683,7 +711,7 @@ async function checkAdminAccess(request, env) {
 
         if (userResponse.ok) {
           const userData = await userResponse.json()
-          console.log('Fetched user email on-demand:', userData.email)
+          debugLog(env, 'Fetched user email on-demand')
 
           // Update session with email, using consistent TTL calculation
           sessionData.userEmail = userData.email
@@ -696,7 +724,7 @@ async function checkAdminAccess(request, env) {
         }
       }
     } catch (e) {
-      console.error('Failed to fetch user email on-demand:', e)
+      debugError(env, 'Failed to fetch user email on-demand:', e)
     }
   }
 

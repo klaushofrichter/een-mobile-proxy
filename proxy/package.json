@@ -1,6 +1,6 @@
 {
   "name": "een-oauth-proxy",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:perf": "vitest run test/performance.test.js",
-    "prepare": "cd .. && husky proxy/.husky"
+    "prepare": "cd .. && husky"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.9.12",
