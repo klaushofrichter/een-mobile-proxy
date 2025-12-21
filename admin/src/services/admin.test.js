@@ -139,20 +139,16 @@ describe('Admin Service - URL Validation', () => {
       expect(getProxyUrlOrThrow()).toBe('http://[::1]:8787')
     })
 
-    it('should throw error when getProxyUrl returns null', () => {
-      // Simulate production mode without ENV_PROXY_URL by mocking getProxyUrl to return null
-      // We test this by verifying the error message matches what getProxyUrlOrThrow throws
-      // Note: In dev mode getProxyUrl() always returns a default, so we verify the error path exists
-      const errorMessage = 'Proxy URL not configured. Set VITE_PROXY_URL in your environment.'
-
-      // The function should throw this specific error when url is null
-      // We can verify the error handling logic by checking the function structure
-      expect(() => {
-        const url = null
-        if (!url) {
-          throw new Error(errorMessage)
-        }
-      }).toThrow(errorMessage)
+    it('should return same value as getProxyUrl in dev mode', () => {
+      // Verify getProxyUrlOrThrow returns exactly what getProxyUrl returns
+      // This ensures the pass-through behavior is correct
+      const proxyUrl = getProxyUrl()
+      const proxyUrlOrThrow = getProxyUrlOrThrow()
+      expect(proxyUrlOrThrow).toBe(proxyUrl)
     })
+
+    // Note: The throw behavior when getProxyUrl() returns null occurs only in production
+    // when VITE_PROXY_URL is not set. This is tested via Playwright integration tests
+    // that verify proper error handling when the proxy is misconfigured.
   })
 })
