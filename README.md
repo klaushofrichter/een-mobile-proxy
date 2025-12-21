@@ -527,6 +527,18 @@ To enable Copilot reviews:
 | `ADMIN_EMAILS` | Comma-separated admin emails | `admin@example.com` |
 | `ALLOWED_ORIGINS` | Comma-separated CORS origins | `https://example.com` |
 | `ENVIRONMENT` | `development` or `production` | `development` |
+| `REFRESH_TOKEN_TTL` | Session TTL buffer in seconds (see below) | `86400` |
+
+**Session TTL and Refresh Token Expiration:**
+
+The proxy stores sessions in Cloudflare KV with a TTL calculated as: `access_token_expires_in + REFRESH_TOKEN_TTL`. Since EEN does not expose the refresh token expiration time in its API response, the `REFRESH_TOKEN_TTL` variable provides a configurable buffer.
+
+- **Default:** 86400 seconds (1 day)
+- **Purpose:** Keeps sessions alive long enough for users to refresh their tokens
+- **If too short:** Users may be forced to re-login even though their refresh token is still valid at EEN
+- **If too long:** Stale sessions remain in KV storage (minimal impact, just wasted space)
+
+Adjust this value based on your EEN OAuth application's refresh token lifetime. For longer-lived refresh tokens (e.g., 7 days), consider setting `REFRESH_TOKEN_TTL=604800`.
 
 **Files:**
 - `proxy/.dev.vars` - Local development (used by `wrangler dev`)

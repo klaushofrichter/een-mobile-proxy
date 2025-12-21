@@ -178,8 +178,9 @@ async function handleGetAccessToken(url, request, env) {
     createdAt: Date.now()
   }
 
-  // Store in KV with TTL matching token expiry (plus buffer)
-  const ttl = (tokens.expires_in || 3600) + 86400 // Add 1 day buffer for refresh
+  // Store in KV with TTL matching token expiry (plus configurable buffer for refresh)
+  const refreshTokenTtl = parseInt(env.REFRESH_TOKEN_TTL, 10) || 86400
+  const ttl = (tokens.expires_in || 3600) + refreshTokenTtl
   await env.EEN_OAUTH_SESSIONS.put(sessionId, JSON.stringify(sessionData), {
     expirationTtl: ttl
   })
@@ -250,7 +251,8 @@ async function handleRefreshAccessToken(request, env) {
     refreshToken: tokens.refresh_token || sessionData.refreshToken
   }
 
-  const ttl = (tokens.expires_in || 3600) + 86400
+  const refreshTokenTtl = parseInt(env.REFRESH_TOKEN_TTL, 10) || 86400
+  const ttl = (tokens.expires_in || 3600) + refreshTokenTtl
   await env.EEN_OAUTH_SESSIONS.put(sessionId, JSON.stringify(updatedSessionData), {
     expirationTtl: ttl
   })

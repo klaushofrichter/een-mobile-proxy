@@ -283,6 +283,10 @@ let countdownInterval = null
 const HEALTH_CHECK_INTERVAL = 60000 // 1 minute
 const refreshCountdown = ref(60)
 
+// KV polling configuration
+const KV_POLL_BASE_DELAY_MS = 500 // Base delay for exponential backoff
+const KV_POLL_MAX_ATTEMPTS = 5 // Maximum polling attempts
+
 // Activity log
 const MAX_LOG_ENTRIES = 250
 const activityLog = ref([])
@@ -412,37 +416,46 @@ function isAuthError(error) {
   return false
 }
 
+// Promise to track current polling operation (for atomic guard)
+let kvPollingPromise = null
+
 // Wait for KV consistency using exponential backoff polling
 async function waitForKvConsistency(expectedCount) {
-  // Guard against concurrent polling operations
-  if (isPollingKv.value) {
-    return false
+  // Atomic guard: if already polling, return the existing promise
+  if (kvPollingPromise) {
+    return kvPollingPromise
   }
-  isPollingKv.value = true
 
-  const maxAttempts = 5
-  try {
-    for (let i = 0; i < maxAttempts; i++) {
-      const delay = 500 * Math.pow(2, i) // 500ms, 1s, 2s, 4s, 8s
-      await new Promise(resolve => setTimeout(resolve, delay))
-      try {
-        const fresh = await getSessionsCount()
-        if (fresh.sessionCount === expectedCount) {
-          return true // KV is consistent
+  // Set guard flag and create the polling promise
+  isPollingKv.value = true
+  kvPollingPromise = (async () => {
+    try {
+      for (let i = 0; i < KV_POLL_MAX_ATTEMPTS; i++) {
+        const delay = KV_POLL_BASE_DELAY_MS * Math.pow(2, i)
+        await new Promise(resolve => setTimeout(resolve, delay))
+        try {
+          const fresh = await getSessionsCount()
+          if (fresh.sessionCount === expectedCount) {
+            return true // KV is consistent
+          }
+        } catch (error) {
+          // Stop polling on auth errors - session may have expired
+          if (isAuthError(error)) {
+            addLogEntry('Auth error during KV sync', 'error')
+            return false
+          }
+          // Log network errors but continue polling - they may be transient
+          addLogEntry(`KV sync retry ${i + 1}/${KV_POLL_MAX_ATTEMPTS}: ${error?.message || 'Network error'}`, 'info')
         }
-      } catch (error) {
-        // Stop polling on auth errors - session may have expired
-        if (isAuthError(error)) {
-          addLogEntry('Auth error during KV sync', 'error')
-          return false
-        }
-        // For network errors, continue polling - they may be transient
       }
+      return false // Gave up waiting
+    } finally {
+      isPollingKv.value = false
+      kvPollingPromise = null
     }
-    return false // Gave up waiting
-  } finally {
-    isPollingKv.value = false
-  }
+  })()
+
+  return kvPollingPromise
 }
 
 // Remove other sessions

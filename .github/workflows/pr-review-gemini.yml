@@ -63,14 +63,17 @@ jobs:
           echo "Changed files:"
           cat changed_files.txt
 
-          # Store content as outputs for the action
-          echo "changed_files<<EOF" >> $GITHUB_OUTPUT
-          cat changed_files.txt >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # Store content as outputs using unique delimiters to prevent injection
+          # Generate random delimiter to avoid conflicts with file content
+          DELIMITER="GHOUTPUT_$(openssl rand -hex 8)"
 
-          echo "diff_content<<EOF" >> $GITHUB_OUTPUT
+          echo "changed_files<<${DELIMITER}" >> $GITHUB_OUTPUT
+          cat changed_files.txt >> $GITHUB_OUTPUT
+          echo "${DELIMITER}" >> $GITHUB_OUTPUT
+
+          echo "diff_content<<${DELIMITER}" >> $GITHUB_OUTPUT
           cat pr_diff_truncated.txt >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "${DELIMITER}" >> $GITHUB_OUTPUT
 
       - name: Run Gemini Code Review
         id: gemini-review
@@ -121,7 +124,22 @@ jobs:
             // Get the workflow run URL
             const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
-            let reviewText = geminiOutput;
+            // Sanitize the output to prevent XSS/injection in GitHub comments
+            function sanitizeForGitHubComment(text) {
+              if (!text) return '';
+              return text
+                // Remove raw HTML tags that could execute scripts
+                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '[script removed]')
+                .replace(/<iframe\b[^>]*>/gi, '[iframe removed]')
+                .replace(/<object\b[^>]*>/gi, '[object removed]')
+                .replace(/<embed\b[^>]*>/gi, '[embed removed]')
+                // Escape HTML entities in non-code blocks
+                .replace(/(?<!`)<(?!\/?(code|pre|a|b|i|em|strong|h[1-6]|ul|ol|li|p|br|hr|blockquote|table|tr|td|th|thead|tbody|img)\b)/gi, '&lt;')
+                // Limit length to prevent DoS
+                .substring(0, 65000);
+            }
+
+            let reviewText = sanitizeForGitHubComment(geminiOutput);
             if (!reviewText || !reviewText.trim()) {
               core.warning('Gemini review output is empty (informational only)');
               reviewText = 'Gemini review unavailable - see workflow logs for details.';
