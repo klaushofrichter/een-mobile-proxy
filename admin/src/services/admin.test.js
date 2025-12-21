@@ -2,7 +2,7 @@
  * Unit tests for admin service URL validation functions
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { isValidProxyUrl, setProxyUrl, getProxyUrl, getProxyOptions } from './admin.js'
+import { isValidProxyUrl, setProxyUrl, getProxyUrl, getProxyUrlOrThrow, getProxyOptions } from './admin.js'
 
 describe('Admin Service - URL Validation', () => {
   beforeEach(() => {
@@ -109,6 +109,25 @@ describe('Admin Service - URL Validation', () => {
       const options = getProxyOptions()
       const localOption = options.find(opt => opt.value === 'http://localhost:8787')
       expect(localOption).toBeTruthy()
+    })
+  })
+
+  describe('getProxyUrlOrThrow', () => {
+    it('should return URL when configured', () => {
+      setProxyUrl('http://localhost:8787')
+      expect(getProxyUrlOrThrow()).toBe('http://localhost:8787')
+    })
+
+    it('should return default URL when nothing stored', () => {
+      // In dev environment, should return default localhost
+      const url = getProxyUrlOrThrow()
+      expect(url).toBeTruthy()
+      expect(url).toContain('localhost')
+    })
+
+    it('should return stored valid URL', () => {
+      localStorage.setItem('een_proxy_url', 'http://127.0.0.1:8787')
+      expect(getProxyUrlOrThrow()).toBe('http://127.0.0.1:8787')
     })
   })
 })
