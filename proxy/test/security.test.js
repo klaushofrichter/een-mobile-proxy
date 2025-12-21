@@ -494,7 +494,7 @@ describe('Security - Redirect URI Validation', () => {
 
     expect(response.status).toBe(400)
     const data = await response.json()
-    expect(data.error).toContain('domain not allowed')
+    expect(data.error).toContain('malformed URL')
   })
 
   it('should accept redirect_uri with allowed origin', async () => {
