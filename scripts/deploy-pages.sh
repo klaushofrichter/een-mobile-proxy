@@ -92,8 +92,8 @@ echo "Deployment complete!"
 echo "========================================"
 echo ""
 echo "Your apps are available at:"
-echo "  - Demo: https://klaushofrichter.github.io/een-oauth-proxy/demo1/"
-echo "  - Admin: https://klaushofrichter.github.io/een-oauth-proxy/admin/"
+echo "  - Demo: https://your-username.github.io/een-oauth-proxy/demo1/"
+echo "  - Admin: https://your-username.github.io/een-oauth-proxy/admin/"
 echo ""
 
 # Cleanup

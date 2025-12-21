@@ -4,15 +4,13 @@
 
 const STORAGE_KEY = 'een_proxy_url'
 const ENV_PROXY_URL = import.meta.env.VITE_PROXY_URL
-const CLOUDFLARE_PROXY_URL = 'https://een-oauth-proxy.klaushofrichter.workers.dev'
 const LOCAL_PROXY_URL = 'http://localhost:8787'
 const DEFAULT_PROXY_URL = ENV_PROXY_URL || LOCAL_PROXY_URL
 
-// Allowed proxy hosts for security validation
+// Allowed proxy hosts for security validation (localhost for dev, ENV hostname for production)
 const ALLOWED_PROXY_HOSTS = [
   'localhost',
-  '127.0.0.1',
-  'een-oauth-proxy.klaushofrichter.workers.dev'
+  '127.0.0.1'
 ]
 
 // Validate and extract ENV_PROXY_URL hostname at module initialization
@@ -42,23 +40,22 @@ function isProduction() {
 
 /**
  * Get available proxy options based on environment
- * - In production: only Cloudflare (and custom env if different)
- * - In development: both local and Cloudflare options
+ * - In production: only the configured VITE_PROXY_URL
+ * - In development: local and configured options
  */
 export function getProxyOptions() {
   const options = []
 
-  // In production, only show Cloudflare; in dev, show both
+  // In production, only show configured proxy; in dev, show local option too
   if (isProduction()) {
-    options.push({ label: 'Cloudflare (Workers)', value: CLOUDFLARE_PROXY_URL })
+    if (ENV_PROXY_URL) {
+      options.push({ label: 'Configured Proxy', value: ENV_PROXY_URL })
+    }
   } else {
     options.push({ label: 'Local (localhost:8787)', value: LOCAL_PROXY_URL })
-    options.push({ label: 'Cloudflare (Workers)', value: CLOUDFLARE_PROXY_URL })
-  }
-
-  // Add env variable URL if it's different from predefined options
-  if (ENV_PROXY_URL && !options.some((opt) => opt.value === ENV_PROXY_URL)) {
-    options.unshift({ label: `Env (${ENV_PROXY_URL})`, value: ENV_PROXY_URL })
+    if (ENV_PROXY_URL && ENV_PROXY_URL !== LOCAL_PROXY_URL) {
+      options.push({ label: 'Configured Proxy', value: ENV_PROXY_URL })
+    }
   }
 
   return options
@@ -93,25 +90,30 @@ function isValidProxyUrl(url) {
 
 /**
  * Get the configured proxy URL (from localStorage or default)
- * In production, defaults to Cloudflare and ignores localhost if stored
+ * In production, requires VITE_PROXY_URL to be set and ignores localhost if stored
  */
 export function getProxyUrl() {
   const stored = localStorage.getItem(STORAGE_KEY)
 
   if (isProduction()) {
+    // In production, ENV_PROXY_URL must be configured
+    if (!ENV_PROXY_URL) {
+      console.error('VITE_PROXY_URL must be set for production builds')
+      return null
+    }
     // In production, don't use localhost even if stored
     if (!stored || stored === LOCAL_PROXY_URL) {
-      return CLOUDFLARE_PROXY_URL
+      return ENV_PROXY_URL
     }
     // Enforce HTTPS in production (case-insensitive check)
     if (!stored.toLowerCase().startsWith('https://')) {
       console.warn('HTTP proxy not allowed in production, using default')
-      return CLOUDFLARE_PROXY_URL
+      return ENV_PROXY_URL
     }
     // Validate the stored URL
     if (!isValidProxyUrl(stored)) {
       console.warn('Invalid proxy URL in storage, using default')
-      return CLOUDFLARE_PROXY_URL
+      return ENV_PROXY_URL
     }
     return stored
   }

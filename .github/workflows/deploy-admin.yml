@@ -40,9 +40,9 @@ jobs:
         run: npm run build
         working-directory: admin
         env:
-          VITE_PROXY_URL: ${{ vars.VITE_PROXY_URL || 'https://een-oauth-proxy.klaushofrichter.workers.dev' }}
+          VITE_PROXY_URL: ${{ vars.VITE_PROXY_URL }}
           VITE_EEN_CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
-          VITE_REDIRECT_URI: 'https://klaushofrichter.github.io/een-oauth-proxy'
+          VITE_REDIRECT_URI: ${{ vars.VITE_REDIRECT_URI }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -75,7 +75,7 @@ jobs:
       - name: Notify Slack
         run: |
           DEPLOY_TIME=$(TZ='America/Chicago' date +"%Y-%m-%d %H:%M:%S CT")
-          APP_URL="https://klaushofrichter.github.io/een-oauth-proxy"
+          APP_URL="${{ vars.VITE_REDIRECT_URI }}"
 
           curl -X POST "${{ secrets.SLACK_WEBHOOK }}" \
             -H "Content-Type: application/json" \

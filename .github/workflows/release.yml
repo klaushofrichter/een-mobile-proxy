@@ -68,8 +68,8 @@ jobs:
           - \`een-oauth-proxy-${{ steps.versions.outputs.release_tag }}.tar.gz\` - TAR.GZ archive
 
           ### Deployed URLs
-          - **Admin App:** https://klaushofrichter.github.io/een-oauth-proxy
-          - **Proxy:** https://een-oauth-proxy.klaushofrichter.workers.dev
+          - **Admin App:** ${{ vars.VITE_REDIRECT_URI }}
+          - **Proxy:** ${{ vars.VITE_PROXY_URL }}
           " \
             "een-oauth-proxy-${{ steps.versions.outputs.release_tag }}.zip" \
             "een-oauth-proxy-${{ steps.versions.outputs.release_tag }}.tar.gz"
@@ -120,7 +120,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*Deployed URLs:*\n• <https://klaushofrichter.github.io/een-oauth-proxy|Admin App>\n• <https://een-oauth-proxy.klaushofrichter.workers.dev|OAuth Proxy>"
+                  "text": "*Deployed URLs:*\n• <${{ vars.VITE_REDIRECT_URI }}|Admin App>\n• <${{ vars.VITE_PROXY_URL }}|OAuth Proxy>"
                 }
               },
               {

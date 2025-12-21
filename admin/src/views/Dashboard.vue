@@ -23,7 +23,7 @@
             </svg>
           </button>
           <a
-            href="https://github.com/klaushofrichter/een-oauth-proxy/tree/develop"
+            href="https://github.com/your-username/een-oauth-proxy/tree/develop"
             target="_blank"
             rel="noopener noreferrer"
             :class="['text-xs hover:text-blue-600 hover:underline', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
