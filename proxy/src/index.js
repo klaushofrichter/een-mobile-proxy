@@ -169,8 +169,9 @@ async function handleGetAccessToken(url, request, env) {
   }
 
   // Validate redirect_uri domain against allowed origins (prevent open redirect attacks)
-  if (!isAllowedRedirectUri(redirectUri, env)) {
-    return jsonResponse({ error: 'Invalid redirect_uri: domain not allowed' }, 400)
+  const redirectValidation = validateRedirectUri(redirectUri, env)
+  if (!redirectValidation.valid) {
+    return jsonResponse({ error: redirectValidation.error }, 400)
   }
 
   // Exchange code for tokens with EEN
@@ -563,12 +564,9 @@ function getAllowedOrigins(env) {
     .map(o => o.trim())
     .filter(o => o.length > 0)
 
-  // In development, also allow localhost
+  // In development, also allow 127.0.0.1:3333 (EEN redirect URI)
   if (env.ENVIRONMENT === 'development') {
-    allowedOrigins.push(
-      'http://localhost:3333',
-      'http://127.0.0.1:3333'
-    )
+    allowedOrigins.push('http://127.0.0.1:3333')
   }
 
   return allowedOrigins
@@ -577,17 +575,25 @@ function getAllowedOrigins(env) {
 /**
  * Validate redirect_uri against allowed origins (prevent open redirect attacks)
  * The redirect_uri's origin must match one of the allowed origins
+ * @returns {Object} { valid: boolean, error?: string }
  */
-function isAllowedRedirectUri(redirectUri, env) {
+function validateRedirectUri(redirectUri, env) {
+  let url
   try {
-    const url = new URL(redirectUri)
-    const redirectOrigin = url.origin
-    const allowedOrigins = getAllowedOrigins(env)
-    return allowedOrigins.includes(redirectOrigin)
+    url = new URL(redirectUri)
   } catch (e) {
-    // Invalid URL
-    return false
+    // Invalid URL format
+    return { valid: false, error: 'Invalid redirect_uri: malformed URL' }
   }
+
+  const redirectOrigin = url.origin
+  const allowedOrigins = getAllowedOrigins(env)
+
+  if (!allowedOrigins.includes(redirectOrigin)) {
+    return { valid: false, error: 'Invalid redirect_uri: domain not allowed' }
+  }
+
+  return { valid: true }
 }
 
 /**
