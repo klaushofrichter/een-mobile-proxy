@@ -1,8 +1,12 @@
 # EEN OAuth Proxy
 
 A standalone OAuth proxy system for Eagle Eye Networks (EEN) consisting of three independent applications.
-![Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fpackage.json&query=version&label=develop&color=%2333ca55)
-![Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fpackage.json&query=version&label=develop&color=%2333ca55)
+![Proxy Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fproxy%2Fpackage.json&query=version&label=proxy-develop&color=%2333ca55)
+![Proxy Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fproxy%2Fpackage.json&query=version&label=proxy-production&color=%2333ca55)
+![Admin Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fadmin%2Fpackage.json&query=version&label=admin-develop&color=%2333ca55)
+![Admin Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fadmin%2Fpackage.json&query=version&label=admin-production&color=%2333ca55)
+![Demo1 Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fdemo1%2Fpackage.json&query=version&label=demo1-develop&color=%2333ca55)
+![Demo1 Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fdemo1%2Fpackage.json&query=version&label=demo1-production&color=%2333ca55)
 
 
 ## Project Structure
