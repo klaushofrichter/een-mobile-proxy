@@ -565,6 +565,10 @@ function getAllowedOrigins(env) {
     .filter(o => o.length > 0)
 
   // In development, also allow 127.0.0.1:3333 (EEN redirect URI)
+  // Note: We intentionally do NOT allow localhost:3333 because EEN OAuth
+  // requires exact redirect URI match. Since EEN is configured for
+  // http://127.0.0.1:3333, using localhost would fail OAuth callbacks
+  // even though localhost and 127.0.0.1 resolve to the same address.
   if (env.ENVIRONMENT === 'development') {
     allowedOrigins.push('http://127.0.0.1:3333')
   }

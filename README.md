@@ -630,7 +630,7 @@ For example, if you modify files in `proxy/`, the `proxy/package.json` version w
 
 ### "Forbidden: Invalid origin" error
 - Check that the request origin is in `ALLOWED_ORIGINS`
-- In development, localhost origins are automatically allowed
+- In development, only `http://127.0.0.1:3333` is automatically allowed (to match EEN OAuth redirect URI)
 
 ### "Admin access required" error
 - Ensure your email is in the `ADMIN_EMAILS` list
@@ -643,6 +643,18 @@ For example, if you modify files in `proxy/`, the `proxy/package.json` version w
 ### OAuth callback fails
 - Verify `VITE_REDIRECT_URI` matches your EEN OAuth app configuration
 - Check that the proxy is running and accessible
+
+## Breaking Changes
+
+### v1.1.4 - Development Origin Restriction
+
+**Change:** In development mode, only `http://127.0.0.1:3333` is now auto-allowed for redirect URIs and CORS origins. Previously, both `localhost:3333` and `127.0.0.1:3333` were allowed.
+
+**Reason:** EEN OAuth configuration requires the redirect URI to match exactly. Since EEN is configured for `http://127.0.0.1:3333`, using `localhost:3333` would fail OAuth callbacks even though they resolve to the same address.
+
+**Action Required:**
+- Ensure your local development setup uses `http://127.0.0.1:3333` (not `localhost:3333`)
+- If you need additional origins, add them to `ALLOWED_ORIGINS` in your `.dev.vars` file
 
 ## License
 
