@@ -95,8 +95,13 @@ const appVersion = computed(() => packageJson.version)
 
 function handleProxyChange(event) {
   const url = event.target.value
-  setProxyUrl(url)
-  selectedProxy.value = url
+  const success = setProxyUrl(url)
+  if (success) {
+    selectedProxy.value = url
+  } else {
+    // Validation failed, reset to current valid proxy URL
+    selectedProxy.value = getProxyUrl()
+  }
 }
 
 function handleLogin() {

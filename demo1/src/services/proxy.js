@@ -10,7 +10,8 @@ const DEFAULT_PROXY_URL = ENV_PROXY_URL || LOCAL_PROXY_URL
 // Allowed proxy hosts for security validation (localhost for dev, ENV hostname for production)
 const ALLOWED_PROXY_HOSTS = [
   'localhost',
-  '127.0.0.1'
+  '127.0.0.1',
+  '::1'  // IPv6 localhost
 ]
 
 // Validate and extract ENV_PROXY_URL hostname at module initialization

@@ -10,7 +10,8 @@ const DEFAULT_PROXY_URL = ENV_PROXY_URL || LOCAL_PROXY_URL
 // Allowed proxy hosts for security validation (localhost for dev, ENV hostname for production)
 const ALLOWED_PROXY_HOSTS = [
   'localhost',
-  '127.0.0.1'
+  '127.0.0.1',
+  '::1'  // IPv6 localhost
 ]
 
 // Validate and extract ENV_PROXY_URL hostname at module initialization
@@ -25,8 +26,8 @@ if (ENV_PROXY_URL) {
     } else {
       console.warn('ENV_PROXY_URL must use HTTPS in production, ignoring:', ENV_PROXY_URL)
     }
-  } catch {
-    console.warn('Invalid ENV_PROXY_URL format, ignoring:', ENV_PROXY_URL)
+  } catch (e) {
+    console.warn('Invalid ENV_PROXY_URL format, ignoring:', ENV_PROXY_URL, '-', e.message)
   }
 }
 
@@ -41,8 +42,9 @@ function isProduction() {
  * Validate if a URL is an allowed proxy URL
  * @param {string} url - URL to validate
  * @returns {boolean} - True if URL is valid and allowed
+ * @exported for testing
  */
-function isValidProxyUrl(url) {
+export function isValidProxyUrl(url) {
   try {
     const parsedUrl = new URL(url)
     const hostname = parsedUrl.hostname
