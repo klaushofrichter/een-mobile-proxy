@@ -1,6 +1,9 @@
 # EEN OAuth Proxy
 
 A standalone OAuth proxy system for Eagle Eye Networks (EEN) consisting of three independent applications.
+![Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fpackage.json&query=version&label=develop&color=%2333ca55)
+![Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fpackage.json&query=version&label=develop&color=%2333ca55)
+
 
 ## Project Structure
 
@@ -35,7 +38,7 @@ A Vue 3 management application for monitoring and administering the OAuth proxy.
 - Remove sessions (except current)
 - Emergency token revocation
 
-**Deployment:** GitHub Pages at `https://klaushofrichter.github.io/een-oauth-proxy/admin/`
+**Deployment:** GitHub Pages at `https://klaushofrichter.github.io/een-oauth-proxy`
 
 ### Demo App (`./demo1`)
 
@@ -48,7 +51,7 @@ A Vue 3 demonstration application showing OAuth integration with EEN.
 - Token refresh and revocation
 - Auto-refresh before token expiration
 
-**Deployment:** GitHub Pages at `https://klaushofrichter.github.io/een-oauth-proxy/demo1/`
+**Deployment:** none, build your own locally. Note that you can not run demo1 and admin on the same local machine as they share a common port 3333
 
 ## Getting Started
 

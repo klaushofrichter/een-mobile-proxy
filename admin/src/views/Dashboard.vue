@@ -466,7 +466,11 @@ async function handleRemoveSessions() {
           addLogEntry('KV sync timeout - display may be stale', 'info')
         }
       }).catch((error) => {
-        addLogEntry(`KV sync error: ${error.message}`, 'error')
+        if (isAuthError(error)) {
+          addLogEntry('Session expired during KV sync', 'error')
+        } else {
+          addLogEntry(`KV sync error: ${error.message}`, 'error')
+        }
       }).finally(() => {
         refreshDisabledAfterRemove.value = false
       })
