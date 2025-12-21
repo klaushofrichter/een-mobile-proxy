@@ -546,9 +546,9 @@ describe('Security - Redirect URI Validation', () => {
     // Verify it's a 400 (redirect_uri error), not 403 (origin error)
     expect(response.status).toBe(400)
     const data = await response.json()
-    // Verify error is specifically about redirect_uri, not origin
+    // Verify error is specifically about redirect_uri with helpful localhost hint
     expect(data.error).toContain('redirect_uri')
-    expect(data.error).toContain('domain not allowed')
+    expect(data.error).toContain('127.0.0.1 instead of localhost')
   })
 })
 

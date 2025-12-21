@@ -594,6 +594,14 @@ function validateRedirectUri(redirectUri, env) {
   const allowedOrigins = getAllowedOrigins(env)
 
   if (!allowedOrigins.includes(redirectOrigin)) {
+    // Check if this is a localhost vs 127.0.0.1 mismatch - provide helpful error
+    if (redirectOrigin.includes('localhost') &&
+        allowedOrigins.some(o => o.includes('127.0.0.1'))) {
+      return {
+        valid: false,
+        error: 'Invalid redirect_uri: use 127.0.0.1 instead of localhost (EEN requires exact match)'
+      }
+    }
     return { valid: false, error: 'Invalid redirect_uri: domain not allowed' }
   }
 
