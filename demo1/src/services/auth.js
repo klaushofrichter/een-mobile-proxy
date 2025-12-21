@@ -2,7 +2,7 @@
  * Authentication service for EEN OAuth
  */
 
-import { getProxyUrl } from './proxy'
+import { getProxyUrlOrThrow } from './proxy'
 
 const CLIENT_ID = import.meta.env.VITE_EEN_CLIENT_ID || ''
 const AUTH_URL = import.meta.env.VITE_EEN_AUTH_URL || 'https://auth.eagleeyenetworks.com/oauth2/authorize'
@@ -31,7 +31,7 @@ export async function getAccessToken(code) {
     redirect_uri: REDIRECT_URI
   })
 
-  const response = await fetch(`${getProxyUrl()}/proxy/getAccessToken?${params.toString()}`, {
+  const response = await fetch(`${getProxyUrlOrThrow()}/proxy/getAccessToken?${params.toString()}`, {
     method: 'POST',
     credentials: 'include'
   })
@@ -51,7 +51,7 @@ export async function refreshToken() {
   const { useAuthStore } = await import('../stores/auth')
   const authStore = useAuthStore()
 
-  const response = await fetch(`${getProxyUrl()}/proxy/refreshAccessToken`, {
+  const response = await fetch(`${getProxyUrlOrThrow()}/proxy/refreshAccessToken`, {
     method: 'POST',
     credentials: 'include'
   })
@@ -73,7 +73,7 @@ export async function refreshToken() {
  * Revoke tokens via proxy
  */
 export async function revokeToken() {
-  const response = await fetch(`${getProxyUrl()}/proxy/revoke`, {
+  const response = await fetch(`${getProxyUrlOrThrow()}/proxy/revoke`, {
     method: 'POST',
     credentials: 'include'
   })

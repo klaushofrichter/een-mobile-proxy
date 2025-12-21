@@ -11,7 +11,7 @@ const DEFAULT_PROXY_URL = ENV_PROXY_URL || LOCAL_PROXY_URL
 const ALLOWED_PROXY_HOSTS = [
   'localhost',
   '127.0.0.1',
-  '::1'  // IPv6 localhost
+  '[::1]'  // IPv6 localhost (brackets required in URL hostname)
 ]
 
 // Validate and extract ENV_PROXY_URL hostname at module initialization
@@ -21,13 +21,13 @@ if (ENV_PROXY_URL) {
     const parsed = new URL(ENV_PROXY_URL)
     // Only trust ENV_PROXY_URL if it's HTTPS (or localhost for dev)
     // Use toLowerCase() for case-insensitive protocol check
-    if (parsed.protocol.toLowerCase() === 'https:' || parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+    if (parsed.protocol.toLowerCase() === 'https:' || parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '[::1]') {
       ENV_PROXY_HOSTNAME = parsed.hostname
     } else {
       console.warn('ENV_PROXY_URL must use HTTPS in production, ignoring:', ENV_PROXY_URL)
     }
-  } catch {
-    console.warn('Invalid ENV_PROXY_URL format, ignoring:', ENV_PROXY_URL)
+  } catch (e) {
+    console.warn('Invalid ENV_PROXY_URL format, ignoring:', ENV_PROXY_URL, '-', e.message)
   }
 }
 
@@ -120,6 +120,20 @@ export function getProxyUrl() {
   }
 
   return stored || DEFAULT_PROXY_URL
+}
+
+/**
+ * Get proxy URL or throw an error if not configured
+ * Use this for API calls to ensure we don't make requests to "null/..."
+ * @returns {string} - The proxy URL
+ * @throws {Error} if proxy URL is not configured
+ */
+export function getProxyUrlOrThrow() {
+  const url = getProxyUrl()
+  if (!url) {
+    throw new Error('Proxy URL not configured. Set VITE_PROXY_URL in your environment.')
+  }
+  return url
 }
 
 /**
