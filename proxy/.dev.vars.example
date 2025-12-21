@@ -11,7 +11,7 @@ ADMIN_EMAILS=admin@example.com
 
 # Allowed CORS origins (comma-separated URLs)
 # Note: localhost is automatically allowed in development mode
-ALLOWED_ORIGINS=https://klaushofrichter.github.io
+ALLOWED_ORIGINS=https://your-username.github.io
 
 # Environment
 ENVIRONMENT=development
