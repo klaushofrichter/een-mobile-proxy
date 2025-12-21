@@ -72,6 +72,18 @@ export async function loginWithEEN(page, customPassword = null) {
 }
 
 /**
+ * Select the local proxy from the dropdown (if visible)
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ */
+export async function selectLocalProxy(page) {
+  const proxySelect = page.locator('#proxy-select')
+  if (await proxySelect.isVisible()) {
+    await proxySelect.selectOption('http://localhost:8787')
+    console.log('📡 Selected local proxy')
+  }
+}
+
+/**
  * Full login flow: navigate to login, click sign in, complete EEN OAuth
  * @param {import('@playwright/test').Page} page - Playwright page object
  */
@@ -80,6 +92,9 @@ export async function loginToApplication(page) {
 
   // Navigate to login page
   await navigateToLogin(page)
+
+  // Select local proxy if dropdown is visible
+  await selectLocalProxy(page)
 
   // Click sign in button
   const loginButton = page.getByRole('button', { name: 'Sign in with Eagle Eye Networks' })

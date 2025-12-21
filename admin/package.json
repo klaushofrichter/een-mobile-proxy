@@ -1,11 +1,11 @@
 {
   "name": "een-oauth-admin",
   "displayName": "EEN OAuth Proxy Admin",
-  "version": "0.0.31",
+  "version": "0.0.32",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run stop && vite",
     "stop": "lsof -ti :3333 | xargs kill -9 2>/dev/null || echo 'Port 3333 is free'",
     "build": "vite build",
     "preview": "vite preview",
