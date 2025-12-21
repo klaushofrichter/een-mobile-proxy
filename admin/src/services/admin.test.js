@@ -23,6 +23,12 @@ describe('Admin Service - URL Validation', () => {
       expect(isValidProxyUrl('https://127.0.0.1:3000')).toBe(true)
     })
 
+    it('should accept IPv6 localhost (::1) URLs', () => {
+      expect(isValidProxyUrl('http://[::1]:8787')).toBe(true)
+      expect(isValidProxyUrl('http://[::1]')).toBe(true)
+      expect(isValidProxyUrl('https://[::1]:3000')).toBe(true)
+    })
+
     it('should reject malformed URLs', () => {
       expect(isValidProxyUrl('not-a-url')).toBe(false)
       expect(isValidProxyUrl('')).toBe(false)
