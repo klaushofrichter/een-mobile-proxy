@@ -513,6 +513,7 @@ describe('Security - Redirect URI Validation', () => {
 
   it('should accept redirect_uri with 127.0.0.1:3333 in development', async () => {
     // 127.0.0.1:3333 is auto-allowed in development (matches EEN redirect URI)
+    // Note: This test requires ENVIRONMENT='development' in vitest.config.js
     const response = await fetchWithMetrics(
       'http://localhost/proxy/getAccessToken?code=test&redirect_uri=http://127.0.0.1:3333/callback',
       {
@@ -528,6 +529,8 @@ describe('Security - Redirect URI Validation', () => {
   it('should reject redirect_uri with localhost:3333 (not auto-allowed)', async () => {
     // Regression test: localhost:3333 is NOT auto-allowed, only 127.0.0.1:3333 is
     // This is because EEN OAuth requires exact redirect URI match
+    // Note: This test requires ENVIRONMENT='development' in vitest.config.js
+    // Error message format: 'Invalid redirect_uri: domain not allowed'
     const response = await fetchWithMetrics(
       'http://localhost/proxy/getAccessToken?code=test&redirect_uri=http://localhost:3333/callback',
       {
