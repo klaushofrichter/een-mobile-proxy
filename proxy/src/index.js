@@ -77,7 +77,7 @@ export default {
 
     // Handle CORS preflight
     if (request.method === 'OPTIONS') {
-      return handleCorsPreflightRequest(corsResult.origin)
+      return handleCorsPreflightRequest(corsResult.origin, env)
     }
 
     // CSRF protection: Require Origin header for state-changing requests
@@ -89,7 +89,7 @@ export default {
     try {
       // Route requests
       const response = await routeRequest(url, request, env)
-      return addCorsHeaders(response, corsResult.origin)
+      return addCorsHeaders(response, corsResult.origin, env)
     } catch (error) {
       debugError(env, 'Request error:', error)
       // Never expose internal error details to clients - use generic message
@@ -97,7 +97,7 @@ export default {
         JSON.stringify({ error: 'Internal server error' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       )
-      return addCorsHeaders(errorResponse, corsResult.origin)
+      return addCorsHeaders(errorResponse, corsResult.origin, env)
     }
   }
 }
@@ -163,9 +163,14 @@ async function handleGetAccessToken(url, request, env) {
     return jsonResponse({ error: 'Invalid code: too long' }, 400)
   }
 
-  // Validate redirect_uri (prevent open redirect and injection)
+  // Validate redirect_uri length (prevent DoS via large payloads)
   if (redirectUri.length > 2000) {
     return jsonResponse({ error: 'Invalid redirect_uri: too long' }, 400)
+  }
+
+  // Validate redirect_uri domain against allowed origins (prevent open redirect attacks)
+  if (!isAllowedRedirectUri(redirectUri, env)) {
+    return jsonResponse({ error: 'Invalid redirect_uri: domain not allowed' }, 400)
   }
 
   // Exchange code for tokens with EEN
@@ -266,7 +271,7 @@ async function handleGetAccessToken(url, request, env) {
  * POST /proxy/refreshAccessToken
  */
 async function handleRefreshAccessToken(request, env) {
-  const sessionId = getSessionIdFromCookie(request)
+  const sessionId = getSessionIdFromCookie(request, env)
   if (!sessionId) {
     return jsonResponse({ error: 'No session found' }, 401)
   }
@@ -325,7 +330,7 @@ async function handleRefreshAccessToken(request, env) {
  * POST /proxy/revoke
  */
 async function handleRevoke(request, env) {
-  const sessionId = getSessionIdFromCookie(request)
+  const sessionId = getSessionIdFromCookie(request, env)
   if (!sessionId) {
     return jsonResponse({ error: 'No session found' }, 401)
   }
@@ -403,7 +408,7 @@ async function handleHealth(env) {
  */
 async function handleAdminVersion(request, env) {
   // Require authenticated session
-  const sessionId = getSessionIdFromCookie(request)
+  const sessionId = getSessionIdFromCookie(request, env)
   if (!sessionId) {
     return jsonResponse({ error: 'Authentication required' }, 401)
   }
@@ -457,7 +462,7 @@ async function handleAdminRemoveSessions(request, env) {
     return jsonResponse({ error: adminCheck.error }, adminCheck.status)
   }
 
-  const currentSessionId = getSessionIdFromCookie(request)
+  const currentSessionId = getSessionIdFromCookie(request, env)
   const listResult = await env.EEN_OAUTH_SESSIONS.list()
 
   let deletedCount = 0
@@ -489,7 +494,7 @@ async function handleAdminRevokeAll(request, env) {
     return jsonResponse({ error: adminCheck.error }, adminCheck.status)
   }
 
-  const currentSessionId = getSessionIdFromCookie(request)
+  const currentSessionId = getSessionIdFromCookie(request, env)
   const listResult = await env.EEN_OAUTH_SESSIONS.list()
 
   let revokedCount = 0
@@ -549,15 +554,9 @@ async function handleAdminRevokeAll(request, env) {
 // ============================================================================
 
 /**
- * Validate request origin against allowed origins
+ * Get list of allowed origins from environment
  */
-function validateOrigin(origin, env) {
-  if (!origin) {
-    // Allow requests without origin (e.g., from tools like curl)
-    return { valid: true, origin: '*' }
-  }
-
-  // Parse allowed origins from env
+function getAllowedOrigins(env) {
   const allowedOriginsStr = env.ALLOWED_ORIGINS || ''
   const allowedOrigins = allowedOriginsStr
     .split(',')
@@ -572,6 +571,36 @@ function validateOrigin(origin, env) {
     )
   }
 
+  return allowedOrigins
+}
+
+/**
+ * Validate redirect_uri against allowed origins (prevent open redirect attacks)
+ * The redirect_uri's origin must match one of the allowed origins
+ */
+function isAllowedRedirectUri(redirectUri, env) {
+  try {
+    const url = new URL(redirectUri)
+    const redirectOrigin = url.origin
+    const allowedOrigins = getAllowedOrigins(env)
+    return allowedOrigins.includes(redirectOrigin)
+  } catch (e) {
+    // Invalid URL
+    return false
+  }
+}
+
+/**
+ * Validate request origin against allowed origins
+ */
+function validateOrigin(origin, env) {
+  if (!origin) {
+    // Allow requests without origin (e.g., from tools like curl)
+    return { valid: true, origin: '*' }
+  }
+
+  const allowedOrigins = getAllowedOrigins(env)
+
   if (allowedOrigins.includes(origin)) {
     return { valid: true, origin }
   }
@@ -582,19 +611,19 @@ function validateOrigin(origin, env) {
 /**
  * Handle CORS preflight requests
  */
-function handleCorsPreflightRequest(origin) {
+function handleCorsPreflightRequest(origin, env) {
   return new Response(null, {
     status: 204,
-    headers: getCorsHeaders(origin)
+    headers: getCorsHeaders(origin, env)
   })
 }
 
 /**
  * Add CORS headers to response
  */
-function addCorsHeaders(response, origin) {
+function addCorsHeaders(response, origin, env) {
   const newHeaders = new Headers(response.headers)
-  const corsHeaders = getCorsHeaders(origin)
+  const corsHeaders = getCorsHeaders(origin, env)
 
   for (const [key, value] of Object.entries(corsHeaders)) {
     newHeaders.set(key, value)
@@ -609,9 +638,11 @@ function addCorsHeaders(response, origin) {
 
 /**
  * Get CORS and security headers
+ * @param {string} origin - The request origin
+ * @param {Object} env - Environment bindings (optional, for conditional headers)
  */
-function getCorsHeaders(origin) {
-  return {
+function getCorsHeaders(origin, env = null) {
+  const headers = {
     // CORS headers
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
@@ -622,9 +653,15 @@ function getCorsHeaders(origin) {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
-    'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'
+    'Referrer-Policy': 'strict-origin-when-cross-origin'
   }
+
+  // Only add HSTS in production (can cause issues with localhost in development)
+  if (!env || env.ENVIRONMENT !== 'development') {
+    headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+  }
+
+  return headers
 }
 
 /**
@@ -635,7 +672,7 @@ function getCorsHeaders(origin) {
 // Minimum 20 characters to prevent brute force attacks (UUIDs are 36 chars)
 const SESSION_ID_REGEX = /^[a-zA-Z0-9_-]{20,50}$/
 
-function getSessionIdFromCookie(request) {
+function getSessionIdFromCookie(request, env) {
   const cookieHeader = request.headers.get('Cookie')
   if (!cookieHeader) return null
 
@@ -646,7 +683,8 @@ function getSessionIdFromCookie(request) {
     if (name === 'sessionId') {
       // Validate session ID format (alphanumeric + hyphens/underscores only)
       if (!value || !SESSION_ID_REGEX.test(value)) {
-        console.warn('Invalid session ID format:', value?.substring(0, 50))
+        // Use conditional logging to prevent info leakage in production
+        debugLog(env, 'Invalid session ID format')
         return null
       }
       return value
@@ -676,7 +714,7 @@ function isAdminUser(userEmail, env) {
  * If userEmail is missing, attempts to fetch it from EEN API
  */
 async function checkAdminAccess(request, env) {
-  const sessionId = getSessionIdFromCookie(request)
+  const sessionId = getSessionIdFromCookie(request, env)
   if (!sessionId) {
     return { error: 'Authentication required', status: 401 }
   }
