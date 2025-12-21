@@ -583,6 +583,10 @@ function getCorsHeaders(origin) {
  * Extract session ID from cookie header
  * Returns null for missing or invalid session IDs
  */
+// Session ID format: alphanumeric, hyphens, underscores only (prevents injection)
+// Length: 1-50 characters (UUIDs are 36 chars, allow some flexibility)
+const SESSION_ID_REGEX = /^[a-zA-Z0-9_-]{1,50}$/
+
 function getSessionIdFromCookie(request) {
   const cookieHeader = request.headers.get('Cookie')
   if (!cookieHeader) return null
@@ -591,10 +595,9 @@ function getSessionIdFromCookie(request) {
   for (const cookie of cookies) {
     const [name, value] = cookie.split('=')
     if (name === 'sessionId') {
-      // Validate session ID format (UUID = 36 chars, allow up to 50 for safety)
-      // KV keys have a 512 byte limit, reject anything too long
-      if (!value || value.length > 50) {
-        console.warn('Invalid session ID length:', value?.length)
+      // Validate session ID format (alphanumeric + hyphens/underscores only)
+      if (!value || !SESSION_ID_REGEX.test(value)) {
+        console.warn('Invalid session ID format:', value?.substring(0, 50))
         return null
       }
       return value
@@ -681,11 +684,13 @@ async function checkAdminAccess(request, env) {
           const userData = await userResponse.json()
           console.log('Fetched user email on-demand:', userData.email)
 
-          // Update session with email
+          // Update session with email, using consistent TTL calculation
           sessionData.userEmail = userData.email
           sessionData.refreshToken = tokens.refresh_token || sessionData.refreshToken
+          const refreshTokenTtl = getRefreshTokenTtl(env)
+          const ttl = (tokens.expires_in || 3600) + refreshTokenTtl
           await env.EEN_OAUTH_SESSIONS.put(sessionId, JSON.stringify(sessionData), {
-            expirationTtl: 86400 * 2  // 2 days
+            expirationTtl: ttl
           })
         }
       }

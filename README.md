@@ -522,7 +522,7 @@ To enable Copilot reviews:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `CLIENT_ID` | EEN OAuth Client ID | `PREVIEW-KLAUS-MOBILE` |
+| `CLIENT_ID` | EEN OAuth Client ID | `YOUR-CLIENT-ID` |
 | `CLIENT_SECRET` | EEN OAuth Client Secret | `your-secret` |
 | `ADMIN_EMAILS` | Comma-separated admin emails | `admin@example.com` |
 | `ALLOWED_ORIGINS` | Comma-separated CORS origins | `https://example.com` |
@@ -551,7 +551,7 @@ Values outside the min/max range are automatically clamped. Adjust this value ba
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `VITE_PROXY_URL` | URL of the OAuth proxy | `http://localhost:8787` |
-| `VITE_EEN_CLIENT_ID` | EEN OAuth Client ID | `PREVIEW-KLAUS-MOBILE` |
+| `VITE_EEN_CLIENT_ID` | EEN OAuth Client ID | `YOUR-CLIENT-ID` |
 | `VITE_EEN_AUTH_URL` | EEN OAuth authorize URL | `https://auth.eagleeyenetworks.com/oauth2/authorize` |
 | `VITE_REDIRECT_URI` | OAuth callback URL | `http://localhost:5173/` |
 

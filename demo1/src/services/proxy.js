@@ -21,7 +21,8 @@ if (ENV_PROXY_URL) {
   try {
     const parsed = new URL(ENV_PROXY_URL)
     // Only trust ENV_PROXY_URL if it's HTTPS (or localhost for dev)
-    if (parsed.protocol === 'https:' || parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+    // Use toLowerCase() for case-insensitive protocol check
+    if (parsed.protocol.toLowerCase() === 'https:' || parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
       ENV_PROXY_HOSTNAME = parsed.hostname
     } else {
       console.warn('ENV_PROXY_URL must use HTTPS in production, ignoring:', ENV_PROXY_URL)
@@ -32,14 +33,11 @@ if (ENV_PROXY_URL) {
 }
 
 /**
- * Check if running in production (GitHub Pages)
- * Uses both Vite's build mode and strict hostname check
+ * Check if running in production
+ * Uses Vite's build mode detection
  */
 function isProduction() {
-  // Check Vite's production mode first
-  if (import.meta.env.PROD) return true
-  // Fallback to strict hostname check for GitHub Pages
-  return window.location.hostname === 'klaushofrichter.github.io'
+  return import.meta.env.PROD
 }
 
 /**
@@ -105,8 +103,8 @@ export function getProxyUrl() {
     if (!stored || stored === LOCAL_PROXY_URL) {
       return CLOUDFLARE_PROXY_URL
     }
-    // Enforce HTTPS in production
-    if (!stored.startsWith('https://')) {
+    // Enforce HTTPS in production (case-insensitive check)
+    if (!stored.toLowerCase().startsWith('https://')) {
       console.warn('HTTP proxy not allowed in production, using default')
       return CLOUDFLARE_PROXY_URL
     }
@@ -134,8 +132,8 @@ export function setProxyUrl(url) {
     return false
   }
 
-  // In production, enforce HTTPS (except localhost for testing)
-  if (isProduction() && !url.startsWith('https://')) {
+  // In production, enforce HTTPS (case-insensitive check)
+  if (isProduction() && !url.toLowerCase().startsWith('https://')) {
     console.warn('HTTP proxy not allowed in production')
     return false
   }
