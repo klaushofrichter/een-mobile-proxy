@@ -2,8 +2,8 @@
  * Workflow Logic Tests
  *
  * Tests for GitHub Actions workflow logic that is critical to the CI/CD pipeline.
- * These tests validate the size restriction logic used in pr-review.yml for custom
- * review prompts, implemented as pure functions without file system dependencies.
+ * These tests validate the size restriction logic used in pr-review.yml and
+ * pr-review-gemini.yml for custom review prompts.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -15,44 +15,30 @@ import { describe, it, expect } from 'vitest'
 const MAX_PROMPT_SIZE = 4096
 
 /**
- * Simulates the custom review prompt processing logic from pr-review.yml
+ * Validates custom review prompt size against the limit.
  *
- * This mirrors the shell script logic:
+ * This mirrors the shell script logic in pr-review.yml:
  *   MAX_SIZE=4096
  *   if [ "$FILE_SIZE" -gt "$MAX_SIZE" ]; then
- *     echo "::warning::claude-review.md exceeds ${MAX_SIZE} bytes, truncating"
+ *     echo "::error::claude-review.md exceeds ${MAX_SIZE} bytes"
+ *     exit 1
  *   fi
- *   head -c "$MAX_SIZE" "$PROMPT_FILE"
  *
- * @param {string} content - The file content to process
+ * @param {string} content - The file content to validate
  * @param {number} maxSize - Maximum allowed size in bytes
- * @returns {object} Result with content, truncated flag, and size info
+ * @returns {object} Result with valid flag and size info
  */
-function processCustomPrompt(content, maxSize = MAX_PROMPT_SIZE) {
+function validatePromptSize(content, maxSize = MAX_PROMPT_SIZE) {
   const encoder = new TextEncoder()
   const contentBytes = encoder.encode(content)
-  const originalSize = contentBytes.length
+  const size = contentBytes.length
 
-  const result = {
-    content: '',
-    truncated: false,
-    originalSize,
-    finalSize: 0
+  return {
+    valid: size <= maxSize,
+    size,
+    maxSize,
+    exceededBy: size > maxSize ? size - maxSize : 0
   }
-
-  if (originalSize > maxSize) {
-    result.truncated = true
-    // Truncate to maxSize bytes (like shell's head -c)
-    const truncatedBytes = contentBytes.slice(0, maxSize)
-    const decoder = new TextDecoder('utf-8', { fatal: false })
-    result.content = decoder.decode(truncatedBytes)
-    result.finalSize = maxSize
-  } else {
-    result.content = content
-    result.finalSize = originalSize
-  }
-
-  return result
 }
 
 /**
@@ -62,7 +48,14 @@ function createContentOfSize(sizeInBytes, char = 'x') {
   return char.repeat(sizeInBytes)
 }
 
-describe('Workflow - Custom Review Prompt Size Restriction', () => {
+/**
+ * Gets the byte size of a string in UTF-8 encoding
+ */
+function getByteSize(content) {
+  return new TextEncoder().encode(content).length
+}
+
+describe('Workflow - Custom Review Prompt Size Validation', () => {
   describe('Size Limit Constants', () => {
     it('should use 4KB (4096 bytes) as the maximum size limit', () => {
       expect(MAX_PROMPT_SIZE).toBe(4096)
@@ -72,107 +65,105 @@ describe('Workflow - Custom Review Prompt Size Restriction', () => {
 
   describe('Content Under Limit', () => {
     it('should accept empty content', () => {
-      const result = processCustomPrompt('')
+      const result = validatePromptSize('')
 
-      expect(result.truncated).toBe(false)
-      expect(result.content).toBe('')
-      expect(result.originalSize).toBe(0)
-      expect(result.finalSize).toBe(0)
+      expect(result.valid).toBe(true)
+      expect(result.size).toBe(0)
+      expect(result.exceededBy).toBe(0)
     })
 
     it('should accept small content', () => {
       const content = '# Review Prompts\n* Point one\n* Point two'
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(false)
-      expect(result.content).toBe(content)
+      expect(result.valid).toBe(true)
+      expect(result.size).toBe(getByteSize(content))
     })
 
     it('should accept content at 1KB', () => {
       const content = createContentOfSize(1024)
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(false)
-      expect(result.originalSize).toBe(1024)
+      expect(result.valid).toBe(true)
+      expect(result.size).toBe(1024)
     })
 
     it('should accept content at 2KB', () => {
       const content = createContentOfSize(2048)
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(false)
-      expect(result.originalSize).toBe(2048)
+      expect(result.valid).toBe(true)
+      expect(result.size).toBe(2048)
     })
   })
 
   describe('Boundary Conditions', () => {
-    it('should not truncate at 4095 bytes (1 byte under limit)', () => {
+    it('should accept at 4095 bytes (1 byte under limit)', () => {
       const content = createContentOfSize(4095)
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(false)
-      expect(result.originalSize).toBe(4095)
-      expect(result.content.length).toBe(4095)
+      expect(result.valid).toBe(true)
+      expect(result.size).toBe(4095)
+      expect(result.exceededBy).toBe(0)
     })
 
-    it('should not truncate at exactly 4096 bytes (at limit)', () => {
+    it('should accept at exactly 4096 bytes (at limit)', () => {
       const content = createContentOfSize(4096)
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(false)
-      expect(result.originalSize).toBe(4096)
-      expect(result.content.length).toBe(4096)
+      expect(result.valid).toBe(true)
+      expect(result.size).toBe(4096)
+      expect(result.exceededBy).toBe(0)
     })
 
-    it('should truncate at 4097 bytes (1 byte over limit)', () => {
+    it('should reject at 4097 bytes (1 byte over limit)', () => {
       const content = createContentOfSize(4097)
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(true)
-      expect(result.originalSize).toBe(4097)
-      expect(result.finalSize).toBe(4096)
+      expect(result.valid).toBe(false)
+      expect(result.size).toBe(4097)
+      expect(result.exceededBy).toBe(1)
     })
 
-    it('should truncate at 4100 bytes (4 bytes over limit)', () => {
+    it('should reject at 4100 bytes (4 bytes over limit)', () => {
       const content = createContentOfSize(4100)
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(true)
-      expect(result.originalSize).toBe(4100)
-      expect(result.finalSize).toBe(4096)
+      expect(result.valid).toBe(false)
+      expect(result.size).toBe(4100)
+      expect(result.exceededBy).toBe(4)
     })
   })
 
-  describe('Large Content Truncation', () => {
-    it('should truncate 8KB content to 4KB', () => {
+  describe('Large Content Rejection', () => {
+    it('should reject 8KB content', () => {
       const content = createContentOfSize(8192)
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(true)
-      expect(result.originalSize).toBe(8192)
-      expect(result.finalSize).toBe(4096)
+      expect(result.valid).toBe(false)
+      expect(result.size).toBe(8192)
+      expect(result.exceededBy).toBe(8192 - 4096)
     })
 
-    it('should truncate 10KB content to 4KB', () => {
+    it('should reject 10KB content', () => {
       const content = createContentOfSize(10240)
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(true)
-      expect(result.originalSize).toBe(10240)
-      expect(result.finalSize).toBe(4096)
+      expect(result.valid).toBe(false)
+      expect(result.size).toBe(10240)
+      expect(result.exceededBy).toBe(10240 - 4096)
     })
 
-    it('should truncate 1MB content to 4KB', () => {
+    it('should reject 1MB content', () => {
       const content = createContentOfSize(1024 * 1024)
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(true)
-      expect(result.originalSize).toBe(1024 * 1024)
-      expect(result.finalSize).toBe(4096)
+      expect(result.valid).toBe(false)
+      expect(result.size).toBe(1024 * 1024)
     })
   })
 
-  describe('Content Preservation', () => {
+  describe('Content Preservation (valid content)', () => {
     it('should preserve markdown formatting under limit', () => {
       const content = `# Additional prompts for Claude Code Review
 * Point one with **bold** text
@@ -182,156 +173,152 @@ describe('Workflow - Custom Review Prompt Size Restriction', () => {
 ## Section Header
 Some more content here.
 `
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(false)
-      expect(result.content).toBe(content)
+      expect(result.valid).toBe(true)
     })
 
     it('should preserve special characters', () => {
       const content = '* Check SQL: SELECT * FROM users WHERE id = \'1\' OR \'1\'=\'1\'\n'
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.content).toBe(content)
+      expect(result.valid).toBe(true)
     })
 
-    it('should preserve newlines correctly', () => {
+    it('should handle newlines correctly', () => {
       const content = 'Line 1\nLine 2\r\nLine 3\rLine 4'
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.content).toBe(content)
+      expect(result.valid).toBe(true)
     })
 
-    it('should preserve whitespace-only content', () => {
+    it('should handle whitespace-only content', () => {
       const content = '   \n\n\t\t   \n'
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.content).toBe(content)
+      expect(result.valid).toBe(true)
     })
   })
 
   describe('UTF-8 Multi-byte Characters', () => {
-    it('should handle ASCII characters (1 byte each)', () => {
+    it('should count ASCII characters as 1 byte each', () => {
       const content = 'Hello World!'
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(false)
-      expect(result.originalSize).toBe(12) // 12 ASCII chars = 12 bytes
+      expect(result.valid).toBe(true)
+      expect(result.size).toBe(12) // 12 ASCII chars = 12 bytes
     })
 
-    it('should handle emoji characters (4 bytes each in UTF-8)', () => {
+    it('should count emoji characters as 4 bytes each in UTF-8', () => {
       // Each emoji is 4 bytes in UTF-8
       const content = '🔍🔍🔍🔍🔍' // 5 emojis = 20 bytes
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(false)
-      expect(result.originalSize).toBe(20)
+      expect(result.valid).toBe(true)
+      expect(result.size).toBe(20)
     })
 
     it('should correctly count bytes for mixed content', () => {
       // 'a' = 1 byte, '🔍' = 4 bytes
       const content = 'a🔍a🔍a' // 1 + 4 + 1 + 4 + 1 = 11 bytes
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.originalSize).toBe(11)
+      expect(result.size).toBe(11)
     })
 
-    it('should truncate emojis at byte boundary', () => {
-      // Fill most of the limit with ASCII, then add emojis
+    it('should reject when emoji content exceeds limit', () => {
+      // Fill most of the limit with ASCII, then add emojis to exceed
       const asciiPart = 'x'.repeat(4090) // 4090 bytes
       const emojiPart = '🔍🔍🔍' // 12 bytes, total = 4102 bytes
       const content = asciiPart + emojiPart
 
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(true)
-      expect(result.finalSize).toBe(4096)
-      // The truncated content should start with the ASCII part
-      expect(result.content.startsWith(asciiPart.slice(0, 100))).toBe(true)
+      expect(result.valid).toBe(false)
+      expect(result.size).toBe(4102)
+      expect(result.exceededBy).toBe(6)
     })
 
-    it('should handle Chinese characters (3 bytes each in UTF-8)', () => {
+    it('should count Chinese characters as 3 bytes each in UTF-8', () => {
       // Each Chinese character is typically 3 bytes in UTF-8
       const content = '中文测试' // 4 chars = 12 bytes
-      const result = processCustomPrompt(content)
+      const result = validatePromptSize(content)
 
-      expect(result.truncated).toBe(false)
-      expect(result.originalSize).toBe(12)
-    })
-  })
-
-  describe('Truncation Accuracy', () => {
-    it('should produce content of exactly maxSize bytes when truncating', () => {
-      const content = createContentOfSize(10000)
-      const result = processCustomPrompt(content)
-
-      expect(result.truncated).toBe(true)
-      expect(result.finalSize).toBe(MAX_PROMPT_SIZE)
-
-      // Verify the actual byte length
-      const encoder = new TextEncoder()
-      expect(encoder.encode(result.content).length).toBe(MAX_PROMPT_SIZE)
-    })
-
-    it('should preserve the beginning of content when truncating', () => {
-      const prefix = 'IMPORTANT_PREFIX_'
-      const filler = 'x'.repeat(10000)
-      const content = prefix + filler
-
-      const result = processCustomPrompt(content)
-
-      expect(result.truncated).toBe(true)
-      expect(result.content.startsWith(prefix)).toBe(true)
-    })
-
-    it('should not corrupt content when truncating ASCII', () => {
-      const alphabet = 'abcdefghijklmnopqrstuvwxyz'
-      const content = alphabet.repeat(200) // 5200 bytes
-
-      const result = processCustomPrompt(content)
-
-      expect(result.truncated).toBe(true)
-      // Truncated content should only contain valid alphabet characters
-      expect(result.content).toMatch(/^[a-z]+$/)
+      expect(result.valid).toBe(true)
+      expect(result.size).toBe(12)
     })
   })
 
   describe('Custom Size Limits', () => {
     it('should respect custom maxSize parameter', () => {
       const content = createContentOfSize(100)
-      const result = processCustomPrompt(content, 50)
+      const result = validatePromptSize(content, 50)
 
-      expect(result.truncated).toBe(true)
-      expect(result.finalSize).toBe(50)
+      expect(result.valid).toBe(false)
+      expect(result.exceededBy).toBe(50)
     })
 
     it('should work with very small limits', () => {
       const content = 'Hello World!'
-      const result = processCustomPrompt(content, 5)
+      const result = validatePromptSize(content, 5)
 
-      expect(result.truncated).toBe(true)
-      expect(result.content).toBe('Hello')
-      expect(result.finalSize).toBe(5)
+      expect(result.valid).toBe(false)
+      expect(result.size).toBe(12)
+      expect(result.exceededBy).toBe(7)
     })
 
     it('should work with limit of 1 byte', () => {
       const content = 'abc'
-      const result = processCustomPrompt(content, 1)
+      const result = validatePromptSize(content, 1)
 
-      expect(result.truncated).toBe(true)
-      expect(result.content).toBe('a')
-      expect(result.finalSize).toBe(1)
+      expect(result.valid).toBe(false)
+      expect(result.exceededBy).toBe(2)
+    })
+
+    it('should accept content exactly at custom limit', () => {
+      const content = 'Hello'
+      const result = validatePromptSize(content, 5)
+
+      expect(result.valid).toBe(true)
+      expect(result.exceededBy).toBe(0)
+    })
+  })
+
+  describe('Error Message Generation', () => {
+    it('should provide useful info for error messages', () => {
+      const content = createContentOfSize(5000)
+      const result = validatePromptSize(content)
+
+      // These values would be used in error messages like:
+      // "claude-review.md exceeds 4096 bytes (5000 bytes)"
+      expect(result.valid).toBe(false)
+      expect(result.size).toBe(5000)
+      expect(result.maxSize).toBe(4096)
+      expect(result.exceededBy).toBe(904)
     })
   })
 })
 
-describe('Workflow - Expected File Configuration', () => {
-  it('should expect prompt file at .github/claude-review.md', () => {
-    const EXPECTED_PATH = '.github/claude-review.md'
+describe('Workflow - Byte Size Calculation', () => {
+  describe('getByteSize helper', () => {
+    it('should return 0 for empty string', () => {
+      expect(getByteSize('')).toBe(0)
+    })
 
-    // Verify the expected path structure
-    expect(EXPECTED_PATH).toMatch(/^\.github\//)
-    expect(EXPECTED_PATH).toMatch(/\.md$/)
-    expect(EXPECTED_PATH).toBe('.github/claude-review.md')
+    it('should count ASCII bytes correctly', () => {
+      expect(getByteSize('abc')).toBe(3)
+      expect(getByteSize('Hello World')).toBe(11)
+    })
+
+    it('should count multi-byte UTF-8 correctly', () => {
+      expect(getByteSize('🔍')).toBe(4)
+      expect(getByteSize('中')).toBe(3)
+      expect(getByteSize('é')).toBe(2)
+    })
+
+    it('should handle mixed content', () => {
+      // a(1) + 🔍(4) + 中(3) + !(1) = 9 bytes
+      expect(getByteSize('a🔍中!')).toBe(9)
+    })
   })
 })

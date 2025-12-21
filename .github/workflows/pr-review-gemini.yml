@@ -51,7 +51,7 @@ jobs:
           fi
 
           # Truncate if too large (Gemini has token limits)
-          if [ $(wc -c < pr_diff.txt) -gt 100000 ]; then
+          if [ "$(wc -c < pr_diff.txt)" -gt 100000 ]; then
             echo "::warning::Diff truncated to 100KB for Gemini review"
             head -c 100000 pr_diff.txt > pr_diff_truncated.txt
           else
@@ -110,11 +110,13 @@ jobs:
       - name: Post Review Comment
         if: always()
         uses: actions/github-script@v7
+        env:
+          GEMINI_OUTPUT: ${{ steps.gemini-review.outputs.output }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            // Get the output from the Gemini action
-            const geminiOutput = `${{ steps.gemini-review.outputs.output }}`;
+            // Get the output from environment variable to avoid injection issues
+            const geminiOutput = process.env.GEMINI_OUTPUT || '';
 
             // Get the workflow run URL
             const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
