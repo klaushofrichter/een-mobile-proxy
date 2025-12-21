@@ -8,11 +8,22 @@ const CLOUDFLARE_PROXY_URL = 'https://een-oauth-proxy.klaushofrichter.workers.de
 const LOCAL_PROXY_URL = 'http://localhost:8787'
 const DEFAULT_PROXY_URL = ENV_PROXY_URL || LOCAL_PROXY_URL
 
+// Allowed proxy hosts for security validation
+const ALLOWED_PROXY_HOSTS = [
+  'localhost',
+  '127.0.0.1',
+  'een-oauth-proxy.klaushofrichter.workers.dev'
+]
+
 /**
  * Check if running in production (GitHub Pages)
+ * Uses both Vite's build mode and strict hostname check
  */
 function isProduction() {
-  return window.location.hostname.includes('github.io')
+  // Check Vite's production mode first
+  if (import.meta.env.PROD) return true
+  // Fallback to strict hostname check for GitHub Pages
+  return window.location.hostname === 'klaushofrichter.github.io'
 }
 
 /**
@@ -40,6 +51,36 @@ export function getProxyOptions() {
 }
 
 /**
+ * Validate if a URL is an allowed proxy URL
+ * @param {string} url - URL to validate
+ * @returns {boolean} - True if URL is valid and allowed
+ */
+function isValidProxyUrl(url) {
+  try {
+    const parsedUrl = new URL(url)
+    const hostname = parsedUrl.hostname
+
+    // Check if hostname is in allowed list
+    if (ALLOWED_PROXY_HOSTS.includes(hostname)) {
+      return true
+    }
+
+    // Also allow ENV_PROXY_URL hostname if configured
+    if (ENV_PROXY_URL) {
+      const envHostname = new URL(ENV_PROXY_URL).hostname
+      if (hostname === envHostname) {
+        return true
+      }
+    }
+
+    return false
+  } catch {
+    // Invalid URL format
+    return false
+  }
+}
+
+/**
  * Get the configured proxy URL (from localStorage or default)
  * In production, defaults to Cloudflare and ignores localhost if stored
  */
@@ -51,6 +92,16 @@ export function getProxyUrl() {
     if (!stored || stored === LOCAL_PROXY_URL) {
       return CLOUDFLARE_PROXY_URL
     }
+    // Enforce HTTPS in production
+    if (!stored.startsWith('https://')) {
+      console.warn('HTTP proxy not allowed in production, using default')
+      return CLOUDFLARE_PROXY_URL
+    }
+    // Validate the stored URL
+    if (!isValidProxyUrl(stored)) {
+      console.warn('Invalid proxy URL in storage, using default')
+      return CLOUDFLARE_PROXY_URL
+    }
     return stored
   }
 
@@ -59,7 +110,23 @@ export function getProxyUrl() {
 
 /**
  * Set the proxy URL (stores in localStorage)
+ * Validates URL before storing to prevent malicious redirects
+ * @param {string} url - Proxy URL to store
+ * @returns {boolean} - True if URL was stored, false if rejected
  */
 export function setProxyUrl(url) {
+  // Validate URL format and allowed hosts
+  if (!isValidProxyUrl(url)) {
+    console.warn('Rejected invalid proxy URL:', url)
+    return false
+  }
+
+  // In production, enforce HTTPS (except localhost for testing)
+  if (isProduction() && !url.startsWith('https://')) {
+    console.warn('HTTP proxy not allowed in production')
+    return false
+  }
+
   localStorage.setItem(STORAGE_KEY, url)
+  return true
 }
