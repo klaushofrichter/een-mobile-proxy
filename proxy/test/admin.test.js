@@ -3,8 +3,8 @@ import { env } from 'cloudflare:test'
 import { fetchWithMetrics } from './test-utils.js'
 
 describe('Admin endpoints', () => {
-  const adminSessionId = 'admin-session-123'
-  const regularSessionId = 'regular-session-456'
+  const adminSessionId = 'admin-session-id-test-123'
+  const regularSessionId = 'regular-session-id-test-456'
 
   beforeEach(async () => {
     // Clear KV storage before each test

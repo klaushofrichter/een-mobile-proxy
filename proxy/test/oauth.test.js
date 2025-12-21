@@ -61,7 +61,7 @@ describe('OAuth endpoints', () => {
         method: 'POST',
         headers: {
           Origin: 'http://localhost:5173',
-          Cookie: 'sessionId=invalid-session-id'
+          Cookie: 'sessionId=invalid-session-id-test-12345'
         }
       })
 
@@ -90,7 +90,7 @@ describe('OAuth endpoints', () => {
         method: 'POST',
         headers: {
           Origin: 'http://localhost:5173',
-          Cookie: 'sessionId=non-existent-session'
+          Cookie: 'sessionId=non-existent-session-12345'
         }
       })
 

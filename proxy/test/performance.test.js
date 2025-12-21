@@ -158,8 +158,8 @@ function generateReport() {
 }
 
 describe('Performance Benchmarks', () => {
-  const adminSessionId = 'perf-admin-session'
-  const userSessionId = 'perf-user-session'
+  const adminSessionId = 'perf-admin-session-test-id'
+  const userSessionId = 'perf-user-session-test-id'
 
   beforeAll(async () => {
     // Clear any existing data
@@ -243,7 +243,7 @@ describe('Performance Benchmarks', () => {
             method: 'POST',
             headers: {
               Origin: 'http://localhost:5173',
-              Cookie: 'sessionId=invalid-session'
+              Cookie: 'sessionId=invalid-session-test-id-12345'
             }
           }
         )
