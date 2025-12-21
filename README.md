@@ -1,12 +1,13 @@
 # EEN OAuth Proxy
 
 A standalone OAuth proxy system for Eagle Eye Networks (EEN) consisting of three independent applications.
-![Proxy Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fproxy%2Fpackage.json&query=version&label=proxy-develop&color=%2333ca55)
-![Proxy Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fproxy%2Fpackage.json&query=version&label=proxy-production&color=%2333ca55)
-![Admin Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fadmin%2Fpackage.json&query=version&label=admin-develop&color=%2333ca55)
-![Admin Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fadmin%2Fpackage.json&query=version&label=admin-production&color=%2333ca55)
-![Demo1 Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fdemo1%2Fpackage.json&query=version&label=demo1-develop&color=%2333ca55)
-![Demo1 Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fklaushofrichter%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fdemo1%2Fpackage.json&query=version&label=demo1-production&color=%2333ca55)
+<!-- Version badges - replace 'your-username' with your GitHub username to enable -->
+<!-- ![Proxy Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fproxy%2Fpackage.json&query=version&label=proxy-develop&color=%2333ca55) -->
+<!-- ![Proxy Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fproxy%2Fpackage.json&query=version&label=proxy-production&color=%2333ca55) -->
+<!-- ![Admin Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fadmin%2Fpackage.json&query=version&label=admin-develop&color=%2333ca55) -->
+<!-- ![Admin Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fadmin%2Fpackage.json&query=version&label=admin-production&color=%2333ca55) -->
+<!-- ![Demo1 Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fdemo1%2Fpackage.json&query=version&label=demo1-develop&color=%2333ca55) -->
+<!-- ![Demo1 Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fdemo1%2Fpackage.json&query=version&label=demo1-production&color=%2333ca55) -->
 
 
 ## Project Structure
@@ -30,7 +31,7 @@ A Cloudflare Worker that handles OAuth authentication with EEN services. It keep
 - Token revocation (`/proxy/revoke`)
 - Admin endpoints for session management
 
-**Deployment:** Cloudflare Workers at `https://een-oauth-proxy.klaushofrichter.workers.dev`
+**Deployment:** Cloudflare Workers at `https://your-proxy.your-subdomain.workers.dev`
 
 ### Admin App (`./admin`)
 
@@ -42,7 +43,7 @@ A Vue 3 management application for monitoring and administering the OAuth proxy.
 - Remove sessions (except current)
 - Emergency token revocation
 
-**Deployment:** GitHub Pages at `https://klaushofrichter.github.io/een-oauth-proxy`
+**Deployment:** GitHub Pages at `https://your-username.github.io/een-oauth-proxy`
 
 ### Demo App (`./demo1`)
 
@@ -71,7 +72,7 @@ A Vue 3 demonstration application showing OAuth integration with EEN.
 
 ```bash
 # Clone the repository
-git clone https://github.com/klaushofrichter/een-oauth-proxy.git
+git clone https://github.com/your-username/een-oauth-proxy.git
 cd een-oauth-proxy
 
 # Install root dependencies (Husky for git hooks)
@@ -108,7 +109,7 @@ Edit `proxy/.dev.vars`:
 CLIENT_ID=your-een-client-id
 CLIENT_SECRET=your-een-client-secret
 ADMIN_EMAILS=admin@example.com
-ALLOWED_ORIGINS=https://klaushofrichter.github.io
+ALLOWED_ORIGINS=https://your-username.github.io
 ENVIRONMENT=development
 ```
 
@@ -194,8 +195,7 @@ npm run dev
 Now you can access:
 - Local App: http://127.0.0.1:3333
 - Proxy: http://localhost:8787
-- Hosted Demo: https://klaushofrichter.github.io/een-oauth-proxy/demo1/
-- Hosted Admin: https://klaushofrichter.github.io/een-oauth-proxy/admin/
+- Hosted Admin: https://your-username.github.io/een-oauth-proxy/admin/
 
 To switch between apps locally:
 ```bash
@@ -376,16 +376,10 @@ The deploy script will:
 
 Update the `.env` files for production:
 
-**demo1/.env:**
-```env
-VITE_PROXY_URL=https://een-oauth-proxy.klaushofrichter.workers.dev
-VITE_REDIRECT_URI=https://klaushofrichter.github.io/een-oauth-proxy/demo1/
-```
-
 **admin/.env:**
 ```env
-VITE_PROXY_URL=https://een-oauth-proxy.klaushofrichter.workers.dev
-VITE_REDIRECT_URI=https://klaushofrichter.github.io/een-oauth-proxy/admin/
+VITE_PROXY_URL=https://your-proxy.your-subdomain.workers.dev
+VITE_REDIRECT_URI=https://your-username.github.io/een-oauth-proxy/admin/
 ```
 
 Then deploy:

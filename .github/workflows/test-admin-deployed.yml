@@ -34,7 +34,7 @@ jobs:
         run: npx playwright test -x
         working-directory: admin
         env:
-          VITE_PROXY_URL: 'https://een-oauth-proxy.klaushofrichter.workers.dev'
+          VITE_PROXY_URL: ${{ vars.VITE_PROXY_URL }}
           VITE_EEN_CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
           VITE_REDIRECT_URI: 'http://127.0.0.1:3333'
           ADMIN_TEST_USER: ${{ secrets.ADMIN_TEST_USER }}

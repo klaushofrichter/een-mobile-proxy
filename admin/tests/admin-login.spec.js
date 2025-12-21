@@ -90,7 +90,7 @@ test.describe('Admin Login and Health', () => {
 
     // Verify a proxy URL is displayed (either localhost or Cloudflare)
     // The actual URL depends on environment configuration
-    const proxyUrlElement = page.locator('.font-mono').filter({ hasText: /localhost:8787|een-oauth-proxy\.klaushofrichter\.workers\.dev/ })
+    const proxyUrlElement = page.locator('.font-mono').filter({ hasText: /localhost:8787|\.workers\.dev/ })
     await expect(proxyUrlElement.first()).toBeVisible()
     const displayedUrl = await proxyUrlElement.first().textContent()
     console.log(`✅ Proxy URL displayed: ${displayedUrl}`)

@@ -593,7 +593,8 @@ function getSessionIdFromCookie(request) {
 
   const cookies = cookieHeader.split(';').map(c => c.trim())
   for (const cookie of cookies) {
-    const [name, value] = cookie.split('=')
+    const [name, ...valueParts] = cookie.split('=')
+    const value = valueParts.join('=')
     if (name === 'sessionId') {
       // Validate session ID format (alphanumeric + hyphens/underscores only)
       if (!value || !SESSION_ID_REGEX.test(value)) {

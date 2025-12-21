@@ -82,7 +82,7 @@
 
       <p class="text-center text-xs text-gray-500">
         <a
-          href="https://github.com/klaushofrichter/een-oauth-proxy/tree/develop"
+          href="https://github.com/your-username/een-oauth-proxy/tree/develop"
           target="_blank"
           rel="noopener noreferrer"
           class="hover:text-blue-600 hover:underline"
