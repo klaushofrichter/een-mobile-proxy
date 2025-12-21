@@ -5,13 +5,20 @@
 increment_version() {
     local folder=$1
     local package_json="$folder/package.json"
+    local package_lock="$folder/package-lock.json"
 
     if [ -f "$package_json" ]; then
         echo "Incrementing version in $folder..."
         cd "$folder"
         npm version patch --no-git-tag-version
+        if [ -f "package-lock.json" ]; then
+            npm install --package-lock-only
+        fi
         cd - > /dev/null
         git add "$package_json"
+        if [ -f "$package_lock" ]; then
+            git add "$package_lock"
+        fi
     fi
 }
 
