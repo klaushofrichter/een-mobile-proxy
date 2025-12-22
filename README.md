@@ -205,7 +205,6 @@ npm run dev
 Now you can access:
 - Local App: http://127.0.0.1:3333
 - Proxy: http://localhost:8787
-- Hosted Admin: https://your-username.github.io/een-oauth-proxy/admin/
 
 To switch between apps locally:
 ```bash
@@ -480,8 +479,10 @@ Configure these secrets in your repository settings (Settings > Secrets and vari
 |--------|-------------|---------|
 | `VITE_EEN_CLIENT_ID` | EEN OAuth Client ID | PR tests, deployment |
 | `EEN_CLIENT_SECRET` | EEN OAuth Client Secret | PR tests (local proxy) |
-| `ADMIN_TEST_USER` | Test user email (must be in ADMIN_EMAILS) | Playwright tests |
-| `ADMIN_TEST_PASSWORD` | Test user password | Playwright tests |
+| `ADMIN_TEST_USER` | Test admin user email (must be in ADMIN_EMAILS) | Playwright tests |
+| `ADMIN_TEST_PASSWORD` | Test admin user password | Playwright tests |
+| `TEST_USER` | Test user email (must not be in ADMIN_EMAILS) | Playwright tests |
+| `TEST_PASSWORD` | Test user password | Playwright tests |
 | `ANTHROPIC_API_KEY` | Anthropic API key for Claude Code reviews | Claude PR review workflow |
 | `GEMINI_API_KEY` | Google Gemini API key for security reviews | Gemini PR review workflow |
 | `SLACK_WEBHOOK` | Slack incoming webhook URL for notifications | Deploy and release workflows |
@@ -636,6 +637,43 @@ For example, if you modify files in `proxy/`, the `proxy/package.json` version w
 
 **Important:** Access tokens are short-lived (typically 1 hour) and validated directly by EEN's API. The proxy does not track or validate access tokens - it only manages refresh tokens server-side.
 
+### Content Security Policy (CSP) and Proxy URLs
+
+Both the admin and demo1 applications implement a Content Security Policy (CSP) to protect against Cross-Site Scripting (XSS) attacks. The CSP includes a `connect-src` directive that controls which URLs the application can make fetch requests to.
+
+**How it works:**
+- The CSP is automatically configured at build time based on the `VITE_PROXY_URL` environment variable
+- The CSP always includes `localhost:8787` and `127.0.0.1:8787` for local development compatibility
+- If `VITE_PROXY_URL` is set and different from localhost, it is automatically added to the CSP
+- A Vite plugin (`vite-plugin-csp.js`) handles this injection automatically
+
+**Runtime Proxy Selection:**
+- Both applications allow users to select a proxy URL at runtime via a dropdown on the login page
+- The dropdown only shows options that are allowed by the CSP:
+  - `localhost:8787` (always available in development)
+  - The `VITE_PROXY_URL` value (if configured)
+- Users can switch between these options at runtime without issues
+
+**Important Notes:**
+- **CSP is static**: The CSP is set at build time and cannot be changed at runtime
+- **Rebuild required**: If you need to use a different proxy URL than what was set during build, you must rebuild the application with the new `VITE_PROXY_URL` set
+- **Transparent for common cases**: If you're using `localhost:8787` or the configured `VITE_PROXY_URL`, everything works transparently - no special configuration needed
+
+**Example Build Commands:**
+
+```bash
+# Build with localhost proxy (default)
+cd admin && npm run build
+
+# Build with Cloudflare proxy
+cd admin && VITE_PROXY_URL=https://your-proxy.workers.dev npm run build
+
+# Build with custom proxy
+cd admin && VITE_PROXY_URL=https://custom-proxy.example.com npm run build
+```
+
+The same applies to the `demo1` application.
+
 ## Troubleshooting
 
 ### "Forbidden: Invalid origin" error
@@ -653,18 +691,6 @@ For example, if you modify files in `proxy/`, the `proxy/package.json` version w
 ### OAuth callback fails
 - Verify `VITE_REDIRECT_URI` matches your EEN OAuth app configuration
 - Check that the proxy is running and accessible
-
-## Breaking Changes
-
-### v1.1.4 - Development Origin Restriction
-
-**Change:** In development mode, only `http://127.0.0.1:3333` is now auto-allowed for redirect URIs and CORS origins. Previously, both `localhost:3333` and `127.0.0.1:3333` were allowed.
-
-**Reason:** EEN OAuth configuration requires the redirect URI to match exactly. Since EEN is configured for `http://127.0.0.1:3333`, using `localhost:3333` would fail OAuth callbacks even though they resolve to the same address.
-
-**Action Required:**
-- Ensure your local development setup uses `http://127.0.0.1:3333` (not `localhost:3333`)
-- If you need additional origins, add them to `ALLOWED_ORIGINS` in your `.dev.vars` file
 
 ## License
 
