@@ -23,10 +23,11 @@ jobs:
             const prNumber = context.payload.pull_request.number;
             
             // Helper function to escape markdown in branch names (comprehensive)
-            // Escapes: backticks, asterisks, underscores, brackets, parentheses, hash, greater than, tilde, pipe
+            // Escapes: backticks, asterisks, underscores, brackets, parentheses, hash, greater than, tilde, pipe, backslash
             const escapeMarkdown = (text) => {
               // Properly escape closing bracket in regex character class
-              return text.replace(/[`*_\[\]()#>\~|]/g, '\\$&');
+              // Escape backslash first to avoid double-escaping
+              return text.replace(/\\/g, '\\\\').replace(/[`*_\[\]()#>\~|]/g, '\\$&');
             };
             
             // Fetch all comments once at the start to avoid duplicate API calls
