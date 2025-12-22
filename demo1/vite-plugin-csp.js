@@ -78,14 +78,14 @@ export function cspPlugin() {
       // Split by spaces and check each origin individually
       const origins = connectSrc.split(/\s+/)
       const allowedWildcard = 'https://*.eagleeyenetworks.com'
-      const unexpectedWildcards = origins.filter(origin => {
-        // Check if origin contains a wildcard
-        if (origin.includes('*')) {
-          // Only allow the specific EEN wildcard pattern
-          return origin !== allowedWildcard
-        }
-        return false
-      })
+      const wildcardOrigins = origins.filter(origin => origin.includes('*'))
+      const allowedWildcardCount = wildcardOrigins.filter(origin => origin === allowedWildcard).length
+      const unexpectedWildcards = wildcardOrigins.filter(origin => origin !== allowedWildcard)
+      
+      // Warn if allowed wildcard appears multiple times (shouldn't happen, but not critical)
+      if (allowedWildcardCount > 1) {
+        console.warn(`⚠️ Warning: Allowed wildcard '${allowedWildcard}' appears ${allowedWildcardCount} times in CSP`)
+      }
       
       if (unexpectedWildcards.length > 0) {
         console.error(`❌ Security: CSP contains unexpected wildcard origins: ${unexpectedWildcards.join(', ')}`)
