@@ -48,6 +48,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create release archive
+        id: create_archive
         if: steps.check_release.outputs.exists == 'false'
         run: |
           ARCHIVE_NAME="een-oauth-proxy-v${{ steps.versions.outputs.proxy_version }}_v${{ steps.versions.outputs.admin_version }}"
@@ -58,9 +59,13 @@ jobs:
           echo "archive_name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        if: steps.check_release.outputs.exists == 'false'
+        if: steps.check_release.outputs.exists == 'false' && steps.create_archive.outputs.archive_name != ''
         run: |
-          ARCHIVE_NAME="een-oauth-proxy-v${{ steps.versions.outputs.proxy_version }}_v${{ steps.versions.outputs.admin_version }}"
+          ARCHIVE_NAME="${{ steps.create_archive.outputs.archive_name }}"
+          if [ -z "$ARCHIVE_NAME" ]; then
+            echo "Error: archive_name is not set. Cannot create release."
+            exit 1
+          fi
           gh release create "${{ steps.versions.outputs.release_tag }}" \
             --title "Proxy v${{ steps.versions.outputs.proxy_version }} / Admin v${{ steps.versions.outputs.admin_version }}" \
             --notes "## EEN OAuth Proxy Release
