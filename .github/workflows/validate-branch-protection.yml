@@ -15,27 +15,34 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            // Configuration
+            const FEATURE_BRANCH_PATTERNS = ['feature/', 'feat/', 'fix/', 'hotfix/', 'bugfix/'];
+            
             const baseBranch = context.payload.pull_request.base.ref;
             const headBranch = context.payload.pull_request.head.ref;
             const prNumber = context.payload.pull_request.number;
             
-            // Helper function to escape markdown in branch names
+            // Helper function to escape markdown in branch names (comprehensive)
+            // Escapes: backticks, asterisks, underscores, brackets, parentheses, hash, greater than, tilde, pipe
             const escapeMarkdown = (text) => {
-              return text.replace(/[`*_\[\]()]/g, '\\$&');
+              return text.replace(/[`*_\[\]()#>\~|]/g, '\\$&');
             };
             
-            // Helper function to check if comment already exists
-            const hasExistingComment = async (searchText) => {
-              const comments = await github.rest.issues.listComments({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
+            // Fetch all comments once at the start to avoid duplicate API calls
+            const allComments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+            
+            // Helper function to check if comment already exists (using pre-fetched comments)
+            const hasExistingComment = (searchText) => {
+              return allComments.data.some(comment => {
+                const isBot = comment.user.type === 'Bot' || 
+                             comment.user.login.includes('[bot]') ||
+                             comment.user.login === 'github-actions[bot]';
+                return isBot && comment.body.includes(searchText);
               });
-              
-              return comments.data.some(comment => 
-                comment.user.type === 'Bot' && 
-                comment.body.includes(searchText)
-              );
             };
             
             console.log(`PR #${prNumber}: ${headBranch} -> ${baseBranch}`);
@@ -44,7 +51,7 @@ jobs:
             if (baseBranch === 'production') {
               if (headBranch !== 'develop') {
                 const searchText = 'Branch Protection Violation';
-                if (!(await hasExistingComment(searchText))) {
+                if (!hasExistingComment(searchText)) {
                   const escapedHeadBranch = escapeMarkdown(headBranch);
                   const errorMsg = `❌ **Branch Protection Violation**\n\n` +
                     `PRs to \`production\` can only come from \`develop\` branch.\n\n` +
@@ -72,7 +79,7 @@ jobs:
             // Rule 2: Develop should not receive PRs from production
             if (baseBranch === 'develop' && headBranch === 'production') {
               const searchText = 'Branch Protection Violation';
-              if (!(await hasExistingComment(searchText))) {
+              if (!hasExistingComment(searchText)) {
                 const errorMsg = `❌ **Branch Protection Violation**\n\n` +
                   `PRs from \`production\` to \`develop\` are not allowed.\n\n` +
                   `The flow should be: \`feature\` → \`develop\` → \`production\`\n\n` +
@@ -91,13 +98,11 @@ jobs:
             }
             
             // Rule 3: Feature branches should go to develop (warning, not blocking)
-            // Check for common branch prefixes: feature/, feat/, fix/, hotfix/, bugfix/
-            const featureBranchPatterns = ['feature/', 'feat/', 'fix/', 'hotfix/', 'bugfix/'];
-            const isFeatureBranch = featureBranchPatterns.some(pattern => headBranch.startsWith(pattern));
+            const isFeatureBranch = FEATURE_BRANCH_PATTERNS.some(pattern => headBranch.startsWith(pattern));
             
             if (baseBranch === 'production' && isFeatureBranch) {
               const searchText = 'Branch Workflow Warning';
-              if (!(await hasExistingComment(searchText))) {
+              if (!hasExistingComment(searchText)) {
                 const escapedHeadBranch = escapeMarkdown(headBranch);
                 const warningMsg = `⚠️ **Branch Workflow Warning**\n\n` +
                   `Feature branches should typically be merged into \`develop\` first, not directly into \`production\`.\n\n` +
