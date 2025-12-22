@@ -36,12 +36,16 @@ export function cspPlugin() {
           const proxyHostname = proxyUrlObj.hostname.toLowerCase()
           
           // Check if it's already in the list
+          // Compare full URLs (including protocol) to allow different protocols for same hostname
           const alreadyInList = connectSrcParts.some(part => {
             if (part === proxyUrl) return true
-            // Check if part is a URL and matches hostname
+            // For exact matches, return true
+            // For hostname-only matches, we allow different protocols (http vs https)
             try {
               const partUrl = new URL(part)
-              return partUrl.hostname.toLowerCase() === proxyHostname
+              // Only consider it a duplicate if both protocol and hostname match
+              return partUrl.protocol === proxyUrlObj.protocol && 
+                     partUrl.hostname.toLowerCase() === proxyHostname
             } catch {
               return false
             }
@@ -68,6 +72,26 @@ export function cspPlugin() {
       }
       
       const connectSrc = connectSrcParts.join(' ')
+      
+      // Validate that final CSP doesn't contain unexpected wildcard origins
+      // Only allow the specific wildcard pattern for EEN domains
+      // Split by spaces and check each origin individually
+      const origins = connectSrc.split(/\s+/)
+      const allowedWildcard = 'https://*.eagleeyenetworks.com'
+      const unexpectedWildcards = origins.filter(origin => {
+        // Check if origin contains a wildcard
+        if (origin.includes('*')) {
+          // Only allow the specific EEN wildcard pattern
+          return origin !== allowedWildcard
+        }
+        return false
+      })
+      
+      if (unexpectedWildcards.length > 0) {
+        console.error(`❌ Security: CSP contains unexpected wildcard origins: ${unexpectedWildcards.join(', ')}`)
+        console.error('Only https://*.eagleeyenetworks.com is allowed as a wildcard origin')
+        throw new Error(`CSP validation failed: unexpected wildcard origins detected`)
+      }
       
       // Replace the connect-src part of the CSP with more robust regex
       // Match connect-src followed by whitespace and everything up to semicolon (or end if last directive)
