@@ -23,26 +23,49 @@ jobs:
       - name: Get version numbers
         id: versions
         run: |
+          set -e
+          echo "📦 Reading version numbers from package.json files..."
+          
+          if [ ! -f "./admin/package.json" ]; then
+            echo "❌ Error: admin/package.json not found"
+            exit 1
+          fi
+          if [ ! -f "./proxy/package.json" ]; then
+            echo "❌ Error: proxy/package.json not found"
+            exit 1
+          fi
+          
           ADMIN_VERSION=$(node -p "require('./admin/package.json').version")
           PROXY_VERSION=$(node -p "require('./proxy/package.json').version")
+          
+          if [ -z "$ADMIN_VERSION" ] || [ -z "$PROXY_VERSION" ]; then
+            echo "❌ Error: Failed to read version numbers"
+            exit 1
+          fi
+          
           # Create combined release tag using both proxy and admin versions
           RELEASE_TAG="proxy-v${PROXY_VERSION}_admin-v${ADMIN_VERSION}"
           echo "admin_version=$ADMIN_VERSION" >> $GITHUB_OUTPUT
           echo "proxy_version=$PROXY_VERSION" >> $GITHUB_OUTPUT
           echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
-          echo "Admin version: $ADMIN_VERSION"
-          echo "Proxy version: $PROXY_VERSION"
-          echo "Release tag: $RELEASE_TAG"
+          
+          echo "✅ Admin version: $ADMIN_VERSION"
+          echo "✅ Proxy version: $PROXY_VERSION"
+          echo "✅ Release tag: $RELEASE_TAG"
 
       - name: Check if release already exists
         id: check_release
         run: |
-          if gh release view "${{ steps.versions.outputs.release_tag }}" > /dev/null 2>&1; then
+          set -e
+          RELEASE_TAG="${{ steps.versions.outputs.release_tag }}"
+          echo "🔍 Checking if release '$RELEASE_TAG' already exists..."
+          
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
             echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Release ${{ steps.versions.outputs.release_tag }} already exists, skipping"
+            echo "ℹ️ Release $RELEASE_TAG already exists, skipping creation"
           else
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Release ${{ steps.versions.outputs.release_tag }} does not exist, will create"
+            echo "✅ Release $RELEASE_TAG does not exist, will create new release"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -51,22 +74,59 @@ jobs:
         id: create_archive
         if: steps.check_release.outputs.exists == 'false'
         run: |
+          set -e
           ARCHIVE_NAME="een-oauth-proxy-v${{ steps.versions.outputs.proxy_version }}_v${{ steps.versions.outputs.admin_version }}"
-          git archive --format=zip --prefix="${ARCHIVE_NAME}/" -o "${ARCHIVE_NAME}.zip" HEAD
-          git archive --format=tar.gz --prefix="${ARCHIVE_NAME}/" -o "${ARCHIVE_NAME}.tar.gz" HEAD
-          echo "Created ${ARCHIVE_NAME}.zip and ${ARCHIVE_NAME}.tar.gz"
-          ls -la *.zip *.tar.gz
+          echo "📦 Creating release archives with name: $ARCHIVE_NAME"
+          
+          echo "Creating ZIP archive..."
+          if ! git archive --format=zip --prefix="${ARCHIVE_NAME}/" -o "${ARCHIVE_NAME}.zip" HEAD; then
+            echo "❌ Error: Failed to create ZIP archive"
+            exit 1
+          fi
+          
+          echo "Creating TAR.GZ archive..."
+          if ! git archive --format=tar.gz --prefix="${ARCHIVE_NAME}/" -o "${ARCHIVE_NAME}.tar.gz" HEAD; then
+            echo "❌ Error: Failed to create TAR.GZ archive"
+            exit 1
+          fi
+          
+          echo "✅ Created archives:"
+          ls -lh "${ARCHIVE_NAME}.zip" "${ARCHIVE_NAME}.tar.gz"
+          
+          # Verify archives exist and have content
+          if [ ! -f "${ARCHIVE_NAME}.zip" ] || [ ! -s "${ARCHIVE_NAME}.zip" ]; then
+            echo "❌ Error: ZIP archive is missing or empty"
+            exit 1
+          fi
+          if [ ! -f "${ARCHIVE_NAME}.tar.gz" ] || [ ! -s "${ARCHIVE_NAME}.tar.gz" ]; then
+            echo "❌ Error: TAR.GZ archive is missing or empty"
+            exit 1
+          fi
+          
           echo "archive_name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
+          echo "✅ Archive creation completed successfully"
 
       - name: Create GitHub Release
         if: steps.check_release.outputs.exists == 'false' && steps.create_archive.outputs.archive_name != ''
         run: |
+          set -e
           ARCHIVE_NAME="${{ steps.create_archive.outputs.archive_name }}"
+          RELEASE_TAG="${{ steps.versions.outputs.release_tag }}"
+          
           if [ -z "$ARCHIVE_NAME" ]; then
-            echo "Error: archive_name is not set. Cannot create release."
+            echo "❌ Error: archive_name is not set. Cannot create release."
             exit 1
           fi
-          gh release create "${{ steps.versions.outputs.release_tag }}" \
+          
+          if [ ! -f "${ARCHIVE_NAME}.zip" ] || [ ! -f "${ARCHIVE_NAME}.tar.gz" ]; then
+            echo "❌ Error: Archive files not found. Expected: ${ARCHIVE_NAME}.zip and ${ARCHIVE_NAME}.tar.gz"
+            exit 1
+          fi
+          
+          echo "🚀 Creating GitHub release: $RELEASE_TAG"
+          echo "📎 Attaching archives: ${ARCHIVE_NAME}.zip, ${ARCHIVE_NAME}.tar.gz"
+          
+          if ! gh release create "$RELEASE_TAG" \
             --title "Proxy v${{ steps.versions.outputs.proxy_version }} / Admin v${{ steps.versions.outputs.admin_version }}" \
             --notes "## EEN OAuth Proxy Release
 
@@ -82,7 +142,13 @@ jobs:
           - **Proxy:** ${{ vars.VITE_PROXY_URL }}
           " \
             "${ARCHIVE_NAME}.zip" \
-            "${ARCHIVE_NAME}.tar.gz"
+            "${ARCHIVE_NAME}.tar.gz"; then
+            echo "❌ Error: Failed to create GitHub release"
+            exit 1
+          fi
+          
+          echo "✅ Successfully created release: $RELEASE_TAG"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/$RELEASE_TAG"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
