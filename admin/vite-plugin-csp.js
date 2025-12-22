@@ -70,13 +70,13 @@ export function cspPlugin() {
       const connectSrc = connectSrcParts.join(' ')
       
       // Replace the connect-src part of the CSP with more robust regex
-      // Match connect-src followed by whitespace and everything up to semicolon or end of attribute
-      // Use non-greedy matching and ensure we match the full directive
-      const cspRegex = /(connect-src\s+)(?:[^;'"]+?)(?=;|\s|"|')/i
+      // Match connect-src followed by whitespace and everything up to semicolon (or end if last directive)
+      // The regex handles both cases: with semicolon after, or as last directive before closing quote
+      const cspRegex = /(connect-src\s+)[^;]+(?=;|")/i
       if (cspRegex.test(html)) {
         return html.replace(cspRegex, `$1${connectSrc}`)
       } else {
-        // Fallback: if regex doesn't match, log warning but don't fail
+        // Fallback: if regex doesn't match, log warning but don't fail build
         console.warn('CSP connect-src directive not found in expected format, skipping injection')
         return html
       }
