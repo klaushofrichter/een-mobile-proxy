@@ -19,26 +19,48 @@ jobs:
             const headBranch = context.payload.pull_request.head.ref;
             const prNumber = context.payload.pull_request.number;
             
+            // Helper function to escape markdown in branch names
+            const escapeMarkdown = (text) => {
+              return text.replace(/[`*_\[\]()]/g, '\\$&');
+            };
+            
+            // Helper function to check if comment already exists
+            const hasExistingComment = async (searchText) => {
+              const comments = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+              });
+              
+              return comments.data.some(comment => 
+                comment.user.type === 'Bot' && 
+                comment.body.includes(searchText)
+              );
+            };
+            
             console.log(`PR #${prNumber}: ${headBranch} -> ${baseBranch}`);
             
             // Rule 1: Production can only receive PRs from develop
             if (baseBranch === 'production') {
               if (headBranch !== 'develop') {
-                const errorMsg = `❌ **Branch Protection Violation**\n\n` +
-                  `PRs to \`production\` can only come from \`develop\` branch.\n\n` +
-                  `This PR is trying to merge \`${headBranch}\` → \`production\`.\n\n` +
-                  `**Required workflow:**\n` +
-                  `1. Merge this PR into \`develop\` first\n` +
-                  `2. Then create a new PR from \`develop\` → \`production\`\n\n` +
-                  `Please close this PR and follow the correct workflow.`;
-                
-                // Comment on the PR
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: prNumber,
-                  body: errorMsg
-                });
+                const searchText = 'Branch Protection Violation';
+                if (!(await hasExistingComment(searchText))) {
+                  const escapedHeadBranch = escapeMarkdown(headBranch);
+                  const errorMsg = `❌ **Branch Protection Violation**\n\n` +
+                    `PRs to \`production\` can only come from \`develop\` branch.\n\n` +
+                    `This PR is trying to merge \`${escapedHeadBranch}\` → \`production\`.\n\n` +
+                    `**Required workflow:**\n` +
+                    `1. Merge this PR into \`develop\` first\n` +
+                    `2. Then create a new PR from \`develop\` → \`production\`\n\n` +
+                    `Please close this PR and follow the correct workflow.`;
+                  
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    body: errorMsg
+                  });
+                }
                 
                 // Fail the check
                 core.setFailed(`Production branch can only receive PRs from develop. This PR is from ${headBranch}.`);
@@ -49,38 +71,50 @@ jobs:
             
             // Rule 2: Develop should not receive PRs from production
             if (baseBranch === 'develop' && headBranch === 'production') {
-              const errorMsg = `❌ **Branch Protection Violation**\n\n` +
-                `PRs from \`production\` to \`develop\` are not allowed.\n\n` +
-                `The flow should be: \`feature\` → \`develop\` → \`production\`\n\n` +
-                `If you need to sync changes, use the sync workflow or merge directly if needed.`;
-              
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                body: errorMsg
-              });
+              const searchText = 'Branch Protection Violation';
+              if (!(await hasExistingComment(searchText))) {
+                const errorMsg = `❌ **Branch Protection Violation**\n\n` +
+                  `PRs from \`production\` to \`develop\` are not allowed.\n\n` +
+                  `The flow should be: \`feature\` → \`develop\` → \`production\`\n\n` +
+                  `If you need to sync changes, use the sync workflow or merge directly if needed.`;
+                
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: errorMsg
+                });
+              }
               
               core.setFailed('PRs from production to develop are not allowed.');
               return;
             }
             
             // Rule 3: Feature branches should go to develop (warning, not blocking)
-            if (baseBranch === 'production' && headBranch.startsWith('feature/')) {
-              const warningMsg = `⚠️ **Branch Workflow Warning**\n\n` +
-                `Feature branches should typically be merged into \`develop\` first, not directly into \`production\`.\n\n` +
-                `**Recommended workflow:**\n` +
-                `1. Merge this PR into \`develop\` first\n` +
-                `2. Test and validate in \`develop\`\n` +
-                `3. Then create a PR from \`develop\` → \`production\`\n\n` +
-                `If this is intentional, you can proceed, but please ensure proper testing.`;
-              
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                body: warningMsg
-              });
+            // Check for common branch prefixes: feature/, feat/, fix/, hotfix/, bugfix/
+            const featureBranchPatterns = ['feature/', 'feat/', 'fix/', 'hotfix/', 'bugfix/'];
+            const isFeatureBranch = featureBranchPatterns.some(pattern => headBranch.startsWith(pattern));
+            
+            if (baseBranch === 'production' && isFeatureBranch) {
+              const searchText = 'Branch Workflow Warning';
+              if (!(await hasExistingComment(searchText))) {
+                const escapedHeadBranch = escapeMarkdown(headBranch);
+                const warningMsg = `⚠️ **Branch Workflow Warning**\n\n` +
+                  `Feature branches should typically be merged into \`develop\` first, not directly into \`production\`.\n\n` +
+                  `This PR is trying to merge \`${escapedHeadBranch}\` → \`production\`.\n\n` +
+                  `**Recommended workflow:**\n` +
+                  `1. Merge this PR into \`develop\` first\n` +
+                  `2. Test and validate in \`develop\`\n` +
+                  `3. Then create a PR from \`develop\` → \`production\`\n\n` +
+                  `If this is intentional, you can proceed, but please ensure proper testing.`;
+                
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: warningMsg
+                });
+              }
               
               console.log('⚠️ Warning: Feature branch going directly to production');
             }
