@@ -50,15 +50,17 @@ jobs:
       - name: Create release archive
         if: steps.check_release.outputs.exists == 'false'
         run: |
-          ARCHIVE_NAME="een-oauth-proxy-v${PROXY_VERSION}_v${ADMIN_VERSION}" 
+          ARCHIVE_NAME="een-oauth-proxy-v${{ steps.versions.outputs.proxy_version }}_v${{ steps.versions.outputs.admin_version }}"
           git archive --format=zip --prefix="${ARCHIVE_NAME}/" -o "${ARCHIVE_NAME}.zip" HEAD
           git archive --format=tar.gz --prefix="${ARCHIVE_NAME}/" -o "${ARCHIVE_NAME}.tar.gz" HEAD
           echo "Created ${ARCHIVE_NAME}.zip and ${ARCHIVE_NAME}.tar.gz"
           ls -la *.zip *.tar.gz
+          echo "archive_name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         if: steps.check_release.outputs.exists == 'false'
         run: |
+          ARCHIVE_NAME="een-oauth-proxy-v${{ steps.versions.outputs.proxy_version }}_v${{ steps.versions.outputs.admin_version }}"
           gh release create "${{ steps.versions.outputs.release_tag }}" \
             --title "Proxy v${{ steps.versions.outputs.proxy_version }} / Admin v${{ steps.versions.outputs.admin_version }}" \
             --notes "## EEN OAuth Proxy Release
@@ -67,15 +69,15 @@ jobs:
           **Proxy Version:** ${{ steps.versions.outputs.proxy_version }}
 
           ### Downloads
-          - \`een-oauth-proxy-${{ steps.versions.outputs.release_tag }}.zip\` - ZIP archive
-          - \`een-oauth-proxy-${{ steps.versions.outputs.release_tag }}.tar.gz\` - TAR.GZ archive
+          - \`${ARCHIVE_NAME}.zip\` - ZIP archive
+          - \`${ARCHIVE_NAME}.tar.gz\` - TAR.GZ archive
 
           ### Deployed URLs
           - **Admin App:** ${{ vars.VITE_REDIRECT_URI }}
           - **Proxy:** ${{ vars.VITE_PROXY_URL }}
           " \
-            "een-oauth-proxy-${{ steps.versions.outputs.release_tag }}.zip" \
-            "een-oauth-proxy-${{ steps.versions.outputs.release_tag }}.tar.gz"
+            "${ARCHIVE_NAME}.zip" \
+            "${ARCHIVE_NAME}.tar.gz"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
