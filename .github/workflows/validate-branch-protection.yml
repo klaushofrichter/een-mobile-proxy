@@ -25,21 +25,31 @@ jobs:
             // Helper function to escape markdown in branch names (comprehensive)
             // Escapes: backticks, asterisks, underscores, brackets, parentheses, hash, greater than, tilde, pipe
             const escapeMarkdown = (text) => {
+              // Properly escape closing bracket in regex character class
               return text.replace(/[`*_\[\]()#>\~|]/g, '\\$&');
             };
             
             // Fetch all comments once at the start to avoid duplicate API calls
-            const allComments = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-            });
+            let allComments;
+            try {
+              allComments = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+              });
+              console.log(`Fetched ${allComments.data.length} existing comments`);
+            } catch (error) {
+              console.error(`Failed to fetch comments: ${error.message}`);
+              // Continue without duplicate detection if API call fails
+              allComments = { data: [] };
+            }
             
             // Helper function to check if comment already exists (using pre-fetched comments)
             const hasExistingComment = (searchText) => {
               return allComments.data.some(comment => {
+                // Improved bot detection: check type, endsWith for [bot] suffix, or exact match
                 const isBot = comment.user.type === 'Bot' || 
-                             comment.user.login.includes('[bot]') ||
+                             comment.user.login.endsWith('[bot]') ||
                              comment.user.login === 'github-actions[bot]';
                 return isBot && comment.body.includes(searchText);
               });
@@ -61,12 +71,18 @@ jobs:
                     `2. Then create a new PR from \`develop\` → \`production\`\n\n` +
                     `Please close this PR and follow the correct workflow.`;
                   
-                  await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: prNumber,
-                    body: errorMsg
-                  });
+                  try {
+                    await github.rest.issues.createComment({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: prNumber,
+                      body: errorMsg
+                    });
+                    console.log('Posted branch protection violation comment');
+                  } catch (error) {
+                    console.error(`Failed to post comment: ${error.message}`);
+                    // Continue to fail the check even if comment posting fails
+                  }
                 }
                 
                 // Fail the check
@@ -85,12 +101,18 @@ jobs:
                   `The flow should be: \`feature\` → \`develop\` → \`production\`\n\n` +
                   `If you need to sync changes, use the sync workflow or merge directly if needed.`;
                 
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: prNumber,
-                  body: errorMsg
-                });
+                try {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    body: errorMsg
+                  });
+                  console.log('Posted reverse flow violation comment');
+                } catch (error) {
+                  console.error(`Failed to post comment: ${error.message}`);
+                  // Continue to fail the check even if comment posting fails
+                }
               }
               
               core.setFailed('PRs from production to develop are not allowed.');
@@ -113,12 +135,18 @@ jobs:
                   `3. Then create a PR from \`develop\` → \`production\`\n\n` +
                   `If this is intentional, you can proceed, but please ensure proper testing.`;
                 
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: prNumber,
-                  body: warningMsg
-                });
+                try {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    body: warningMsg
+                  });
+                  console.log('Posted feature branch warning comment');
+                } catch (error) {
+                  console.error(`Failed to post comment: ${error.message}`);
+                  // Warning is non-blocking, so continue even if comment fails
+                }
               }
               
               console.log('⚠️ Warning: Feature branch going directly to production');
