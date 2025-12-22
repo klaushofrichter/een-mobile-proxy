@@ -157,6 +157,7 @@ jobs:
         run: |
           RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/${{ steps.versions.outputs.release_tag }}"
           RELEASE_TIME=$(TZ='America/Chicago' date +"%Y-%m-%d %H:%M:%S CT")
+          ADMIN_APP_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/admin/"
 
           curl -X POST "${{ secrets.SLACK_WEBHOOK }}" \
             -H "Content-Type: application/json" \
@@ -188,7 +189,7 @@ jobs:
                   },
                   {
                     "type": "mrkdwn",
-                    "text": "*Repository:*\n${{ github.repository }}"
+                    "text": "*Repository:*\n<${{ github.server_url }}/${{ github.repository }}|${{ github.repository }}>"
                   }
                 ]
               },
@@ -196,7 +197,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*Deployed URLs:*\n• <${{ vars.VITE_REDIRECT_URI }}|Admin App>\n• <${{ vars.VITE_PROXY_URL }}|OAuth Proxy>"
+                  "text": "*Deployed URLs:*\n• <${ADMIN_APP_URL}|Admin App>\n• <${{ vars.VITE_PROXY_URL }}|OAuth Proxy>"
                 }
               },
               {
