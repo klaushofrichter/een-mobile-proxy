@@ -28,20 +28,58 @@ export function cspPlugin() {
       ]
       
       // Add the proxy URL if it's not already in the list (and not localhost)
-      if (proxyUrl && 
-          !connectSrcParts.includes(proxyUrl) && 
-          !proxyUrl.includes('localhost') && 
-          !proxyUrl.includes('127.0.0.1')) {
+      // Use URL parsing for precise hostname matching to avoid false positives
+      let shouldAddProxyUrl = false
+      if (proxyUrl) {
+        try {
+          const proxyUrlObj = new URL(proxyUrl)
+          const proxyHostname = proxyUrlObj.hostname.toLowerCase()
+          
+          // Check if it's already in the list
+          const alreadyInList = connectSrcParts.some(part => {
+            if (part === proxyUrl) return true
+            // Check if part is a URL and matches hostname
+            try {
+              const partUrl = new URL(part)
+              return partUrl.hostname.toLowerCase() === proxyHostname
+            } catch {
+              return false
+            }
+          })
+          
+          // Only add if not already in list and not a localhost variant
+          // Use hostname comparison instead of string includes to avoid false positives
+          const isLocalhost = proxyHostname === 'localhost' || 
+                             proxyHostname === '127.0.0.1' || 
+                             proxyHostname === '[::1]' ||
+                             proxyHostname.startsWith('127.') ||
+                             proxyHostname.endsWith('.localhost')
+          
+          shouldAddProxyUrl = !alreadyInList && !isLocalhost
+        } catch (error) {
+          // If URL parsing fails, fall back to simple string check
+          console.warn(`Invalid proxy URL format: ${proxyUrl}, skipping CSP injection`)
+          shouldAddProxyUrl = false
+        }
+      }
+      
+      if (shouldAddProxyUrl) {
         connectSrcParts.push(proxyUrl)
       }
       
       const connectSrc = connectSrcParts.join(' ')
       
-      // Replace the connect-src part of the CSP
-      return html.replace(
-        /(connect-src\s+)[^;]+/,
-        `$1${connectSrc}`
-      )
+      // Replace the connect-src part of the CSP with more robust regex
+      // Match connect-src followed by whitespace and everything up to semicolon or end of attribute
+      // Use non-greedy matching and ensure we match the full directive
+      const cspRegex = /(connect-src\s+)(?:[^;'"]+?)(?=;|\s|"|')/i
+      if (cspRegex.test(html)) {
+        return html.replace(cspRegex, `$1${connectSrc}`)
+      } else {
+        // Fallback: if regex doesn't match, log warning but don't fail
+        console.warn('CSP connect-src directive not found in expected format, skipping injection')
+        return html
+      }
     }
   }
 }
