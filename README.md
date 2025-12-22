@@ -1,6 +1,14 @@
 # EEN OAuth Proxy
 
 A standalone OAuth proxy system for Eagle Eye Networks (EEN) consisting of three independent applications.
+
+The repository is intended as example implementation of an OAuth proxy. Users will need to have a CLIENT_ID
+and CLIENT_SECRET for OAuth with [Eagleeye Networks (EEN)](https://www.een.com/), and at least one user account. 
+See the [Eagleeye Networks Developer Portal](https://developer.eagleeyenetworks.com/) for more details. 
+
+This repository is provided as is without any warranty, functionality guarantee or assurance of availability. 
+This repository uses EENs services, but it is not associated to EEN. 
+
 <!-- Version badges - replace 'your-username' with your GitHub username to enable -->
 <!-- ![Proxy Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fproxy%2Fpackage.json&query=version&label=proxy-develop&color=%2333ca55) -->
 <!-- ![Proxy Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fproxy%2Fpackage.json&query=version&label=proxy-production&color=%2333ca55) -->
@@ -23,7 +31,9 @@ een-oauth-proxy/
 
 ### Proxy (`./proxy`)
 
-A Cloudflare Worker that handles OAuth authentication with EEN services. It keeps the CLIENT_ID and CLIENT_SECRET secure on the server side, never exposing them to the frontend.
+This is a Cloudflare Worker that handles OAuth authentication with EEN services in a secure way.
+It keeps the CLIENT_SECRET secure on the server side, never exposing it to the frontend.
+There are also some admin features, such as a health endpoint and session management. 
 
 **Features:**
 - OAuth token exchange (`/proxy/getAccessToken`)
