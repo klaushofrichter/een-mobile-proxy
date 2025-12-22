@@ -50,7 +50,7 @@ jobs:
       - name: Create release archive
         if: steps.check_release.outputs.exists == 'false'
         run: |
-          ARCHIVE_NAME="een-oauth-proxy-${{ steps.versions.outputs.release_tag }}"
+          ARCHIVE_NAME="een-oauth-proxy-v${PROXY_VERSION}_v${ADMIN_VERSION}" 
           git archive --format=zip --prefix="${ARCHIVE_NAME}/" -o "${ARCHIVE_NAME}.zip" HEAD
           git archive --format=tar.gz --prefix="${ARCHIVE_NAME}/" -o "${ARCHIVE_NAME}.tar.gz" HEAD
           echo "Created ${ARCHIVE_NAME}.zip and ${ARCHIVE_NAME}.tar.gz"
