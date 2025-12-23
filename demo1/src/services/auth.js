@@ -12,11 +12,16 @@ const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || window.location.origin
  * Get the EEN OAuth authorization URL
  */
 export function getAuthUrl() {
+  // Generate a random state for CSRF protection
+  const state = crypto.getRandomValues(new Uint32Array(1))[0].toString(16)
+  sessionStorage.setItem('oauth_state', state)
+
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
     response_type: 'code',
-    scope: 'vms.all'
+    scope: 'vms.all',
+    state: state
   })
 
   return `${AUTH_URL}?${params.toString()}`
@@ -89,7 +94,15 @@ export async function revokeToken() {
 /**
  * Handle OAuth callback
  */
-export async function handleAuthCallback(code) {
+export async function handleAuthCallback(code, state) {
+  // Verify state to prevent CSRF
+  const storedState = sessionStorage.getItem('oauth_state')
+  sessionStorage.removeItem('oauth_state')
+
+  if (!state || state !== storedState) {
+    throw new Error('Invalid OAuth state (CSRF protection)')
+  }
+
   const { useAuthStore } = await import('../stores/auth')
   const authStore = useAuthStore()
 

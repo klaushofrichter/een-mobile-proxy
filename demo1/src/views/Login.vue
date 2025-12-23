@@ -118,13 +118,14 @@ onMounted(async () => {
 
   // Check if this is an OAuth callback
   const code = route.query.code
+  const state = route.query.state
 
   if (code) {
     isProcessingCallback.value = true
     error.value = null
 
     try {
-      await handleAuthCallback(code)
+      await handleAuthCallback(code, state)
 
       // Redirect to intended destination or profile
       const redirectTo = localStorage.getItem('redirectAfterLogin') || '/profile'
