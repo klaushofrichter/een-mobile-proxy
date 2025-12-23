@@ -75,7 +75,6 @@ jobs:
       - name: Notify Slack
         run: |
           DEPLOY_TIME=$(TZ='America/Chicago' date +"%Y-%m-%d %H:%M:%S CT")
-          APP_URL="${{ vars.VITE_REDIRECT_URI }}"
 
           curl -X POST "${{ secrets.SLACK_WEBHOOK }}" \
             -H "Content-Type: application/json" \
@@ -107,7 +106,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*Application URL:*\n<${APP_URL}|${APP_URL}>"
+                  "text": "*Application URL:*\n<${{ vars.VITE_REDIRECT_URI }}|Admin App>"
                 }
               },
               {
@@ -120,7 +119,7 @@ jobs:
                       "text": "🔗 Open App",
                       "emoji": true
                     },
-                    "url": "${APP_URL}",
+                    "url": "${{ vars.VITE_REDIRECT_URI }}",
                     "style": "primary"
                   }
                 ]
