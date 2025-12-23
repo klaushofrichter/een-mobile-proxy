@@ -114,13 +114,14 @@ onMounted(async () => {
 
   // Check if this is an OAuth callback
   const code = route.query.code
+  const state = route.query.state
 
   if (code) {
     isProcessingCallback.value = true
     error.value = null
 
     try {
-      await handleAuthCallback(code)
+      await handleAuthCallback(code, state)
 
       // Verify user has admin access before allowing dashboard access
       const isAdmin = await verifyAdminAccess()
