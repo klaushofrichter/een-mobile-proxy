@@ -620,6 +620,14 @@ function validateOrigin(origin, env) {
   const allowedOrigins = getAllowedOrigins(env)
 
   if (allowedOrigins.includes(origin)) {
+    // In production, enforce HTTPS (except for local testing if allowed)
+    if (env.ENVIRONMENT === 'production' && !origin.startsWith('https://')) {
+      // Allow localhost/127.0.0.1 even in production as it is a secure context
+      const isLocalhost = origin.includes('://localhost') || origin.includes('://127.0.0.1') || origin.includes('://[::1]')
+      if (!isLocalhost) {
+        return { valid: false, origin: null }
+      }
+    }
     return { valid: true, origin }
   }
 
@@ -665,13 +673,17 @@ function getCorsHeaders(origin, env = null) {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
-    'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
     // Security headers
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
     'Referrer-Policy': 'strict-origin-when-cross-origin'
+  }
+
+  // Credentials can only be true if Origin is NOT '*'
+  if (origin !== '*') {
+    headers['Access-Control-Allow-Credentials'] = 'true'
   }
 
   // Only add HSTS in production (can cause issues with localhost in development)
