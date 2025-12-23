@@ -391,6 +391,8 @@ VITE_PROXY_URL=https://your-proxy.your-subdomain.workers.dev
 VITE_REDIRECT_URI=https://your-username.github.io/een-oauth-proxy
 ```
 
+**Important:** The `VITE_REDIRECT_URI` must **exactly match** what's registered in your EEN OAuth application configuration, including the presence or absence of trailing slashes and paths. If not set, it defaults to `window.location.origin` (e.g., `https://your-username.github.io`).
+
 Then deploy:
 ```bash
 npm run deploy:pages
