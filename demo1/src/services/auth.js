@@ -12,8 +12,8 @@ const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || window.location.origin
  * Get the EEN OAuth authorization URL
  */
 export function getAuthUrl() {
-  // Generate a random state for CSRF protection
-  const state = crypto.getRandomValues(new Uint32Array(1))[0].toString(16)
+  // Generate a random state for CSRF protection (128-bit entropy)
+  const state = crypto.randomUUID()
   sessionStorage.setItem('oauth_state', state)
 
   const params = new URLSearchParams({

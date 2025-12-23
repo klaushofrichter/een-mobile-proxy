@@ -235,4 +235,37 @@ test.describe('Authentication Flows', () => {
 
     console.log('\n✅ Old token behavior test completed!\n')
   })
+
+  test('should fail login if OAuth state is invalid (CSRF protection)', async ({ page }) => {
+    console.log('\n▶️ Running Test: Invalid OAuth state (CSRF)\n')
+    test.setTimeout(MAX_TEST_TIMEOUT)
+
+    // Step 1: Start the login flow to establish a state in sessionStorage
+    await navigateToLogin(page)
+    const loginButton = page.getByRole('button', { name: 'Sign in with Eagle Eye Networks' })
+
+    // We need to capture the state, but we can't without letting it navigate.
+    // Instead, we'll set a known state, then navigate with a wrong one.
+    await page.evaluate(() => {
+      sessionStorage.setItem('oauth_state', 'my-secret-test-state')
+    })
+    console.log('🤫 Injected known state into sessionStorage')
+
+    // Step 2: Navigate to the callback URL with a valid-looking code but an *invalid* state
+    const callbackUrl = `/?code=fake-code-for-csrf-test&state=this-is-wrong`
+    await page.goto(callbackUrl)
+    console.log(`🔀 Navigated to callback with invalid state: ${callbackUrl}`)
+
+    // Step 3: Check for failure
+    // The app should detect the state mismatch and show an error.
+    await expect(page.locator('text=Invalid OAuth state')).toBeVisible({ timeout: 10000 })
+    console.log('✅ Error message displayed for invalid state')
+
+    // Verify we are still on the login page and not redirected
+    const currentUrl = page.url()
+    expect(currentUrl).not.toContain('/profile')
+    console.log('✅ Confirmed not redirected to profile')
+
+    console.log('\n✅ CSRF (state) protection test completed!\n')
+  })
 })

@@ -123,6 +123,9 @@ onMounted(async () => {
     try {
       await handleAuthCallback(code, state)
 
+      // Clean up URL parameters to prevent leakage
+      window.history.replaceState({}, document.title, window.location.pathname)
+
       // Verify user has admin access before allowing dashboard access
       const isAdmin = await verifyAdminAccess()
       if (!isAdmin) {
