@@ -136,7 +136,7 @@ Edit `demo1/.env`:
 VITE_PROXY_URL=http://localhost:8787
 VITE_EEN_CLIENT_ID=your-een-client-id
 VITE_EEN_AUTH_URL=https://auth.eagleeyenetworks.com/oauth2/authorize
-VITE_REDIRECT_URI=http://localhost:5173/
+VITE_REDIRECT_URI=http://127.0.0.1:3333
 ```
 
 **Admin App (`./admin/.env`):**
@@ -150,7 +150,7 @@ Edit `admin/.env`:
 VITE_PROXY_URL=http://localhost:8787
 VITE_EEN_CLIENT_ID=your-een-client-id
 VITE_EEN_AUTH_URL=https://auth.eagleeyenetworks.com/oauth2/authorize
-VITE_REDIRECT_URI=http://localhost:5174/
+VITE_REDIRECT_URI=http://127.0.0.1:3333
 ```
 
 ### Step 3: Create Cloudflare KV Namespace
@@ -388,7 +388,7 @@ Update the `.env` files for production:
 **admin/.env:**
 ```env
 VITE_PROXY_URL=https://your-proxy.your-subdomain.workers.dev
-VITE_REDIRECT_URI=https://your-username.github.io/een-oauth-proxy/admin/
+VITE_REDIRECT_URI=https://your-username.github.io/een-oauth-proxy
 ```
 
 Then deploy:
@@ -571,7 +571,7 @@ Values outside the min/max range are automatically clamped. Adjust this value ba
 | `VITE_PROXY_URL` | URL of the OAuth proxy | `http://localhost:8787` |
 | `VITE_EEN_CLIENT_ID` | EEN OAuth Client ID | `YOUR-CLIENT-ID` |
 | `VITE_EEN_AUTH_URL` | EEN OAuth authorize URL | `https://auth.eagleeyenetworks.com/oauth2/authorize` |
-| `VITE_REDIRECT_URI` | OAuth callback URL | `http://localhost:5173/` |
+| `VITE_REDIRECT_URI` | OAuth callback URL (must exactly match EEN config) | `http://127.0.0.1:3333` |
 
 ## API Endpoints
 
@@ -689,7 +689,9 @@ The same applies to the `demo1` application.
 - Update `wrangler.toml` with the namespace ID
 
 ### OAuth callback fails
-- Verify `VITE_REDIRECT_URI` matches your EEN OAuth app configuration
+- Verify `VITE_REDIRECT_URI` **exactly matches** your EEN OAuth app configuration
+- **Important:** The redirect URI must match character-for-character, including trailing slashes. For example, if EEN has `http://127.0.0.1:3333` registered (without trailing slash), your `VITE_REDIRECT_URI` must also be `http://127.0.0.1:3333` (not `http://127.0.0.1:3333/`)
+- If you see `[invalid_request] OAuth 2.0 Parameter: redirect_uri`, the URIs don't match exactly
 - Check that the proxy is running and accessible
 
 ## License
