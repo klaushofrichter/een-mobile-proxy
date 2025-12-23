@@ -127,9 +127,6 @@ onMounted(async () => {
     try {
       await handleAuthCallback(code, state)
 
-      // Clean up URL parameters to prevent leakage
-      window.history.replaceState({}, document.title, window.location.pathname)
-
       // Redirect to intended destination or profile
       const redirectTo = localStorage.getItem('redirectAfterLogin') || '/profile'
       localStorage.removeItem('redirectAfterLogin')
