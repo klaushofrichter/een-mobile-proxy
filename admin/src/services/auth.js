@@ -9,10 +9,27 @@ const AUTH_URL = import.meta.env.VITE_EEN_AUTH_URL || 'https://auth.eagleeyenetw
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || window.location.origin
 
 /**
+ * Constant-time string comparison to prevent timing attacks
+ */
+function constantTimeCompare(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') {
+    return false
+  }
+  if (a.length !== b.length) {
+    return false
+  }
+  let mismatch = 0
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  }
+  return mismatch === 0
+}
+
+/**
  * Get the EEN OAuth authorization URL
  */
 export function getAuthUrl() {
-  // Generate a random state for CSRF protection (128-bit entropy)
+  // Generate a random state for CSRF protection (122-bit entropy, UUID v4)
   const state = crypto.randomUUID()
   sessionStorage.setItem('oauth_state', state)
 
@@ -70,12 +87,12 @@ export async function revokeToken() {
  * Handle OAuth callback
  */
 export async function handleAuthCallback(code, state) {
-  // Verify state to prevent CSRF
+  // Verify state to prevent CSRF (use constant-time comparison to prevent timing attacks)
   const storedState = sessionStorage.getItem('oauth_state')
   sessionStorage.removeItem('oauth_state')
 
-  if (!state || state !== storedState) {
-    throw new Error('Invalid OAuth state (CSRF protection)')
+  if (!state || !storedState || !constantTimeCompare(state, storedState)) {
+    throw new Error('Invalid OAuth state')
   }
 
   const { useAuthStore } = await import('../stores/auth')
