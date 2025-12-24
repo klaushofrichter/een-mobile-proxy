@@ -131,10 +131,9 @@ export default {
       // Route requests
       const response = await routeRequest(url, request, env)
 
-      // Increment rate limit counter after successful routing (not for 404s)
-      if (response.status !== 404) {
-        ctx.waitUntil(incrementRateLimitCounter(request, url, env))
-      }
+      // Increment rate limit counter for all requests including 404s
+      // This prevents endpoint enumeration attacks where attackers probe for valid paths
+      ctx.waitUntil(incrementRateLimitCounter(request, url, env))
 
       return addCorsHeaders(response, corsResult.origin, env)
     } catch (error) {
@@ -667,10 +666,18 @@ function getClientIdentifier(request, env) {
     return { identifier: `ip|${cfIp}`, isUnknown: false }
   }
 
-  // Fall back to X-Forwarded-For (for proxied requests)
+  // In production, missing CF-Connecting-IP is suspicious - log warning
+  // X-Forwarded-For can be spoofed by clients, so treat as unknown in production
+  const isProduction = env.ENVIRONMENT !== 'development'
+  if (isProduction) {
+    // Log warning in production (not using debugError which is dev-only)
+    console.warn('Rate limit: CF-Connecting-IP missing in production, using restrictive limit')
+  }
+
+  // Fall back to X-Forwarded-For only in development (it's spoofable in production)
   const forwardedFor = request.headers.get('X-Forwarded-For')
-  if (forwardedFor) {
-    // Take the first IP (original client)
+  if (forwardedFor && !isProduction) {
+    // Take the first IP (original client) - only trusted in development
     const clientIp = forwardedFor.split(',')[0].trim()
     return { identifier: `ip|${clientIp}`, isUnknown: false }
   }
@@ -682,8 +689,8 @@ function getClientIdentifier(request, env) {
   }
 
   // Last resort: use a restrictive shared bucket for unidentified clients
-  // This should be rare - only in local dev without X-Forwarded-For
-  // Uses a very low limit to prevent abuse while allowing basic testing
+  // In production, this catches requests without CF-Connecting-IP (non-Cloudflare paths)
+  // In development, this catches requests without X-Forwarded-For
   return { identifier: 'unknown', isUnknown: true }
 }
 
@@ -860,7 +867,8 @@ async function handleAdminRateLimitStats(request, env) {
         }
       }
     } catch (e) {
-      // Skip on error
+      // Log error but continue processing other keys
+      debugError(env, 'Failed to fetch rate limit stat:', key.name, e.message)
     }
   }
 
