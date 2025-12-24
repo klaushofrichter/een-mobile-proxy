@@ -10,20 +10,21 @@ const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || window.location.origin
 
 /**
  * Constant-time string comparison to prevent timing attacks.
- * Always compares the same number of characters regardless of input
- * to avoid leaking length information through timing.
+ * Always iterates based on the stored value (b) length to ensure
+ * constant execution time regardless of attacker-controlled input.
  */
 function constantTimeCompare(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') {
     return false
   }
 
-  const maxLen = Math.max(a.length, b.length)
-  let mismatch = a.length ^ b.length  // Track length difference
+  // Track length mismatch but don't short-circuit
+  let mismatch = a.length !== b.length ? 1 : 0
 
-  for (let i = 0; i < maxLen; i++) {
+  // Always iterate based on stored state (b) length for constant time
+  for (let i = 0; i < b.length; i++) {
     const aChar = i < a.length ? a.charCodeAt(i) : 0
-    const bChar = i < b.length ? b.charCodeAt(i) : 0
+    const bChar = b.charCodeAt(i)
     mismatch |= aChar ^ bChar
   }
 
