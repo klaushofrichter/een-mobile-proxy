@@ -118,56 +118,62 @@ test.describe('Happy Path - OAuth Login Flow', () => {
     // Create first browser context and page for OAuth login
     const context1 = await browser.newContext()
     const page1 = await context1.newPage()
-    console.log('📱 Created first browser context for OAuth login')
+    let context2 = null
 
-    // Login via OAuth in first context
-    await loginToApplication(page1)
+    try {
+      console.log('📱 Created first browser context for OAuth login')
 
-    // Capture credentials from profile page
-    const credentials = await captureCredentialsFromProfile(page1)
-    console.log('📋 Credentials captured from first session')
+      // Login via OAuth in first context
+      await loginToApplication(page1)
 
-    // Create second browser context (completely isolated)
-    const context2 = await browser.newContext()
-    const page2 = await context2.newPage()
-    console.log('📱 Created second browser context for direct access')
+      // Capture credentials from profile page
+      const credentials = await captureCredentialsFromProfile(page1)
+      console.log('📋 Credentials captured from first session')
 
-    // Navigate to direct access page in second context
-    await page2.goto('/direct')
-    await expect(page2.getByRole('heading', { name: 'Direct Access' })).toBeVisible()
-    console.log('✅ Second context on Direct Access page')
+      // Create second browser context (completely isolated)
+      context2 = await browser.newContext()
+      const page2 = await context2.newPage()
+      console.log('📱 Created second browser context for direct access')
 
-    // Fill in the captured credentials
-    await page2.getByLabel('Access Token').fill(credentials.token)
-    console.log('✅ Entered captured access token')
+      // Navigate to direct access page in second context
+      await page2.goto('/direct')
+      await expect(page2.getByRole('heading', { name: 'Direct Access' })).toBeVisible()
+      console.log('✅ Second context on Direct Access page')
 
-    await page2.getByLabel('Base URL').fill(credentials.hostname)
-    console.log(`✅ Entered hostname: ${credentials.hostname}`)
+      // Fill in the captured credentials
+      await page2.getByLabel('Access Token').fill(credentials.token)
+      console.log('✅ Entered captured access token')
 
-    await page2.getByLabel('Port').fill(credentials.port.toString())
-    console.log(`✅ Entered port: ${credentials.port}`)
+      await page2.getByLabel('Base URL').fill(credentials.hostname)
+      console.log(`✅ Entered hostname: ${credentials.hostname}`)
 
-    // Click Proceed
-    await page2.getByRole('button', { name: 'Proceed' }).click()
-    console.log('👆 Clicked Proceed')
+      await page2.getByLabel('Port').fill(credentials.port.toString())
+      console.log(`✅ Entered port: ${credentials.port}`)
 
-    // Verify successful login - should redirect to profile
-    await page2.waitForURL('/profile', { timeout: 15000 })
-    console.log('✅ Redirected to profile page')
+      // Click Proceed
+      await page2.getByRole('button', { name: 'Proceed' }).click()
+      console.log('👆 Clicked Proceed')
 
-    // Verify profile content is displayed
-    await expect(page2.locator('h3', { hasText: 'User Profile' })).toBeVisible({ timeout: 15000 })
-    console.log('✅ User Profile heading visible in second context')
+      // Verify successful login - should redirect to profile
+      await page2.waitForURL('/profile', { timeout: 15000 })
+      console.log('✅ Redirected to profile page')
 
-    // Verify credentials section shows the token
-    await expect(page2.locator('h3', { hasText: 'Credentials' })).toBeVisible()
-    console.log('✅ Credentials section visible')
+      // Verify profile content is displayed
+      await expect(page2.locator('h3', { hasText: 'User Profile' })).toBeVisible({ timeout: 15000 })
+      console.log('✅ User Profile heading visible in second context')
 
-    // Clean up - close both contexts
-    await context1.close()
-    await context2.close()
-    console.log('🧹 Closed both browser contexts')
+      // Verify credentials section shows the token
+      await expect(page2.locator('h3', { hasText: 'Credentials' })).toBeVisible()
+      console.log('✅ Credentials section visible')
 
-    console.log('\n✅ Direct access with captured token test completed!\n')
+      console.log('\n✅ Direct access with captured token test completed!\n')
+    } finally {
+      // Clean up - always close contexts even if test fails
+      await context1.close()
+      if (context2) {
+        await context2.close()
+      }
+      console.log('🧹 Closed browser contexts')
+    }
   })
 })

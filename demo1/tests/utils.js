@@ -152,16 +152,13 @@ export async function captureCredentialsFromProfile(page) {
   await showButton.click()
   console.log('👆 Clicked Show & Copy')
 
-  // Wait a moment for the input type to change
-  await page.waitForTimeout(500)
-
-  // Get token value - find the input in the Access Token row
-  const tokenInput = page.locator('input[type="text"]').filter({ has: page.locator('..', { has: page.locator('label:has-text("Access Token")') }) })
-
-  // Alternative: get the input that follows the Access Token label
+  // Wait for the input type to change from password to text
   const tokenRow = page.locator('.flex.items-center').filter({ hasText: 'Access Token' })
+  await tokenRow.locator('input[type="text"]').waitFor({ state: 'visible', timeout: 5000 })
+
+  // Get token value from the Access Token row
   const token = await tokenRow.locator('input').inputValue()
-  console.log(`✅ Captured token: ${token.substring(0, 20)}...`)
+  console.log(`✅ Captured token: ${token.substring(0, 8)}...`)
 
   return { token, hostname, port }
 }
