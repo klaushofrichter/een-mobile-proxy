@@ -158,7 +158,7 @@ describe('Rate Limiting - Low Limit Scenarios', () => {
     it('should progressively count requests and eventually block', async () => {
       // Clear the counter
       const bucket = Math.floor(Date.now() / (60 * 1000))
-      const key = `RATE_LIMIT:health:ip:10.1.1.1:${bucket}`
+      const key = `RATE_LIMIT:health:ip|10.1.1.1:${bucket}`
       await env.EEN_OAUTH_SESSIONS.delete(key)
 
       // Start by setting counter to just below limit
@@ -206,7 +206,7 @@ describe('Rate Limiting - Low Limit Scenarios', () => {
       const bucket = Math.floor(Date.now() / (60 * 1000))
 
       // Rate limit client A
-      const keyA = `RATE_LIMIT:health:ip:192.168.1.100:${bucket}`
+      const keyA = `RATE_LIMIT:health:ip|192.168.1.100:${bucket}`
       await env.EEN_OAUTH_SESSIONS.put(keyA, '100', { expirationTtl: 120 })
 
       // Client A is blocked
@@ -240,7 +240,7 @@ describe('Rate Limiting - Low Limit Scenarios', () => {
       const clientIp = '10.2.2.2'
 
       // Set high counter for OLD bucket (should be ignored)
-      const oldKey = `RATE_LIMIT:health:ip:${clientIp}:${oldBucket}`
+      const oldKey = `RATE_LIMIT:health:ip|${clientIp}:${oldBucket}`
       await env.EEN_OAUTH_SESSIONS.put(oldKey, '1000', { expirationTtl: 120 })
 
       // Current bucket should have no counter, so request succeeds

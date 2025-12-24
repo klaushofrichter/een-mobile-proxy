@@ -163,16 +163,18 @@ describe('Rate Limiting', () => {
     })
 
     it('should block requests exceeding the limit', async () => {
-      // Set counter just below limit
+      // Set counter just below limit for an identified client
       const bucket = Math.floor(Date.now() / (60 * 1000))
-      const key = `RATE_LIMIT:health:unknown:${bucket}`
+      const clientIp = '192.168.50.50'
+      const key = `RATE_LIMIT:health:ip|${clientIp}:${bucket}`
 
       // Set to 59 (one below default limit of 60)
       await env.EEN_OAUTH_SESSIONS.put(key, '59', { expirationTtl: 120 })
 
       // This request should succeed (59 -> 60)
       const response1 = await fetchWithMetrics('http://localhost/health', {
-        method: 'GET'
+        method: 'GET',
+        headers: { 'CF-Connecting-IP': clientIp }
       })
       expect(response1.status).toBe(200)
 
@@ -184,7 +186,8 @@ describe('Rate Limiting', () => {
 
       // This request should be blocked
       const response2 = await fetchWithMetrics('http://localhost/health', {
-        method: 'GET'
+        method: 'GET',
+        headers: { 'CF-Connecting-IP': clientIp }
       })
       expect(response2.status).toBe(429)
     })
@@ -253,7 +256,7 @@ describe('Rate Limiting', () => {
       await new Promise(resolve => setTimeout(resolve, 100))
 
       // Check that the key includes the IP
-      const listResult = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:health:ip:' })
+      const listResult = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:health:ip|' })
       const matchingKeys = listResult.keys.filter(k => k.name.includes(clientIp))
       expect(matchingKeys.length).toBeGreaterThan(0)
     })
@@ -270,7 +273,7 @@ describe('Rate Limiting', () => {
 
       await new Promise(resolve => setTimeout(resolve, 100))
 
-      const listResult = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:health:ip:' })
+      const listResult = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:health:ip|' })
       const matchingKeys = listResult.keys.filter(k => k.name.includes(clientIp))
       expect(matchingKeys.length).toBeGreaterThan(0)
     })
@@ -279,7 +282,7 @@ describe('Rate Limiting', () => {
       const bucket = Math.floor(Date.now() / (60 * 1000))
 
       // Exhaust limit for client1
-      const client1Key = `RATE_LIMIT:health:ip:192.168.1.1:${bucket}`
+      const client1Key = `RATE_LIMIT:health:ip|192.168.1.1:${bucket}`
       await env.EEN_OAUTH_SESSIONS.put(client1Key, '100', { expirationTtl: 120 })
 
       // Client1 should be blocked
@@ -347,7 +350,7 @@ describe('Rate Limiting', () => {
   describe('CORS and Rate Limiting', () => {
     it('should include CORS headers in rate limit responses', async () => {
       const bucket = Math.floor(Date.now() / (60 * 1000))
-      const key = `RATE_LIMIT:health:ip:10.0.0.100:${bucket}`
+      const key = `RATE_LIMIT:health:ip|10.0.0.100:${bucket}`
       await env.EEN_OAUTH_SESSIONS.put(key, '100', { expirationTtl: 120 })
 
       const response = await fetchWithMetrics('http://localhost/health', {
@@ -362,15 +365,45 @@ describe('Rate Limiting', () => {
       expect(response.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173')
     })
 
-    it('should not rate limit CORS preflight requests', async () => {
-      // OPTIONS requests should not be counted
-      for (let i = 0; i < 100; i++) {
-        const response = await fetchWithMetrics('http://localhost/health', {
-          method: 'OPTIONS',
-          headers: { Origin: 'http://localhost:5173' }
-        })
-        expect(response.status).toBe(204)
+    it('should rate limit CORS preflight requests', async () => {
+      // OPTIONS requests should be rate limited to prevent OPTIONS flood attacks
+      const bucket = Math.floor(Date.now() / (60 * 1000))
+      const key = `RATE_LIMIT:health:ip|10.0.0.200:${bucket}`
+      await env.EEN_OAUTH_SESSIONS.put(key, '100', { expirationTtl: 120 })
+
+      const response = await fetchWithMetrics('http://localhost/health', {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'http://localhost:5173',
+          'CF-Connecting-IP': '10.0.0.200'
+        }
+      })
+      expect(response.status).toBe(429)
+    })
+
+    it('should count OPTIONS requests toward rate limit', async () => {
+      // Clear any existing counters
+      const existingKeys = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:health:ip|10.0.0.201' })
+      for (const key of existingKeys.keys) {
+        await env.EEN_OAUTH_SESSIONS.delete(key.name)
       }
+
+      // Make an OPTIONS request
+      const response = await fetchWithMetrics('http://localhost/health', {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'http://localhost:5173',
+          'CF-Connecting-IP': '10.0.0.201'
+        }
+      })
+      expect(response.status).toBe(204)
+
+      // Wait for counter increment
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      // Check that the counter was incremented
+      const listResult = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:health:ip|10.0.0.201' })
+      expect(listResult.keys.length).toBeGreaterThan(0)
     })
   })
 })
