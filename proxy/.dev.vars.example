@@ -19,3 +19,16 @@ ENVIRONMENT=development
 # Refresh token TTL buffer in seconds (added to access token expiry for KV storage)
 # Default: 86400 (1 day). Increase if EEN refresh tokens live longer.
 REFRESH_TOKEN_TTL=86400
+
+# Rate Limiting Configuration
+# RATE_LIMIT_ENABLED: 'true' to enable, 'false' to disable (default: true)
+# RATE_LIMIT_WINDOW: time window in seconds (default: 60)
+# RATE_LIMIT_HEALTH: max requests per window for /health (default: 60)
+# RATE_LIMIT_OAUTH: max requests per window for /proxy/* (default: 30)
+# RATE_LIMIT_ADMIN: max requests per window for /admin/* (default: 60)
+# Set to 0 to disable rate limiting for a specific category
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_WINDOW=60
+RATE_LIMIT_HEALTH=60
+RATE_LIMIT_OAUTH=30
+RATE_LIMIT_ADMIN=60
