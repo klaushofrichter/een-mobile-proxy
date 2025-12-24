@@ -19,7 +19,7 @@ function constantTimeCompare(a, b) {
   }
 
   const maxLen = Math.max(a.length, b.length)
-  let mismatch = a.length ^ b.length  // Track length difference
+  let mismatch = 0
 
   for (let i = 0; i < maxLen; i++) {
     const aChar = i < a.length ? a.charCodeAt(i) : 0
@@ -27,7 +27,8 @@ function constantTimeCompare(a, b) {
     mismatch |= aChar ^ bChar
   }
 
-  return mismatch === 0
+  // Check length difference after loop to avoid timing leakage
+  return mismatch === 0 && a.length === b.length
 }
 
 /**
