@@ -147,7 +147,7 @@ test.describe('Happy Path - OAuth Login Flow', () => {
       await page2.getByLabel('Base URL').fill(credentials.hostname)
       console.log(`✅ Entered hostname: ${credentials.hostname}`)
 
-      await page2.getByLabel('Port').fill(credentials.port.toString())
+      await page2.getByLabel('Port').fill(credentials.port)
       console.log(`✅ Entered port: ${credentials.port}`)
 
       // Click Proceed
