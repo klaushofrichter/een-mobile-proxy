@@ -534,6 +534,28 @@ To enable Copilot reviews:
 2. Create/edit a ruleset for the production branch
 3. Enable "Request pull request review from GitHub Copilot"
 
+### Claude Code PR Skill
+
+This project includes a Claude Code skill for automating the PR creation and review process. The skill is defined in `.claude/skills/PR-and-check/SKILL.md`.
+
+**What it does:**
+1. Validates you're on a feature branch (not `develop` or `production`)
+2. Checks for existing PRs on the branch
+3. Runs all test suites locally (proxy, admin, demo1)
+4. Creates a well-formatted PR to `develop` with test results and version numbers
+5. Monitors the automated code review workflow and reports recommendations
+
+**Usage:**
+```bash
+# In Claude Code CLI, invoke the skill:
+/PR-and-check
+```
+
+**Requirements:**
+- Must be on a feature branch
+- Local proxy must be available for integration tests
+- GitHub CLI (`gh`) must be authenticated
+
 ## Environment Variables Reference
 
 ### Proxy Environment Variables
