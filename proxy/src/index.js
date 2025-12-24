@@ -490,8 +490,10 @@ async function handleAdminSessionsCount(request, env) {
 
   const listResult = await env.EEN_OAUTH_SESSIONS.list()
 
-  // Filter out special keys like DEPLOY_VERSION
-  const sessionKeys = listResult.keys.filter(key => !key.name.startsWith('DEPLOY_'))
+  // Filter out special keys (DEPLOY_* and RATE_LIMIT:*)
+  const sessionKeys = listResult.keys.filter(
+    key => !key.name.startsWith('DEPLOY_') && !key.name.startsWith('RATE_LIMIT:')
+  )
 
   return jsonResponse({
     sessionCount: sessionKeys.length
@@ -514,8 +516,12 @@ async function handleAdminRemoveSessions(request, env) {
 
   let deletedCount = 0
   for (const key of listResult.keys) {
-    // Skip current session and special keys
-    if (key.name === currentSessionId || key.name.startsWith('DEPLOY_')) {
+    // Skip current session and special keys (DEPLOY_* and RATE_LIMIT:*)
+    if (
+      key.name === currentSessionId ||
+      key.name.startsWith('DEPLOY_') ||
+      key.name.startsWith('RATE_LIMIT:')
+    ) {
       continue
     }
 
@@ -548,8 +554,8 @@ async function handleAdminRevokeAll(request, env) {
   let errorCount = 0
 
   for (const key of listResult.keys) {
-    // Skip special keys
-    if (key.name.startsWith('DEPLOY_')) {
+    // Skip special keys (DEPLOY_* and RATE_LIMIT:*)
+    if (key.name.startsWith('DEPLOY_') || key.name.startsWith('RATE_LIMIT:')) {
       continue
     }
 
