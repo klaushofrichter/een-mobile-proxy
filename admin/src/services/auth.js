@@ -9,19 +9,25 @@ const AUTH_URL = import.meta.env.VITE_EEN_AUTH_URL || 'https://auth.eagleeyenetw
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || window.location.origin
 
 /**
- * Constant-time string comparison to prevent timing attacks
+ * Constant-time string comparison to prevent timing attacks.
+ * Always iterates based on the stored value (b) length to ensure
+ * constant execution time regardless of attacker-controlled input.
  */
 function constantTimeCompare(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') {
     return false
   }
-  if (a.length !== b.length) {
-    return false
+
+  // Track length mismatch but don't short-circuit
+  let mismatch = a.length !== b.length ? 1 : 0
+
+  // Always iterate based on stored state (b) length for constant time
+  for (let i = 0; i < b.length; i++) {
+    const aChar = i < a.length ? a.charCodeAt(i) : 0
+    const bChar = b.charCodeAt(i)
+    mismatch |= aChar ^ bChar
   }
-  let mismatch = 0
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  }
+
   return mismatch === 0
 }
 
@@ -89,9 +95,16 @@ export async function revokeToken() {
 export async function handleAuthCallback(code, state) {
   // Verify state to prevent CSRF (use constant-time comparison to prevent timing attacks)
   const storedState = sessionStorage.getItem('oauth_state')
+  // Remove state immediately to prevent replay attacks
   sessionStorage.removeItem('oauth_state')
 
   if (!state || !storedState || !constantTimeCompare(state, storedState)) {
+    // Log failed state validation for security monitoring (no sensitive data)
+    console.warn('[Security] OAuth state validation failed:', {
+      hasState: !!state,
+      hasStoredState: !!storedState,
+      timestamp: new Date().toISOString()
+    })
     throw new Error('Invalid OAuth state')
   }
 
