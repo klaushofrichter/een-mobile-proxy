@@ -26,9 +26,13 @@ REFRESH_TOKEN_TTL=86400
 # RATE_LIMIT_HEALTH: max requests per window for /health (default: 60)
 # RATE_LIMIT_OAUTH: max requests per window for /proxy/* (default: 30)
 # RATE_LIMIT_ADMIN: max requests per window for /admin/* (default: 60)
+# RATE_LIMIT_UNKNOWN: max requests per window for unidentified clients (default: 5)
+#   - In development, clients without CF-Connecting-IP use X-Forwarded-For
+#   - In production, missing CF-Connecting-IP triggers this restrictive limit
 # Set to 0 to disable rate limiting for a specific category
 RATE_LIMIT_ENABLED=true
 RATE_LIMIT_WINDOW=60
 RATE_LIMIT_HEALTH=60
 RATE_LIMIT_OAUTH=30
 RATE_LIMIT_ADMIN=60
+RATE_LIMIT_UNKNOWN=5

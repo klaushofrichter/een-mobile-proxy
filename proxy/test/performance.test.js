@@ -198,7 +198,7 @@ describe('Performance Benchmarks', () => {
     it('should measure /health response time (10 iterations)', async () => {
       for (let i = 0; i < 10; i++) {
         const { response, duration } = await measure('GET /health', 'http://localhost/health', {
-          headers: { Origin: 'http://localhost:5173' }
+          headers: { Origin: 'http://localhost:5173', 'CF-Connecting-IP': '10.99.99.1' }
         })
         expect(response.status).toBe(200)
       }

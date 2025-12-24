@@ -40,6 +40,7 @@ const DEFAULT_RATE_LIMIT_HEALTH = 60 // requests per window
 const DEFAULT_RATE_LIMIT_OAUTH = 30 // requests per window
 const DEFAULT_RATE_LIMIT_ADMIN = 60 // requests per window
 const DEFAULT_RATE_LIMIT_WINDOW = 60 // seconds
+const DEFAULT_RATE_LIMIT_UNKNOWN = 5 // very restrictive limit for unidentified clients
 
 // Rate limit categories
 const RATE_LIMIT_CATEGORY = {
@@ -97,18 +98,14 @@ export default {
       return new Response('Forbidden: Invalid origin', { status: 403 })
     }
 
-    // Handle CORS preflight
-    if (request.method === 'OPTIONS') {
-      return handleCorsPreflightRequest(corsResult.origin, env)
-    }
-
     // CSRF protection: Require Origin header for state-changing requests
     // Requests without Origin (e.g., curl) are blocked for POST/DELETE to prevent CSRF
     if ((request.method === 'POST' || request.method === 'DELETE') && !origin) {
       return new Response('Forbidden: Origin header required', { status: 403 })
     }
 
-    // Rate limiting check
+    // Rate limiting check - applies to all requests including OPTIONS preflight
+    // This prevents attackers from using OPTIONS floods to probe the server
     const rateLimitResult = await checkRateLimit(request, url, env)
     if (rateLimitResult.limited) {
       const response = jsonResponse(
@@ -123,14 +120,20 @@ export default {
       return addCorsHeaders(response, corsResult.origin, env)
     }
 
+    // Handle CORS preflight (after rate limit check)
+    if (request.method === 'OPTIONS') {
+      // Increment rate limit counter for OPTIONS requests too
+      ctx.waitUntil(incrementRateLimitCounter(request, url, env))
+      return handleCorsPreflightRequest(corsResult.origin, env)
+    }
+
     try {
       // Route requests
       const response = await routeRequest(url, request, env)
 
-      // Increment rate limit counter after successful routing (not for 404s)
-      if (response.status !== 404) {
-        ctx.waitUntil(incrementRateLimitCounter(request, url, env))
-      }
+      // Increment rate limit counter for all requests including 404s
+      // This prevents endpoint enumeration attacks where attackers probe for valid paths
+      ctx.waitUntil(incrementRateLimitCounter(request, url, env))
 
       return addCorsHeaders(response, corsResult.origin, env)
     } catch (error) {
@@ -622,7 +625,9 @@ function getRateLimitConfig(env) {
       [RATE_LIMIT_CATEGORY.HEALTH]: parseInt(env.RATE_LIMIT_HEALTH, 10) || DEFAULT_RATE_LIMIT_HEALTH,
       [RATE_LIMIT_CATEGORY.OAUTH]: parseInt(env.RATE_LIMIT_OAUTH, 10) || DEFAULT_RATE_LIMIT_OAUTH,
       [RATE_LIMIT_CATEGORY.ADMIN]: parseInt(env.RATE_LIMIT_ADMIN, 10) || DEFAULT_RATE_LIMIT_ADMIN
-    }
+    },
+    // Very restrictive limit for unidentified clients (no CF-Connecting-IP or session)
+    unknownLimit: parseInt(env.RATE_LIMIT_UNKNOWN, 10) || DEFAULT_RATE_LIMIT_UNKNOWN
   }
 }
 
@@ -647,34 +652,46 @@ function getRateLimitCategory(path) {
 /**
  * Get client identifier for rate limiting
  * Uses CF-Connecting-IP header (Cloudflare provides real client IP)
- * Falls back to session ID for authenticated requests, then to a generic key
+ * Falls back to session ID for authenticated requests
+ * In production (Cloudflare), CF-Connecting-IP should always be present
  * @param {Request} request - Incoming request
  * @param {Object} env - Environment bindings
- * @returns {string} Client identifier
+ * @returns {{identifier: string, isUnknown: boolean}} Client identifier and unknown flag
  */
 function getClientIdentifier(request, env) {
   // Prefer CF-Connecting-IP (real client IP from Cloudflare)
+  // This should ALWAYS be present on Cloudflare Workers in production
   const cfIp = request.headers.get('CF-Connecting-IP')
   if (cfIp) {
-    return `ip:${cfIp}`
+    return { identifier: `ip|${cfIp}`, isUnknown: false }
   }
 
-  // Fall back to X-Forwarded-For
+  // In production, missing CF-Connecting-IP is suspicious - log warning
+  // X-Forwarded-For can be spoofed by clients, so treat as unknown in production
+  const isProduction = env.ENVIRONMENT !== 'development'
+  if (isProduction) {
+    // Log warning in production (not using debugError which is dev-only)
+    console.warn('Rate limit: CF-Connecting-IP missing in production, using restrictive limit')
+  }
+
+  // Fall back to X-Forwarded-For only in development (it's spoofable in production)
   const forwardedFor = request.headers.get('X-Forwarded-For')
-  if (forwardedFor) {
-    // Take the first IP (original client)
+  if (forwardedFor && !isProduction) {
+    // Take the first IP (original client) - only trusted in development
     const clientIp = forwardedFor.split(',')[0].trim()
-    return `ip:${clientIp}`
+    return { identifier: `ip|${clientIp}`, isUnknown: false }
   }
 
   // Fall back to session ID if available
   const sessionId = getSessionIdFromCookie(request, env)
   if (sessionId) {
-    return `session:${sessionId}`
+    return { identifier: `session|${sessionId}`, isUnknown: false }
   }
 
-  // Last resort: use a generic identifier (will share limits)
-  return 'unknown'
+  // Last resort: use a restrictive shared bucket for unidentified clients
+  // In production, this catches requests without CF-Connecting-IP (non-Cloudflare paths)
+  // In development, this catches requests without X-Forwarded-For
+  return { identifier: 'unknown', isUnknown: true }
 }
 
 /**
@@ -692,6 +709,10 @@ function getRateLimitKey(category, identifier, window) {
 
 /**
  * Check if request is rate limited
+ * Note: Counter increments are non-atomic due to KV's eventual consistency.
+ * This means under high concurrency, some requests may slip through slightly
+ * over the limit. This is acceptable for rate limiting purposes - the goal
+ * is protection against abuse, not precise counting.
  * @param {Request} request - Incoming request
  * @param {URL} url - Parsed URL
  * @param {Object} env - Environment bindings
@@ -712,14 +733,17 @@ async function checkRateLimit(request, url, env) {
     return { limited: false }
   }
 
-  const limit = config.limits[category]
+  const { identifier, isUnknown } = getClientIdentifier(request, env)
+
+  // Use restrictive limit for unidentified clients (no CF-Connecting-IP or session)
+  // This prevents abuse from clients that bypass normal identification
+  const limit = isUnknown ? config.unknownLimit : config.limits[category]
 
   // Skip if limit is 0 (disabled for this category)
   if (limit === 0) {
     return { limited: false }
   }
 
-  const identifier = getClientIdentifier(request, env)
   const key = getRateLimitKey(category, identifier, config.window)
 
   try {
@@ -763,7 +787,7 @@ async function incrementRateLimitCounter(request, url, env) {
     return
   }
 
-  const identifier = getClientIdentifier(request, env)
+  const { identifier } = getClientIdentifier(request, env)
   const key = getRateLimitKey(category, identifier, config.window)
 
   try {
@@ -843,7 +867,8 @@ async function handleAdminRateLimitStats(request, env) {
         }
       }
     } catch (e) {
-      // Skip on error
+      // Log error but continue processing other keys
+      debugError(env, 'Failed to fetch rate limit stat:', key.name, e.message)
     }
   }
 
