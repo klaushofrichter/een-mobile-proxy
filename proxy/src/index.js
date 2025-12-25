@@ -668,13 +668,15 @@ function getClientIdentifier(request, env) {
 
   // In production, missing CF-Connecting-IP is suspicious - log warning
   // X-Forwarded-For can be spoofed by clients, so treat as unknown in production
-  const isProduction = env.ENVIRONMENT !== 'development'
+  // Note: undefined ENVIRONMENT is treated as development (local wrangler dev)
+  const isProduction = env.ENVIRONMENT === 'production'
   if (isProduction) {
     // Log warning in production (not using debugError which is dev-only)
     console.warn('Rate limit: CF-Connecting-IP missing in production, using restrictive limit')
   }
 
-  // Fall back to X-Forwarded-For only in development (it's spoofable in production)
+  // Fall back to X-Forwarded-For in development (it's spoofable in production)
+  // This includes local dev where ENVIRONMENT may be undefined
   const forwardedFor = request.headers.get('X-Forwarded-For')
   if (forwardedFor && !isProduction) {
     // Take the first IP (original client) - only trusted in development
