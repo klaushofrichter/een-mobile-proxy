@@ -176,8 +176,8 @@ export async function loginToAdmin(page) {
 export async function logoutFromAdmin(page) {
   console.log('🚪 Starting logout')
 
-  // Click logout button
-  const logoutButton = page.getByRole('button', { name: /Logout/i })
+  // Click logout button (exact match to avoid matching "Logout & Revoke")
+  const logoutButton = page.getByRole('button', { name: 'Logout', exact: true })
   await logoutButton.click()
 
   // Wait for redirect to login page
