@@ -13,6 +13,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Auto-refresh timer
   let refreshTimer = null
+  let isRefreshing = false
 
   // Getters
   const isAuthenticated = computed(() => !!token.value)
@@ -56,9 +57,12 @@ export const useAuthStore = defineStore('auth', () => {
       }
     }
 
-    // Set up auto-refresh if we have a refresh token
+    // Set up auto-refresh if we have a refresh token and token is not expired
     if (refreshTokenMarker.value && tokenExpiration.value) {
-      setupAutoRefresh()
+      const remaining = tokenExpiration.value - Date.now()
+      if (remaining > 0) {
+        setupAutoRefresh()
+      }
     }
   }
 
@@ -132,11 +136,17 @@ export const useAuthStore = defineStore('auth', () => {
 
     if (refreshTime > 0) {
       refreshTimer = setTimeout(async () => {
+        // Guard against concurrent refresh attempts
+        if (isRefreshing) return
+        isRefreshing = true
+
         const { refreshToken } = await import('../services/auth')
         try {
           await refreshToken()
         } catch (e) {
           console.error('Auto-refresh failed:', e)
+        } finally {
+          isRefreshing = false
         }
       }, refreshTime)
     }
@@ -147,6 +157,7 @@ export const useAuthStore = defineStore('auth', () => {
       clearTimeout(refreshTimer)
       refreshTimer = null
     }
+    isRefreshing = false
   }
 
   function clearState() {

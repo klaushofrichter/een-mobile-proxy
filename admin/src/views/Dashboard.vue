@@ -554,6 +554,8 @@ async function handleLogoutAndRevoke() {
   } catch (e) {
     console.error('Logout and revoke error:', e)
     router.push('/')
+  } finally {
+    isRevokingSession.value = false
   }
 }
 
