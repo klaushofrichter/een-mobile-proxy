@@ -60,7 +60,7 @@
 
       <p class="text-center text-xs text-gray-500">
         <a
-          href="https://github.com/your-username/een-oauth-proxy/tree/develop"
+          :href="githubRepoUrl"
           target="_blank"
           rel="noopener noreferrer"
           class="hover:text-blue-600 hover:underline"
@@ -92,6 +92,10 @@ const selectedProxy = ref(getProxyUrl())
 
 const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
+const githubRepoUrl = computed(() => {
+  const baseUrl = import.meta.env.VITE_GITHUB_REPO || 'https://github.com/your-username/een-oauth-proxy'
+  return `${baseUrl}/tree/develop`
+})
 
 function handleProxyChange(event) {
   const url = event.target.value

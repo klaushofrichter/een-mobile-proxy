@@ -23,7 +23,7 @@
             </svg>
           </button>
           <a
-            href="https://github.com/your-username/een-oauth-proxy/tree/develop"
+            :href="githubRepoUrl"
             target="_blank"
             rel="noopener noreferrer"
             :class="['text-xs hover:text-blue-600 hover:underline', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
@@ -294,6 +294,10 @@ const logContainer = ref(null)
 
 const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
+const githubRepoUrl = computed(() => {
+  const baseUrl = import.meta.env.VITE_GITHUB_REPO || 'https://github.com/your-username/een-oauth-proxy'
+  return `${baseUrl}/tree/develop`
+})
 const proxyUrl = computed(() => getProxyUrl())
 
 const lastHealthCheckText = computed(() => {

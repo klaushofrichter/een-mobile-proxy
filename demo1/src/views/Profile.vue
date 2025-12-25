@@ -24,7 +24,7 @@
         <div class="flex justify-between items-center">
           <h1 class="text-2xl font-bold text-gray-900">{{ appTitle }}</h1>
           <a
-            href="https://github.com/your-username/een-oauth-proxy/tree/develop"
+            :href="githubRepoUrl"
             target="_blank"
             rel="noopener noreferrer"
             class="text-sm text-gray-500 hover:text-blue-600 hover:underline"
@@ -180,6 +180,10 @@ let expirationInterval = null
 const userProfile = computed(() => authStore.userProfile)
 const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
+const githubRepoUrl = computed(() => {
+  const baseUrl = import.meta.env.VITE_GITHUB_REPO || 'https://github.com/your-username/een-oauth-proxy'
+  return `${baseUrl}/tree/develop`
+})
 
 const tokenExpirationText = computed(() => {
   forceUpdate.value // Trigger reactivity
