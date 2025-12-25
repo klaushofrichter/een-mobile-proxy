@@ -1,6 +1,9 @@
 #!/bin/sh
 
 # Pre-commit hook to increment version in subfolders with staged changes
+# and check if proxy deployment is needed
+
+PROXY_URL="${PROXY_URL:-https://een-oauth-proxy.klaushofrichter.workers.dev}"
 
 increment_version() {
     local folder=$1
@@ -23,8 +26,10 @@ increment_version() {
 }
 
 # Check if proxy folder has staged changes
+proxy_changed=false
 if git diff --cached --name-only | grep -q "^proxy/"; then
     increment_version "proxy"
+    proxy_changed=true
 fi
 
 # Check if demo1 folder has staged changes
@@ -35,6 +40,39 @@ fi
 # Check if admin folder has staged changes
 if git diff --cached --name-only | grep -q "^admin/"; then
     increment_version "admin"
+fi
+
+# Check proxy deployment status if proxy was changed
+if [ "$proxy_changed" = true ]; then
+    echo ""
+    echo "========================================"
+    echo "  Proxy Deployment Check"
+    echo "========================================"
+
+    # Get local version from package.json
+    local_version=$(node -p "require('./proxy/package.json').version" 2>/dev/null)
+
+    # Try to get deployed version from health endpoint
+    deployed_version=$(curl -s --connect-timeout 5 "$PROXY_URL/health" 2>/dev/null | node -p "try { JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8')).version.split(' - ')[1] } catch(e) { '' }" 2>/dev/null)
+
+    if [ -n "$deployed_version" ]; then
+        echo "  Local version:    v$local_version"
+        echo "  Deployed version: v$deployed_version"
+
+        if [ "$local_version" != "$deployed_version" ]; then
+            echo ""
+            echo "  ⚠️  DEPLOYMENT NEEDED"
+            echo "  Run 'cd proxy && npm run deploy' after merging to production"
+        else
+            echo ""
+            echo "  ✓ Versions match (will differ after this commit)"
+        fi
+    else
+        echo "  Local version: v$local_version"
+        echo "  ⚠️  Could not fetch deployed version from $PROXY_URL"
+    fi
+    echo "========================================"
+    echo ""
 fi
 
 exit 0
