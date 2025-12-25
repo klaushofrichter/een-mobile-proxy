@@ -43,6 +43,8 @@ jobs:
           VITE_PROXY_URL: ${{ vars.VITE_PROXY_URL }}
           VITE_EEN_CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
           VITE_REDIRECT_URI: ${{ vars.VITE_REDIRECT_URI }}
+          VITE_GITHUB_REPO: https://github.com/${{ github.repository }}
+          VITE_GITHUB_BRANCH: production
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

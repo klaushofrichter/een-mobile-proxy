@@ -11,6 +11,9 @@ export const useAuthStore = defineStore('auth', () => {
   const port = ref(null)
   const userProfile = ref(null)
 
+  // Auto-refresh timer
+  let refreshTimer = null
+
   // Getters
   const isAuthenticated = computed(() => !!token.value)
 
@@ -52,6 +55,11 @@ export const useAuthStore = defineStore('auth', () => {
         console.error('Failed to parse stored user profile:', e)
       }
     }
+
+    // Set up auto-refresh if we have a refresh token
+    if (refreshTokenMarker.value && tokenExpiration.value) {
+      setupAutoRefresh()
+    }
   }
 
   function setToken(newToken, expiresIn = null) {
@@ -64,11 +72,13 @@ export const useAuthStore = defineStore('auth', () => {
         const expiration = Date.now() + expiresIn * 1000
         tokenExpiration.value = expiration
         localStorage.setItem('token_expiration', expiration.toString())
+        setupAutoRefresh()
       }
     } else {
       localStorage.removeItem('auth_token')
       localStorage.removeItem('token_expiration')
       tokenExpiration.value = null
+      clearAutoRefresh()
     }
   }
 
@@ -105,17 +115,42 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function logout() {
-    // Revoke token at proxy
-    if (refreshTokenMarker.value) {
-      try {
-        await revokeTokenService()
-      } catch (e) {
-        console.error('Failed to revoke token:', e)
-      }
-    }
+  function getTokenTimeRemaining() {
+    if (!tokenExpiration.value) return null
+    const remaining = tokenExpiration.value - Date.now()
+    return Math.max(0, remaining)
+  }
 
-    // Clear all state
+  function setupAutoRefresh() {
+    clearAutoRefresh()
+
+    const remaining = getTokenTimeRemaining()
+    if (!remaining || remaining <= 0) return
+
+    // Refresh 5 minutes before expiration (or at 50% if less than 10 minutes total)
+    const refreshTime = Math.min(remaining - 5 * 60 * 1000, remaining * 0.5)
+
+    if (refreshTime > 0) {
+      refreshTimer = setTimeout(async () => {
+        const { refreshToken } = await import('../services/auth')
+        try {
+          await refreshToken()
+        } catch (e) {
+          console.error('Auto-refresh failed:', e)
+        }
+      }, refreshTime)
+    }
+  }
+
+  function clearAutoRefresh() {
+    if (refreshTimer) {
+      clearTimeout(refreshTimer)
+      refreshTimer = null
+    }
+  }
+
+  function clearState() {
+    // Clear all state without revoking tokens
     token.value = null
     tokenExpiration.value = null
     refreshTokenMarker.value = null
@@ -131,6 +166,20 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('port')
     localStorage.removeItem('user_profile')
     localStorage.removeItem('redirectAfterLogin')
+
+    clearAutoRefresh()
+  }
+
+  async function logout() {
+    // Revoke token at proxy then clear state
+    if (refreshTokenMarker.value) {
+      try {
+        await revokeTokenService()
+      } catch (e) {
+        console.error('Failed to revoke token:', e)
+      }
+    }
+    clearState()
   }
 
   return {
@@ -150,6 +199,8 @@ export const useAuthStore = defineStore('auth', () => {
     setRefreshToken,
     setBaseUrl,
     setUserProfile,
+    getTokenTimeRemaining,
+    clearState,
     logout
   }
 })

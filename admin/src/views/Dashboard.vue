@@ -35,6 +35,13 @@
           >
             {{ isLoggingOut ? 'Logging out...' : 'Logout' }}
           </button>
+          <button
+            :disabled="isRevokingSession"
+            class="px-3 py-1.5 text-white text-xs rounded disabled:opacity-50 bg-red-600 hover:bg-red-700"
+            @click="handleLogoutAndRevoke"
+          >
+            {{ isRevokingSession ? 'Revoking...' : 'Logout & Revoke' }}
+          </button>
         </div>
       </div>
 
@@ -267,6 +274,7 @@ const refreshDisabledAfterRemove = ref(false)
 const isPollingKv = ref(false) // Guard against concurrent KV polling
 const isRevokingAll = ref(false)
 const isLoggingOut = ref(false)
+const isRevokingSession = ref(false)
 const showConfirmModal = ref(false)
 
 // Health check state
@@ -296,7 +304,8 @@ const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
 const githubRepoUrl = computed(() => {
   const baseUrl = import.meta.env.VITE_GITHUB_REPO || 'https://github.com/your-username/een-oauth-proxy'
-  return `${baseUrl}/tree/develop`
+  const branch = import.meta.env.VITE_GITHUB_BRANCH || 'develop'
+  return `${baseUrl}/tree/${branch}`
 })
 const proxyUrl = computed(() => getProxyUrl())
 
@@ -527,10 +536,23 @@ async function handleLogout() {
   addLogEntry('Logging out...', 'info')
 
   try {
-    await authStore.logout()
+    authStore.clearState()
     router.push('/')
   } catch (e) {
     console.error('Logout error:', e)
+    router.push('/')
+  }
+}
+
+async function handleLogoutAndRevoke() {
+  isRevokingSession.value = true
+  addLogEntry('Revoking tokens and logging out...', 'info')
+
+  try {
+    await authStore.logout()
+    router.push('/')
+  } catch (e) {
+    console.error('Logout and revoke error:', e)
     router.push('/')
   }
 }
