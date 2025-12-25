@@ -10,6 +10,8 @@ export const useAuthStore = defineStore('auth', () => {
   const hostname = ref(null)
   const port = ref(null)
   const userProfile = ref(null)
+  const refreshFailed = ref(false)
+  const refreshFailedMessage = ref('')
 
   // Auto-refresh timer
   let refreshTimer = null
@@ -127,6 +129,7 @@ export const useAuthStore = defineStore('auth', () => {
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // 5 minutes before expiration
   const REFRESH_THRESHOLD_RATIO = 0.5 // Or 50% of token lifetime
   const MIN_TIME_FOR_REFRESH_MS = 60 * 1000 // Don't setup refresh if less than 1 minute remaining
+  const MIN_SAFE_TIMEOUT_MS = 5 * 1000 // Minimum safe timeout to avoid too-rapid firing
 
   function setupAutoRefresh() {
     clearAutoRefresh()
@@ -136,9 +139,13 @@ export const useAuthStore = defineStore('auth', () => {
     if (!remaining || remaining <= MIN_TIME_FOR_REFRESH_MS) return
 
     // Refresh 5 minutes before expiration (or at 50% if less than 10 minutes total)
-    const refreshTime = Math.min(remaining - REFRESH_BUFFER_MS, remaining * REFRESH_THRESHOLD_RATIO)
+    // Ensure minimum safe timeout to avoid too-rapid firing
+    const refreshTime = Math.max(
+      MIN_SAFE_TIMEOUT_MS,
+      Math.min(remaining - REFRESH_BUFFER_MS, remaining * REFRESH_THRESHOLD_RATIO)
+    )
 
-    if (refreshTime > 0) {
+    if (refreshTime > 0 && refreshTime < remaining) {
       refreshTimer = setTimeout(async () => {
         // Guard against concurrent refresh attempts
         if (isRefreshing) return
@@ -149,12 +156,13 @@ export const useAuthStore = defineStore('auth', () => {
           await refreshToken()
         } catch (e) {
           // Log failure for monitoring/telemetry
-          console.warn('[Auth] Auto-refresh failed - clearing session:', {
+          console.warn('[Auth] Auto-refresh failed:', {
             error: e.message,
             timestamp: new Date().toISOString()
           })
-          // Clear state on failure - router guard will redirect to login
-          clearState()
+          // Set refresh failed state - UI will show dialog and handle redirect
+          refreshFailed.value = true
+          refreshFailedMessage.value = e.message || 'Session expired. Please log in again.'
         } finally {
           isRefreshing = false
         }
@@ -178,6 +186,8 @@ export const useAuthStore = defineStore('auth', () => {
     hostname.value = null
     port.value = null
     userProfile.value = null
+    refreshFailed.value = false
+    refreshFailedMessage.value = ''
 
     // Clear localStorage
     localStorage.removeItem('auth_token')
@@ -189,6 +199,12 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('redirectAfterLogin')
 
     clearAutoRefresh()
+  }
+
+  function acknowledgeRefreshFailure() {
+    // Called when user acknowledges the refresh failure dialog
+    // Clear state and allow redirect to login
+    clearState()
   }
 
   async function logout() {
@@ -211,6 +227,8 @@ export const useAuthStore = defineStore('auth', () => {
     hostname,
     port,
     userProfile,
+    refreshFailed,
+    refreshFailedMessage,
     // Getters
     isAuthenticated,
     baseUrl,
@@ -222,6 +240,7 @@ export const useAuthStore = defineStore('auth', () => {
     setUserProfile,
     getTokenTimeRemaining,
     clearState,
+    acknowledgeRefreshFailure,
     logout
   }
 })

@@ -208,6 +208,28 @@
           </div>
         </div>
       </div>
+
+      <!-- Session Expired Modal -->
+      <div
+        v-if="authStore.refreshFailed"
+        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      >
+        <div :class="['rounded-lg p-5 max-w-sm mx-4', isDarkMode ? 'bg-gray-800' : 'bg-white']">
+          <h3 class="text-base font-bold text-orange-500 mb-3">Session Expired</h3>
+          <p :class="['text-sm mb-4', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+            Your session could not be refreshed automatically. Please log in again to continue.
+          </p>
+          <p v-if="authStore.refreshFailedMessage" :class="['text-xs mb-4 italic', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+            {{ authStore.refreshFailedMessage }}
+          </p>
+          <button
+            class="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+            @click="handleRefreshFailureAck"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -557,6 +579,11 @@ async function handleLogoutAndRevoke() {
   } finally {
     isRevokingSession.value = false
   }
+}
+
+function handleRefreshFailureAck() {
+  authStore.acknowledgeRefreshFailure()
+  router.push('/')
 }
 
 async function fetchUserProfile() {
