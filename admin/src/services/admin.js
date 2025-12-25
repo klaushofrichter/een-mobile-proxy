@@ -2,6 +2,8 @@
  * Admin service for proxy management
  */
 
+import { getAuthHeaders } from '../utils/auth-headers'
+
 const STORAGE_KEY = 'een_proxy_url'
 const ENV_PROXY_URL = import.meta.env.VITE_PROXY_URL
 const LOCAL_PROXY_URL = 'http://localhost:8787'
@@ -30,6 +32,8 @@ if (ENV_PROXY_URL) {
     console.warn('Invalid ENV_PROXY_URL format, ignoring:', ENV_PROXY_URL, '-', e.message)
   }
 }
+
+
 
 /**
  * Check if running in production build
@@ -166,8 +170,10 @@ export function getProxyUrlOrThrow() {
  * @throws {Error} if authentication failed or other error
  */
 export async function verifyAdminAccess() {
+  const headers = await getAuthHeaders()
   const response = await fetch(`${getProxyUrlOrThrow()}/admin/version`, {
-    credentials: 'include'
+    credentials: 'include',
+    headers
   })
 
   if (response.status === 403) {
@@ -218,8 +224,10 @@ export async function getHealth() {
  * Get proxy version
  */
 export async function getVersion() {
+  const headers = await getAuthHeaders()
   const response = await fetch(`${getProxyUrlOrThrow()}/admin/version`, {
-    credentials: 'include'
+    credentials: 'include',
+    headers
   })
 
   if (!response.ok) {
@@ -234,8 +242,10 @@ export async function getVersion() {
  * Get session count
  */
 export async function getSessionsCount() {
+  const headers = await getAuthHeaders()
   const response = await fetch(`${getProxyUrlOrThrow()}/admin/sessionsCount`, {
-    credentials: 'include'
+    credentials: 'include',
+    headers
   })
 
   if (!response.ok) {
@@ -250,9 +260,11 @@ export async function getSessionsCount() {
  * Remove all sessions except current
  */
 export async function removeSessions() {
+  const headers = await getAuthHeaders()
   const response = await fetch(`${getProxyUrlOrThrow()}/admin/removeSessions`, {
     method: 'DELETE',
-    credentials: 'include'
+    credentials: 'include',
+    headers
   })
 
   if (!response.ok) {
@@ -267,9 +279,11 @@ export async function removeSessions() {
  * Revoke all tokens (emergency)
  */
 export async function revokeAll() {
+  const headers = await getAuthHeaders()
   const response = await fetch(`${getProxyUrlOrThrow()}/admin/revokeAll`, {
     method: 'POST',
-    credentials: 'include'
+    credentials: 'include',
+    headers
   })
 
   if (!response.ok) {

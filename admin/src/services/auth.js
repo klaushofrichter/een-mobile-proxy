@@ -3,6 +3,11 @@
  */
 
 import { getProxyUrl } from './admin'
+import { getAuthHeaders } from '../utils/auth-headers'
+
+/**
+ * Get authentication headers (Bearer token with session ID)
+ */
 
 const CLIENT_ID = import.meta.env.VITE_EEN_CLIENT_ID || ''
 const AUTH_URL = import.meta.env.VITE_EEN_AUTH_URL || 'https://auth.eagleeyenetworks.com/oauth2/authorize'
@@ -78,10 +83,12 @@ export async function getAccessToken(code) {
 export async function refreshToken() {
   const { useAuthStore } = await import('../stores/auth')
   const authStore = useAuthStore()
+  const headers = await getAuthHeaders()
 
   const response = await fetch(`${getProxyUrl()}/proxy/refreshAccessToken`, {
     method: 'POST',
-    credentials: 'include'
+    credentials: 'include',
+    headers
   })
 
   if (!response.ok) {
@@ -101,9 +108,11 @@ export async function refreshToken() {
  * Revoke tokens via proxy
  */
 export async function revokeToken() {
+  const headers = await getAuthHeaders()
   const response = await fetch(`${getProxyUrl()}/proxy/revoke`, {
     method: 'POST',
-    credentials: 'include'
+    credentials: 'include',
+    headers
   })
 
   if (!response.ok) {
@@ -141,6 +150,11 @@ export async function handleAuthCallback(code, state) {
   // Store tokens and base URL
   authStore.setToken(data.accessToken, data.expiresIn)
   authStore.setRefreshToken('present')
+  
+  // Store session ID if present (for header-based auth on mobile/cross-site)
+  if (data.sessionId) {
+    authStore.setSessionId(data.sessionId)
+  }
 
   if (data.httpsBaseUrl) {
     // Parse httpsBaseUrl to extract hostname and port

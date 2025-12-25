@@ -7,6 +7,7 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref(null)
   const tokenExpiration = ref(null)
   const refreshTokenMarker = ref(null)
+  const sessionId = ref(null) // Added for mobile/cross-site support
   const hostname = ref(null)
   const port = ref(null)
   const userProfile = ref(null)
@@ -32,6 +33,7 @@ export const useAuthStore = defineStore('auth', () => {
     const storedToken = localStorage.getItem('auth_token')
     const storedExpiration = localStorage.getItem('token_expiration')
     const storedRefresh = localStorage.getItem('refresh_token')
+    const storedSessionId = localStorage.getItem('session_id')
     const storedHostname = localStorage.getItem('hostname')
     const storedPort = localStorage.getItem('port')
     const storedProfile = localStorage.getItem('user_profile')
@@ -44,6 +46,9 @@ export const useAuthStore = defineStore('auth', () => {
     }
     if (storedRefresh) {
       refreshTokenMarker.value = storedRefresh
+    }
+    if (storedSessionId) {
+      sessionId.value = storedSessionId
     }
     if (storedHostname) {
       hostname.value = storedHostname
@@ -65,6 +70,20 @@ export const useAuthStore = defineStore('auth', () => {
       setupAutoRefresh()
     }
   }
+
+  function setSessionId(newId) {
+    sessionId.value = newId
+    if (newId) {
+      // SECURITY WARNING: Storing session ID in localStorage makes it accessible to JavaScript.
+      // This is necessary for mobile/cross-site support where cookies are blocked (ITP),
+      // but it increases XSS risk compared to HttpOnly cookies.
+      // Ensure strict CSP and other security measures are in place.
+      localStorage.setItem('session_id', newId)
+    } else {
+      localStorage.removeItem('session_id')
+    }
+  }
+
 
   function setToken(newToken, expiresIn = null) {
     token.value = newToken
@@ -185,6 +204,7 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = null
     tokenExpiration.value = null
     refreshTokenMarker.value = null
+    sessionId.value = null
     hostname.value = null
     port.value = null
     userProfile.value = null
@@ -195,6 +215,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('auth_token')
     localStorage.removeItem('token_expiration')
     localStorage.removeItem('refresh_token')
+    localStorage.removeItem('session_id')
     localStorage.removeItem('hostname')
     localStorage.removeItem('port')
     localStorage.removeItem('user_profile')
@@ -226,6 +247,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     tokenExpiration,
     refreshTokenMarker,
+    sessionId,
     hostname,
     port,
     userProfile,
@@ -238,6 +260,7 @@ export const useAuthStore = defineStore('auth', () => {
     initialize,
     setToken,
     setRefreshToken,
+    setSessionId,
     setBaseUrl,
     setUserProfile,
     getTokenTimeRemaining,

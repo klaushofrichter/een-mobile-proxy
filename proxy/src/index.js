@@ -305,7 +305,8 @@ async function handleGetAccessToken(url, request, env) {
     accessToken: tokens.access_token,
     expiresIn: tokens.expires_in,
     httpsBaseUrl: tokens.httpsBaseUrl,
-    userEmail: userEmail  // Include email so frontend knows who's logged in
+    userEmail: userEmail,  // Include email so frontend knows who's logged in
+    sessionId: sessionId   // Return session ID for header-based auth (mobile support)
   }
 
   const response = jsonResponse(responseData)
@@ -1038,6 +1039,24 @@ function getCorsHeaders(origin, env = null) {
 const SESSION_ID_REGEX = /^[a-zA-Z0-9_-]{20,50}$/
 
 function getSessionIdFromCookie(request, env) {
+  // Check Authorization header first (Bearer token)
+  const authHeader = request.headers.get('Authorization')
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7).trim()
+    
+    // Validate format
+    // Explicit length check prevents ReDoS on the regex
+    if (token && token.length <= 50) {
+      if (SESSION_ID_REGEX.test(token)) {
+        return token
+      } else {
+        debugLog(env, 'Invalid session ID format in Authorization header')
+      }
+    } else {
+      debugLog(env, 'Session ID in Authorization header too long or empty')
+    }
+  }
+
   const cookieHeader = request.headers.get('Cookie')
   if (!cookieHeader) return null
 
