@@ -44,6 +44,7 @@ The proxy implements multiple layers of security:
 - **CORS Protection** - Strict origin validation with configurable allowlist
 - **CSRF Protection** - Origin header required for state-changing requests (POST/DELETE)
 - **Secure Cookies** - HttpOnly, Secure, SameSite=None session cookies
+- **Header-Based Auth** - Supports `Authorization: Bearer <sessionId>` for mobile/cross-site compatibility (ITP bypass)
 - **Input Validation** - Length limits and format validation on all inputs
 - **Session ID Security** - Cryptographically random UUIDs with format validation
 - **No Secret Exposure** - CLIENT_SECRET and refresh tokens never sent to frontend
@@ -685,14 +686,14 @@ Values outside the min/max range are automatically clamped. Adjust this value ba
 
 | Method | Endpoint | Auth Required | Description |
 |--------|----------|---------------|-------------|
-| POST | `/proxy/getAccessToken` | No (uses OAuth code) | Exchange authorization code for access token. Returns access token, stores refresh token server-side. |
-| POST | `/proxy/refreshAccessToken` | Session cookie | Refresh access token using stored refresh token. |
-| POST | `/proxy/revoke` | Session cookie | Revoke tokens at EEN and clear server-side session. |
+| POST | `/proxy/getAccessToken` | No (uses OAuth code) | Exchange authorization code for access token. Returns access token and `sessionId` (in body), stores refresh token server-side. |
+| POST | `/proxy/refreshAccessToken` | Session cookie OR Header | Refresh access token using stored refresh token. |
+| POST | `/proxy/revoke` | Session cookie OR Header | Revoke tokens at EEN and clear server-side session. |
 
 ### Admin Endpoints (Admin User Required)
 
 These endpoints require:
-1. A valid session cookie (`sessionId`)
+1. A valid session (`sessionId`) provided via `Cookie` OR `Authorization: Bearer <sessionId>` header
 2. The session's `userEmail` must be in the `ADMIN_EMAILS` environment variable
 
 | Method | Endpoint | Description |
@@ -717,6 +718,7 @@ For example, if you modify files in `proxy/`, the `proxy/package.json` version w
 - **CLIENT_SECRET** is never exposed to the frontend
 - **Refresh tokens** are stored server-side only in Cloudflare KV
 - **Session cookies** are HttpOnly, Secure, and SameSite=None
+- **Header-Based Auth** is supported for mobile clients where third-party cookies are blocked (ITP)
 - **CORS validation** on all proxy requests
 - **Admin endpoints** require email verification against allowlist
 - **Automatic token expiration** via KV TTL

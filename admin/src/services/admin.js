@@ -32,6 +32,23 @@ if (ENV_PROXY_URL) {
 }
 
 /**
+ * Get authentication headers (Bearer token with session ID)
+ * This is required for mobile/cross-site support where cookies might be blocked
+ */
+async function getAuthHeaders() {
+  // Dynamic import to avoid circular dependencies
+  const { useAuthStore } = await import('../stores/auth')
+  const authStore = useAuthStore()
+  
+  if (authStore.sessionId) {
+    return {
+      'Authorization': `Bearer ${authStore.sessionId}`
+    }
+  }
+  return {}
+}
+
+/**
  * Check if running in production build
  */
 function isProduction() {
@@ -166,8 +183,10 @@ export function getProxyUrlOrThrow() {
  * @throws {Error} if authentication failed or other error
  */
 export async function verifyAdminAccess() {
+  const headers = await getAuthHeaders()
   const response = await fetch(`${getProxyUrlOrThrow()}/admin/version`, {
-    credentials: 'include'
+    credentials: 'include',
+    headers
   })
 
   if (response.status === 403) {
@@ -218,8 +237,10 @@ export async function getHealth() {
  * Get proxy version
  */
 export async function getVersion() {
+  const headers = await getAuthHeaders()
   const response = await fetch(`${getProxyUrlOrThrow()}/admin/version`, {
-    credentials: 'include'
+    credentials: 'include',
+    headers
   })
 
   if (!response.ok) {
@@ -234,8 +255,10 @@ export async function getVersion() {
  * Get session count
  */
 export async function getSessionsCount() {
+  const headers = await getAuthHeaders()
   const response = await fetch(`${getProxyUrlOrThrow()}/admin/sessionsCount`, {
-    credentials: 'include'
+    credentials: 'include',
+    headers
   })
 
   if (!response.ok) {
@@ -250,9 +273,11 @@ export async function getSessionsCount() {
  * Remove all sessions except current
  */
 export async function removeSessions() {
+  const headers = await getAuthHeaders()
   const response = await fetch(`${getProxyUrlOrThrow()}/admin/removeSessions`, {
     method: 'DELETE',
-    credentials: 'include'
+    credentials: 'include',
+    headers
   })
 
   if (!response.ok) {
@@ -267,9 +292,11 @@ export async function removeSessions() {
  * Revoke all tokens (emergency)
  */
 export async function revokeAll() {
+  const headers = await getAuthHeaders()
   const response = await fetch(`${getProxyUrlOrThrow()}/admin/revokeAll`, {
     method: 'POST',
-    credentials: 'include'
+    credentials: 'include',
+    headers
   })
 
   if (!response.ok) {
