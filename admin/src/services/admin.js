@@ -2,6 +2,8 @@
  * Admin service for proxy management
  */
 
+import { getAuthHeaders } from '../utils/auth-headers'
+
 const STORAGE_KEY = 'een_proxy_url'
 const ENV_PROXY_URL = import.meta.env.VITE_PROXY_URL
 const LOCAL_PROXY_URL = 'http://localhost:8787'
@@ -31,22 +33,7 @@ if (ENV_PROXY_URL) {
   }
 }
 
-/**
- * Get authentication headers (Bearer token with session ID)
- * This is required for mobile/cross-site support where cookies might be blocked
- */
-async function getAuthHeaders() {
-  // Dynamic import to avoid circular dependencies
-  const { useAuthStore } = await import('../stores/auth')
-  const authStore = useAuthStore()
-  
-  if (authStore.sessionId) {
-    return {
-      'Authorization': `Bearer ${authStore.sessionId}`
-    }
-  }
-  return {}
-}
+
 
 /**
  * Check if running in production build

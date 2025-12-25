@@ -44,7 +44,7 @@ The proxy implements multiple layers of security:
 - **CORS Protection** - Strict origin validation with configurable allowlist
 - **CSRF Protection** - Origin header required for state-changing requests (POST/DELETE)
 - **Secure Cookies** - HttpOnly, Secure, SameSite=None session cookies
-- **Header-Based Auth** - Supports `Authorization: Bearer <sessionId>` for mobile/cross-site compatibility (ITP bypass)
+- **Header-Based Auth** - Supports `Authorization: Bearer <sessionId>` for mobile/cross-site compatibility (ITP bypass). *Note: This requires storing the session ID in client storage (localStorage), which has different security trade-offs compared to HttpOnly cookies.*
 - **Input Validation** - Length limits and format validation on all inputs
 - **Session ID Security** - Cryptographically random UUIDs with format validation
 - **No Secret Exposure** - CLIENT_SECRET and refresh tokens never sent to frontend
@@ -718,7 +718,7 @@ For example, if you modify files in `proxy/`, the `proxy/package.json` version w
 - **CLIENT_SECRET** is never exposed to the frontend
 - **Refresh tokens** are stored server-side only in Cloudflare KV
 - **Session cookies** are HttpOnly, Secure, and SameSite=None
-- **Header-Based Auth** is supported for mobile clients where third-party cookies are blocked (ITP)
+- **Header-Based Auth** is supported for mobile clients where third-party cookies are blocked (ITP). This mechanism uses `localStorage` on the client, which is accessible to JavaScript. While necessary for functionality in some environments, it relies on XSS protection (CSP, input sanitization) rather than the HttpOnly flag for security.
 - **CORS validation** on all proxy requests
 - **Admin endpoints** require email verification against allowlist
 - **Automatic token expiration** via KV TTL

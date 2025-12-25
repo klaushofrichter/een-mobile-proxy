@@ -74,6 +74,10 @@ export const useAuthStore = defineStore('auth', () => {
   function setSessionId(newId) {
     sessionId.value = newId
     if (newId) {
+      // SECURITY WARNING: Storing session ID in localStorage makes it accessible to JavaScript.
+      // This is necessary for mobile/cross-site support where cookies are blocked (ITP),
+      // but it increases XSS risk compared to HttpOnly cookies.
+      // Ensure strict CSP and other security measures are in place.
       localStorage.setItem('session_id', newId)
     } else {
       localStorage.removeItem('session_id')

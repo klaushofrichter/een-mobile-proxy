@@ -3,22 +3,11 @@
  */
 
 import { getProxyUrl } from './admin'
+import { getAuthHeaders } from '../utils/auth-headers'
 
 /**
  * Get authentication headers (Bearer token with session ID)
  */
-async function getAuthHeaders() {
-  // Dynamic import to avoid circular dependencies
-  const { useAuthStore } = await import('../stores/auth')
-  const authStore = useAuthStore()
-  
-  if (authStore.sessionId) {
-    return {
-      'Authorization': `Bearer ${authStore.sessionId}`
-    }
-  }
-  return {}
-}
 
 const CLIENT_ID = import.meta.env.VITE_EEN_CLIENT_ID || ''
 const AUTH_URL = import.meta.env.VITE_EEN_AUTH_URL || 'https://auth.eagleeyenetworks.com/oauth2/authorize'

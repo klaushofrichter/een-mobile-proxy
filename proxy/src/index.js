@@ -1043,9 +1043,17 @@ function getSessionIdFromCookie(request, env) {
   const authHeader = request.headers.get('Authorization')
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7).trim()
+    
     // Validate format
-    if (token && SESSION_ID_REGEX.test(token)) {
-      return token
+    // Explicit length check prevents ReDoS on the regex
+    if (token && token.length <= 50) {
+      if (SESSION_ID_REGEX.test(token)) {
+        return token
+      } else {
+        debugLog(env, 'Invalid session ID format in Authorization header')
+      }
+    } else {
+      debugLog(env, 'Session ID in Authorization header too long or empty')
     }
   }
 
