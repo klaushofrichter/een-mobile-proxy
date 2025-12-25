@@ -32,8 +32,9 @@
             :disabled="isLoggingOut"
             :class="['px-3 py-1.5 text-white text-xs rounded disabled:opacity-50', isDarkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-600 hover:bg-gray-700']"
             @click="handleLogout"
+            title="Sign out locally without revoking server tokens"
           >
-            {{ isLoggingOut ? 'Logging out...' : 'Logout' }}
+            {{ isLoggingOut ? 'Signing out...' : 'Sign Out' }}
           </button>
           <button
             :disabled="isRevokingSession"
@@ -209,10 +210,10 @@
         </div>
       </div>
 
-      <!-- Session Expired Modal -->
+      <!-- Session Expired Modal (z-[60] to override other modals) -->
       <div
         v-if="authStore.refreshFailed"
-        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
       >
         <div :class="['rounded-lg p-5 max-w-sm mx-4', isDarkMode ? 'bg-gray-800' : 'bg-white']">
           <h3 class="text-base font-bold text-orange-500 mb-3">Session Expired</h3>
@@ -555,13 +556,13 @@ async function handleRevokeAll() {
 
 async function handleLogout() {
   isLoggingOut.value = true
-  addLogEntry('Logging out...', 'info')
+  addLogEntry('Signing out (local only)...', 'info')
 
   try {
     authStore.clearState()
     router.push('/')
   } catch (e) {
-    console.error('Logout error:', e)
+    console.error('Sign out error:', e)
     router.push('/')
   }
 }

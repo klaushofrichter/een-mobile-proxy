@@ -154,10 +154,10 @@
         </div>
       </div>
 
-      <!-- Session Expired Modal -->
+      <!-- Session Expired Modal (z-[60] to override other modals) -->
       <div
         v-if="authStore.refreshFailed"
-        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
       >
         <div class="bg-white rounded-lg p-5 max-w-sm mx-4">
           <h3 class="text-base font-bold text-orange-500 mb-3">Session Expired</h3>

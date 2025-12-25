@@ -170,20 +170,20 @@ export async function loginToAdmin(page) {
 }
 
 /**
- * Logout from the admin app
+ * Sign out from the admin app (local only, without token revocation)
  * @param {import('@playwright/test').Page} page - Playwright page object
  */
 export async function logoutFromAdmin(page) {
-  console.log('🚪 Starting logout')
+  console.log('🚪 Starting sign out')
 
-  // Click logout button (exact match to avoid matching "Logout & Revoke")
-  const logoutButton = page.getByRole('button', { name: 'Logout', exact: true })
-  await logoutButton.click()
+  // Click sign out button (exact match to avoid matching "Logout & Revoke")
+  const signOutButton = page.getByRole('button', { name: 'Sign Out', exact: true })
+  await signOutButton.click()
 
   // Wait for redirect to login page
   await page.waitForURL('/', { timeout: 15000 })
   await expect(page.getByRole('button', { name: 'Sign in with Eagle Eye Networks' })).toBeVisible()
-  console.log('✅ Successfully logged out')
+  console.log('✅ Successfully signed out')
 }
 
 /**

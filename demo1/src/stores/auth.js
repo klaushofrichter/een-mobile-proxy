@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { revokeToken as revokeTokenService } from '../services/auth'
+import { revokeToken as revokeTokenService, refreshToken as refreshTokenService } from '../services/auth'
 
 export const useAuthStore = defineStore('auth', () => {
   // State
@@ -13,9 +13,9 @@ export const useAuthStore = defineStore('auth', () => {
   const refreshFailed = ref(false)
   const refreshFailedMessage = ref('')
 
-  // Auto-refresh timer
-  let refreshTimer = null
-  let isRefreshing = false
+  // Auto-refresh timer (refs for HMR safety and proper lifecycle management)
+  const refreshTimerId = ref(null)
+  const isRefreshing = ref(false)
 
   // Getters
   const isAuthenticated = computed(() => !!token.value)
@@ -60,6 +60,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     // Set up auto-refresh if we have a refresh token
+    // setupAutoRefresh() handles all edge cases including expired tokens and minimum time buffers
     if (refreshTokenMarker.value && tokenExpiration.value) {
       setupAutoRefresh()
     }
@@ -131,7 +132,10 @@ export const useAuthStore = defineStore('auth', () => {
   const MIN_SAFE_TIMEOUT_MS = 5 * 1000 // Minimum safe timeout to avoid too-rapid firing
 
   function setupAutoRefresh() {
-    clearAutoRefresh()
+    // Guard against redundant setup calls
+    if (refreshTimerId.value) {
+      clearAutoRefresh()
+    }
 
     const remaining = getTokenTimeRemaining()
     // Don't setup refresh if token is expired or has less than minimum time remaining
@@ -145,14 +149,13 @@ export const useAuthStore = defineStore('auth', () => {
     )
 
     if (refreshTime > 0 && refreshTime < remaining) {
-      refreshTimer = setTimeout(async () => {
+      refreshTimerId.value = setTimeout(async () => {
         // Guard against concurrent refresh attempts
-        if (isRefreshing) return
-        isRefreshing = true
+        if (isRefreshing.value) return
+        isRefreshing.value = true
 
-        const { refreshToken } = await import('../services/auth')
         try {
-          await refreshToken()
+          await refreshTokenService()
         } catch (e) {
           // Log failure for monitoring/telemetry
           console.warn('[Auth] Auto-refresh failed:', {
@@ -163,18 +166,18 @@ export const useAuthStore = defineStore('auth', () => {
           refreshFailed.value = true
           refreshFailedMessage.value = e.message || 'Session expired. Please log in again.'
         } finally {
-          isRefreshing = false
+          isRefreshing.value = false
         }
       }, refreshTime)
     }
   }
 
   function clearAutoRefresh() {
-    if (refreshTimer) {
-      clearTimeout(refreshTimer)
-      refreshTimer = null
+    if (refreshTimerId.value) {
+      clearTimeout(refreshTimerId.value)
+      refreshTimerId.value = null
     }
-    isRefreshing = false
+    isRefreshing.value = false
   }
 
   function clearState() {
