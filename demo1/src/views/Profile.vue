@@ -153,6 +153,28 @@
           </div>
         </div>
       </div>
+
+      <!-- Session Expired Modal (z-[60] to override other modals) -->
+      <div
+        v-if="authStore.refreshFailed"
+        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
+      >
+        <div class="bg-white rounded-lg p-5 max-w-sm mx-4">
+          <h3 class="text-base font-bold text-orange-500 mb-3">Session Expired</h3>
+          <p class="text-sm text-gray-700 mb-4">
+            Your session could not be refreshed automatically. Please log in again to continue.
+          </p>
+          <p v-if="authStore.refreshFailedMessage" class="text-xs text-gray-500 italic mb-4">
+            {{ authStore.refreshFailedMessage }}
+          </p>
+          <button
+            class="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+            @click="handleRefreshFailureAck"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -182,7 +204,8 @@ const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
 const githubRepoUrl = computed(() => {
   const baseUrl = import.meta.env.VITE_GITHUB_REPO || 'https://github.com/your-username/een-oauth-proxy'
-  return `${baseUrl}/tree/develop`
+  const branch = import.meta.env.VITE_GITHUB_BRANCH || 'develop'
+  return `${baseUrl}/tree/${branch}`
 })
 
 const tokenExpirationText = computed(() => {
@@ -293,6 +316,11 @@ async function handleLogout() {
     // Still navigate to login even on error
     router.push('/')
   }
+}
+
+function handleRefreshFailureAck() {
+  authStore.acknowledgeRefreshFailure()
+  router.push('/')
 }
 
 onMounted(async () => {

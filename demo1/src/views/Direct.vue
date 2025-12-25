@@ -114,7 +114,8 @@ const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
 const githubRepoUrl = computed(() => {
   const baseUrl = import.meta.env.VITE_GITHUB_REPO || 'https://github.com/your-username/een-oauth-proxy'
-  return `${baseUrl}/tree/develop`
+  const branch = import.meta.env.VITE_GITHUB_BRANCH || 'develop'
+  return `${baseUrl}/tree/${branch}`
 })
 
 onMounted(() => {

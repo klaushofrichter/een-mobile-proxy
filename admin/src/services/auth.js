@@ -73,6 +73,31 @@ export async function getAccessToken(code) {
 }
 
 /**
+ * Refresh access token via proxy
+ */
+export async function refreshToken() {
+  const { useAuthStore } = await import('../stores/auth')
+  const authStore = useAuthStore()
+
+  const response = await fetch(`${getProxyUrl()}/proxy/refreshAccessToken`, {
+    method: 'POST',
+    credentials: 'include'
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Token refresh failed' }))
+    throw new Error(error.error || 'Token refresh failed')
+  }
+
+  const data = await response.json()
+
+  // Update store with new token
+  authStore.setToken(data.accessToken, data.expiresIn)
+
+  return data
+}
+
+/**
  * Revoke tokens via proxy
  */
 export async function revokeToken() {

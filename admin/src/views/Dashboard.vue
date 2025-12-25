@@ -32,8 +32,16 @@
             :disabled="isLoggingOut"
             :class="['px-3 py-1.5 text-white text-xs rounded disabled:opacity-50', isDarkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-600 hover:bg-gray-700']"
             @click="handleLogout"
+            title="Sign out locally without revoking server tokens"
           >
-            {{ isLoggingOut ? 'Logging out...' : 'Logout' }}
+            {{ isLoggingOut ? 'Signing out...' : 'Sign Out' }}
+          </button>
+          <button
+            :disabled="isRevokingSession"
+            class="px-3 py-1.5 text-white text-xs rounded disabled:opacity-50 bg-red-600 hover:bg-red-700"
+            @click="handleLogoutAndRevoke"
+          >
+            {{ isRevokingSession ? 'Revoking...' : 'Logout & Revoke' }}
           </button>
         </div>
       </div>
@@ -201,6 +209,28 @@
           </div>
         </div>
       </div>
+
+      <!-- Session Expired Modal (z-[60] to override other modals) -->
+      <div
+        v-if="authStore.refreshFailed"
+        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
+      >
+        <div :class="['rounded-lg p-5 max-w-sm mx-4', isDarkMode ? 'bg-gray-800' : 'bg-white']">
+          <h3 class="text-base font-bold text-orange-500 mb-3">Session Expired</h3>
+          <p :class="['text-sm mb-4', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+            Your session could not be refreshed automatically. Please log in again to continue.
+          </p>
+          <p v-if="authStore.refreshFailedMessage" :class="['text-xs mb-4 italic', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+            {{ authStore.refreshFailedMessage }}
+          </p>
+          <button
+            class="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+            @click="handleRefreshFailureAck"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -267,6 +297,7 @@ const refreshDisabledAfterRemove = ref(false)
 const isPollingKv = ref(false) // Guard against concurrent KV polling
 const isRevokingAll = ref(false)
 const isLoggingOut = ref(false)
+const isRevokingSession = ref(false)
 const showConfirmModal = ref(false)
 
 // Health check state
@@ -296,7 +327,8 @@ const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
 const githubRepoUrl = computed(() => {
   const baseUrl = import.meta.env.VITE_GITHUB_REPO || 'https://github.com/your-username/een-oauth-proxy'
-  return `${baseUrl}/tree/develop`
+  const branch = import.meta.env.VITE_GITHUB_BRANCH || 'develop'
+  return `${baseUrl}/tree/${branch}`
 })
 const proxyUrl = computed(() => getProxyUrl())
 
@@ -524,15 +556,35 @@ async function handleRevokeAll() {
 
 async function handleLogout() {
   isLoggingOut.value = true
-  addLogEntry('Logging out...', 'info')
+  addLogEntry('Signing out (local only)...', 'info')
+
+  try {
+    authStore.clearState()
+    router.push('/')
+  } catch (e) {
+    console.error('Sign out error:', e)
+    router.push('/')
+  }
+}
+
+async function handleLogoutAndRevoke() {
+  isRevokingSession.value = true
+  addLogEntry('Revoking tokens and logging out...', 'info')
 
   try {
     await authStore.logout()
     router.push('/')
   } catch (e) {
-    console.error('Logout error:', e)
+    console.error('Logout and revoke error:', e)
     router.push('/')
+  } finally {
+    isRevokingSession.value = false
   }
+}
+
+function handleRefreshFailureAck() {
+  authStore.acknowledgeRefreshFailure()
+  router.push('/')
 }
 
 async function fetchUserProfile() {

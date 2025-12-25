@@ -259,7 +259,10 @@ async function handleGetAccessToken(url, request, env) {
         // Handle object format: {hostname: "c001.eagleeyenetworks.com", port: 443}
         const host = tokens.httpsBaseUrl.hostname || tokens.httpsBaseUrl.host
         const port = tokens.httpsBaseUrl.port
-        baseUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
+        // Validate host before constructing URL
+        if (host && typeof host === 'string') {
+          baseUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
+        }
       }
     }
     debugLog(env, 'Fetching user profile from:', `${baseUrl}/api/v3.0/users/self`)
@@ -1116,7 +1119,10 @@ async function checkAdminAccess(request, env) {
           } else if (typeof tokens.httpsBaseUrl === 'object') {
             const host = tokens.httpsBaseUrl.hostname || tokens.httpsBaseUrl.host
             const port = tokens.httpsBaseUrl.port
-            baseUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
+            // Validate host before constructing URL
+            if (host && typeof host === 'string') {
+              baseUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
+            }
           }
         }
         debugLog(env, 'On-demand fetch: using baseUrl:', baseUrl)
@@ -1133,14 +1139,25 @@ async function checkAdminAccess(request, env) {
           const userData = await userResponse.json()
           debugLog(env, 'Fetched user email on-demand')
 
-          // Update session with email, using consistent TTL calculation
-          sessionData.userEmail = userData.email
-          sessionData.refreshToken = tokens.refresh_token || sessionData.refreshToken
-          const refreshTokenTtl = getRefreshTokenTtl(env)
-          const ttl = (tokens.expires_in || 3600) + refreshTokenTtl
-          await env.EEN_OAUTH_SESSIONS.put(sessionId, JSON.stringify(sessionData), {
-            expirationTtl: ttl
-          })
+          // Re-read session to reduce race condition window
+          // Another request might have already updated the email
+          const currentSessionStr = await env.EEN_OAUTH_SESSIONS.get(sessionId)
+          if (currentSessionStr) {
+            const currentSession = JSON.parse(currentSessionStr)
+            // Only update if email is still missing (reduce duplicate writes)
+            if (!currentSession.userEmail) {
+              currentSession.userEmail = userData.email
+              currentSession.refreshToken = tokens.refresh_token || currentSession.refreshToken
+              const refreshTokenTtl = getRefreshTokenTtl(env)
+              const ttl = (tokens.expires_in || 3600) + refreshTokenTtl
+              await env.EEN_OAUTH_SESSIONS.put(sessionId, JSON.stringify(currentSession), {
+                expirationTtl: ttl
+              })
+              sessionData = currentSession // Update local reference
+            } else {
+              sessionData.userEmail = currentSession.userEmail
+            }
+          }
         }
       }
     } catch (e) {

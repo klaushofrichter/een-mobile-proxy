@@ -18,6 +18,55 @@ This repository uses EENs services, but it is not associated to EEN.
 <!-- ![Demo1 Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fdemo1%2Fpackage.json&query=version&label=demo1-production&color=%2333ca55) -->
 
 
+## Features
+
+### Proxy Features
+
+The OAuth proxy provides secure token management for Eagle Eye Networks authentication:
+
+- **OAuth Token Exchange** - Securely exchanges authorization codes for access tokens, keeping CLIENT_SECRET server-side
+- **Token Refresh** - Automatic refresh token management with server-side storage in Cloudflare KV
+- **Token Revocation** - Clean logout with EEN token revocation and session cleanup
+- **Session Management** - Server-side sessions with configurable TTL and automatic expiration
+- **Health Monitoring** - Public health endpoint for uptime monitoring (supports HEAD requests)
+- **Multi-Region Support** - Automatically handles EEN regional API endpoints (httpsBaseUrl)
+
+### Security Features
+
+The proxy implements multiple layers of security:
+
+- **Rate Limiting** - Configurable per-endpoint rate limits to prevent abuse:
+  - `/health`: 60 requests/minute (default)
+  - `/proxy/*`: 30 requests/minute (default)
+  - `/admin/*`: 60 requests/minute (default)
+  - Unknown clients (no IP identification): 5 requests/minute
+  - Configurable via environment variables (`RATE_LIMIT_*`)
+- **CORS Protection** - Strict origin validation with configurable allowlist
+- **CSRF Protection** - Origin header required for state-changing requests (POST/DELETE)
+- **Secure Cookies** - HttpOnly, Secure, SameSite=None session cookies
+- **Input Validation** - Length limits and format validation on all inputs
+- **Session ID Security** - Cryptographically random UUIDs with format validation
+- **No Secret Exposure** - CLIENT_SECRET and refresh tokens never sent to frontend
+- **Security Headers** - X-Content-Type-Options, X-Frame-Options, CSP, HSTS (production)
+- **Admin Access Control** - Email-based allowlist for administrative functions
+- **Open Redirect Prevention** - Redirect URI validation against allowed origins
+- **Timing Attack Prevention** - Constant-time comparison for sensitive operations
+
+### Admin App Features
+
+The admin application provides monitoring and management capabilities:
+
+- **Dashboard Overview** - Real-time proxy health status and version information
+- **Session Monitoring** - View count of active user sessions
+- **Rate Limit Statistics** - Monitor rate limiting activity across endpoints
+- **Session Management** - Remove other users' sessions while preserving your own
+- **Emergency Revocation** - Revoke all tokens system-wide (logs out all users)
+- **Activity Log** - Real-time log of admin actions with timestamps
+- **Dark Mode** - Toggle between light and dark themes (persisted)
+- **Resizable Panels** - Adjustable dashboard layout (persisted)
+- **Auto-Refresh** - Automatic health check updates with countdown timer
+- **Non-Admin Rejection** - Clear error messages for users not in admin list
+
 ## Project Structure
 
 ```
@@ -67,55 +116,6 @@ A Vue 3 demonstration application showing OAuth integration with EEN.
 - Auto-refresh before token expiration
 
 **Deployment:** none, build your own locally. Note that you can not run demo1 and admin on the same local machine as they share a common port 3333
-
-## Features
-
-### Proxy Features
-
-The OAuth proxy provides secure token management for Eagle Eye Networks authentication:
-
-- **OAuth Token Exchange** - Securely exchanges authorization codes for access tokens, keeping CLIENT_SECRET server-side
-- **Token Refresh** - Automatic refresh token management with server-side storage in Cloudflare KV
-- **Token Revocation** - Clean logout with EEN token revocation and session cleanup
-- **Session Management** - Server-side sessions with configurable TTL and automatic expiration
-- **Health Monitoring** - Public health endpoint for uptime monitoring (supports HEAD requests)
-- **Multi-Region Support** - Automatically handles EEN regional API endpoints (httpsBaseUrl)
-
-### Security Features
-
-The proxy implements multiple layers of security:
-
-- **Rate Limiting** - Configurable per-endpoint rate limits to prevent abuse:
-  - `/health`: 60 requests/minute (default)
-  - `/proxy/*`: 30 requests/minute (default)
-  - `/admin/*`: 60 requests/minute (default)
-  - Unknown clients (no IP identification): 5 requests/minute
-  - Configurable via environment variables (`RATE_LIMIT_*`)
-- **CORS Protection** - Strict origin validation with configurable allowlist
-- **CSRF Protection** - Origin header required for state-changing requests (POST/DELETE)
-- **Secure Cookies** - HttpOnly, Secure, SameSite=None session cookies
-- **Input Validation** - Length limits and format validation on all inputs
-- **Session ID Security** - Cryptographically random UUIDs with format validation
-- **No Secret Exposure** - CLIENT_SECRET and refresh tokens never sent to frontend
-- **Security Headers** - X-Content-Type-Options, X-Frame-Options, CSP, HSTS (production)
-- **Admin Access Control** - Email-based allowlist for administrative functions
-- **Open Redirect Prevention** - Redirect URI validation against allowed origins
-- **Timing Attack Prevention** - Constant-time comparison for sensitive operations
-
-### Admin App Features
-
-The admin application provides monitoring and management capabilities:
-
-- **Dashboard Overview** - Real-time proxy health status and version information
-- **Session Monitoring** - View count of active user sessions
-- **Rate Limit Statistics** - Monitor rate limiting activity across endpoints
-- **Session Management** - Remove other users' sessions while preserving your own
-- **Emergency Revocation** - Revoke all tokens system-wide (logs out all users)
-- **Activity Log** - Real-time log of admin actions with timestamps
-- **Dark Mode** - Toggle between light and dark themes (persisted)
-- **Resizable Panels** - Adjustable dashboard layout (persisted)
-- **Auto-Refresh** - Automatic health check updates with countdown timer
-- **Non-Admin Rejection** - Clear error messages for users not in admin list
 
 ## Getting Started
 
@@ -267,20 +267,14 @@ You can run the demo or admin app locally while connecting to your production Cl
 
 **Prerequisites:**
 1. Your production proxy must have `http://127.0.0.1:3333` in `ALLOWED_ORIGINS`
-2. Configure `VITE_PROD_PROXY_URL` in your `.env` file:
+2. Unix-like environment (macOS, Linux, or WSL/Git Bash on Windows)
+3. Export `VITE_PROD_PROXY_URL` in your shell
 
-**Demo App (`./demo1/.env`):**
-```env
-VITE_PROD_PROXY_URL=https://your-proxy.your-subdomain.workers.dev
-```
-
-**Admin App (`./admin/.env`):**
-```env
-VITE_PROD_PROXY_URL=https://your-proxy.your-subdomain.workers.dev
-```
-
-**Run with production proxy:**
+**Setup and run:**
 ```bash
+# Export the production proxy URL (add to your ~/.bashrc or ~/.zshrc for persistence)
+export VITE_PROD_PROXY_URL=https://your-proxy.your-subdomain.workers.dev
+
 # Demo app against production proxy
 cd demo1
 npm run dev:prod
@@ -290,7 +284,7 @@ cd admin
 npm run dev:prod
 ```
 
-The `dev:prod` script uses `VITE_PROD_PROXY_URL` instead of `VITE_PROXY_URL`, allowing you to keep separate configurations for local and production proxies.
+> **Note:** The `dev:prod` script uses shell variable expansion (`$VITE_PROD_PROXY_URL`), which requires the variable to be exported in your shell environment. Simply adding it to `.env` is not sufficient - you must use `export` or source it from a shell profile.
 
 > **Security Note:** Adding `http://127.0.0.1:3333` to production `ALLOWED_ORIGINS` is safe because `127.0.0.1` only resolves to the local machine and browsers cannot spoof the `Origin` header.
 
