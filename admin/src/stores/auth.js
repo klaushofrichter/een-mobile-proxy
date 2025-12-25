@@ -57,12 +57,10 @@ export const useAuthStore = defineStore('auth', () => {
       }
     }
 
-    // Set up auto-refresh if we have a refresh token and token is not expired
+    // Set up auto-refresh if we have a refresh token
+    // setupAutoRefresh() handles all edge cases including expired tokens and minimum time buffers
     if (refreshTokenMarker.value && tokenExpiration.value) {
-      const remaining = tokenExpiration.value - Date.now()
-      if (remaining > 0) {
-        setupAutoRefresh()
-      }
+      setupAutoRefresh()
     }
   }
 
@@ -125,14 +123,20 @@ export const useAuthStore = defineStore('auth', () => {
     return Math.max(0, remaining)
   }
 
+  // Constants for auto-refresh timing
+  const REFRESH_BUFFER_MS = 5 * 60 * 1000 // 5 minutes before expiration
+  const REFRESH_THRESHOLD_RATIO = 0.5 // Or 50% of token lifetime
+  const MIN_TIME_FOR_REFRESH_MS = 60 * 1000 // Don't setup refresh if less than 1 minute remaining
+
   function setupAutoRefresh() {
     clearAutoRefresh()
 
     const remaining = getTokenTimeRemaining()
-    if (!remaining || remaining <= 0) return
+    // Don't setup refresh if token is expired or has less than minimum time remaining
+    if (!remaining || remaining <= MIN_TIME_FOR_REFRESH_MS) return
 
     // Refresh 5 minutes before expiration (or at 50% if less than 10 minutes total)
-    const refreshTime = Math.min(remaining - 5 * 60 * 1000, remaining * 0.5)
+    const refreshTime = Math.min(remaining - REFRESH_BUFFER_MS, remaining * REFRESH_THRESHOLD_RATIO)
 
     if (refreshTime > 0) {
       refreshTimer = setTimeout(async () => {
@@ -144,7 +148,13 @@ export const useAuthStore = defineStore('auth', () => {
         try {
           await refreshToken()
         } catch (e) {
-          console.error('Auto-refresh failed:', e)
+          // Log failure for monitoring/telemetry
+          console.warn('[Auth] Auto-refresh failed - clearing session:', {
+            error: e.message,
+            timestamp: new Date().toISOString()
+          })
+          // Clear state on failure - router guard will redirect to login
+          clearState()
         } finally {
           isRefreshing = false
         }
