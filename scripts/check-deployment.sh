@@ -6,7 +6,15 @@
 # Environment variables:
 #   PROXY_URL              - Override proxy URL (default: production)
 
+set -euo pipefail
+
 PROXY_URL="${PROXY_URL:-https://een-oauth-proxy.klaushofrichter.workers.dev}"
+
+# Validate PROXY_URL format to prevent command injection
+if [[ ! "$PROXY_URL" =~ ^https?:// ]]; then
+    echo "Error: Invalid PROXY_URL format. Must start with http:// or https://"
+    exit 1
+fi
 
 echo "========================================"
 echo "  Proxy Deployment Check"

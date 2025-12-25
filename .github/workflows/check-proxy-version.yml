@@ -34,21 +34,30 @@ jobs:
           
           # Fetch health endpoint with timeout
           # Use -s (silent) but show errors
-          HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" --max-time 10 "$PROXY_URL/health")
+          RESPONSE_FILE="response-${{ github.run_id }}.json"
+          HTTP_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" --max-time 10 "$PROXY_URL/health")
           
           if [ "$HTTP_CODE" != "200" ]; then
             echo "::warning title=Proxy Unreachable::Could not fetch deployed version from $PROXY_URL/health (HTTP $HTTP_CODE). Assuming deployment needed."
             echo "deployed_version=unknown" >> $GITHUB_OUTPUT
+            rm -f "$RESPONSE_FILE"
             exit 0
           fi
           
-          # Extract full version string (e.g., "een-oauth-proxy - 1.2.13 - 2025-12-25 23:16:30 UTC")
-          FULL_VERSION=$(jq -r .version response.json)
+          FULL_VERSION=$(jq -r .version "$RESPONSE_FILE")
+          rm -f "$RESPONSE_FILE"
           echo "Full deployed version string: $FULL_VERSION"
+
+          if [ "$FULL_VERSION" == "null" ] || [ -z "$FULL_VERSION" ]; then
+             echo "::warning::Version field missing in health response."
+             echo "deployed_version=unknown" >> $GITHUB_OUTPUT
+             exit 0
+          fi
           
           # Parse out the semantic version (the middle part between " - ")
           # If parsing fails, default to the full string or "unknown"
-          if [[ "$FULL_VERSION" =~ -[[:space:]]([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]- ]]; then
+          REGEX='-[[:space:]]([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]-'
+          if [[ "$FULL_VERSION" =~ $REGEX ]]; then
             DEPLOYED_VERSION="${BASH_REMATCH[1]}"
           else
             # Try to grab just the version if the format is different or simple
