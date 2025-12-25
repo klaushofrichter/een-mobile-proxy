@@ -35,19 +35,11 @@ increment_version() {
     fi
 }
 
-# Capture proxy version BEFORE incrementing (for accurate comparison)
-proxy_version_before=""
-if git diff --cached --name-only | grep -q "^proxy/"; then
-    proxy_version_before=$(node -p "require('./proxy/package.json').version" 2>/dev/null)
-fi
-
 # Check if proxy folder has staged changes
-proxy_changed=false
 if git diff --cached --name-only | grep -q "^proxy/"; then
     if ! increment_version "proxy"; then
         exit 1
     fi
-    proxy_changed=true
 fi
 
 # Check if demo1 folder has staged changes
@@ -62,57 +54,6 @@ if git diff --cached --name-only | grep -q "^admin/"; then
     if ! increment_version "admin"; then
         exit 1
     fi
-fi
-
-# Check proxy deployment status if proxy was changed
-if [ "$proxy_changed" = true ] && [ "$SKIP_DEPLOYMENT_CHECK" != "1" ]; then
-    echo ""
-    echo "========================================"
-    echo "  Proxy Deployment Check"
-    echo "========================================"
-
-    # Get the new local version (after increment)
-    local_version=$(node -p "require('./proxy/package.json').version" 2>/dev/null)
-
-    # Try to get deployed version from health endpoint
-    # --max-redirs 0 prevents following redirects for security
-    health_response=$(curl -s --max-redirs 0 --connect-timeout 2 --max-time 3 "$PROXY_URL/health" 2>/dev/null)
-
-    if [ -n "$health_response" ]; then
-        # Parse version using node with proper stdin handling
-        deployed_version=$(echo "$health_response" | node -e "
-            let data = '';
-            process.stdin.on('data', chunk => data += chunk);
-            process.stdin.on('end', () => {
-                try {
-                    const version = JSON.parse(data).version.split(' - ')[1];
-                    if (version) console.log(version);
-                } catch(e) {}
-            });
-        " 2>/dev/null)
-    fi
-
-    if [ -n "$deployed_version" ]; then
-        echo "  Local version (after bump): v$local_version"
-        echo "  Deployed version:           v$deployed_version"
-
-        if [ "$proxy_version_before" = "$deployed_version" ]; then
-            echo ""
-            echo "  ⚠️  DEPLOYMENT NEEDED after merge"
-            echo "  Run 'cd proxy && npm run deploy' after merging to production"
-        else
-            echo ""
-            echo "  ⚠️  DEPLOYMENT ALREADY PENDING"
-            echo "  Deployed version differs from pre-commit version (v$proxy_version_before)"
-            echo "  Run 'cd proxy && npm run deploy' after merging to production"
-        fi
-    else
-        echo "  Local version: v$local_version"
-        echo "  ⚠️  Could not fetch deployed version (network timeout or error)"
-        echo "  Set SKIP_DEPLOYMENT_CHECK=1 to skip this check"
-    fi
-    echo "========================================"
-    echo ""
 fi
 
 exit 0

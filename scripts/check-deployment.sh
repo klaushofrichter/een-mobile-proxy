@@ -1,0 +1,58 @@
+#!/bin/bash
+
+# Script to check if proxy deployment is needed
+# This can be run manually or in CI/CD
+#
+# Environment variables:
+#   PROXY_URL              - Override proxy URL (default: production)
+
+PROXY_URL="${PROXY_URL:-https://een-oauth-proxy.klaushofrichter.workers.dev}"
+
+echo "========================================"
+echo "  Proxy Deployment Check"
+echo "========================================"
+
+# Get the local version
+local_version=$(node -p "require('./proxy/package.json').version" 2>/dev/null)
+
+# Try to get deployed version from health endpoint
+# --max-redirs 0 prevents following redirects for security
+health_response=$(curl -s --max-redirs 0 --connect-timeout 5 --max-time 10 "$PROXY_URL/health" 2>/dev/null)
+
+if [ -n "$health_response" ]; then
+    # Parse version using node with proper stdin handling
+    deployed_version=$(echo "$health_response" | node -e "
+        let data = '';
+        process.stdin.on('data', chunk => data += chunk);
+        process.stdin.on('end', () => {
+            try {
+                const version = JSON.parse(data).version.split(' - ')[1];
+                if (version) console.log(version);
+            } catch(e) {}
+        });
+    " 2>/dev/null)
+fi
+
+if [ -n "$deployed_version" ]; then
+    echo "  Local version:    v$local_version"
+    echo "  Deployed version: v$deployed_version"
+
+    if [ "$local_version" != "$deployed_version" ]; then
+        echo ""
+        echo "  ⚠️  DEPLOYMENT NEEDED"
+        echo "  Local version differs from deployed version."
+        echo "  Run 'cd proxy && npm run deploy'"
+        exit 1
+    else
+        echo ""
+        echo "  ✅  Deployment up to date"
+    fi
+else
+    echo "  Local version: v$local_version"
+    echo "  ⚠️  Could not fetch deployed version (network timeout or error)"
+    echo "  Please check manually."
+    exit 1
+fi
+
+echo "========================================"
+echo ""

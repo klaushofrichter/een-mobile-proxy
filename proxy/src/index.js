@@ -260,7 +260,8 @@ async function handleGetAccessToken(url, request, env) {
         const host = tokens.httpsBaseUrl.hostname || tokens.httpsBaseUrl.host
         const port = tokens.httpsBaseUrl.port
         // Validate host before constructing URL
-        if (host && typeof host === 'string') {
+        // Allow alphanumeric, hyphens, and dots (standard hostname)
+        if (host && typeof host === 'string' && /^[a-zA-Z0-9.-]+$/.test(host)) {
           baseUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
         }
       }
