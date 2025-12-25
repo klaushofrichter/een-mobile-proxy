@@ -3,6 +3,7 @@
  *
  * This worker handles OAuth authentication with Eagle Eye Networks (EEN) services.
  * It keeps CLIENT_ID and CLIENT_SECRET secure on the server side.
+ * Pre-commit hook will remind to deploy when proxy changes are committed.
  *
  * Endpoints:
  *   POST /proxy/getAccessToken     - Exchange authorization code for tokens
