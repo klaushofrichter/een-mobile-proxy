@@ -9,64 +9,6 @@ See the [Eagleeye Networks Developer Portal](https://developer.eagleeyenetworks.
 This repository is provided as is without any warranty, functionality guarantee or assurance of availability. 
 This repository uses EENs services, but it is not associated to EEN. 
 
-<!-- Version badges - replace 'your-username' with your GitHub username to enable -->
-<!-- ![Proxy Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fproxy%2Fpackage.json&query=version&label=proxy-develop&color=%2333ca55) -->
-<!-- ![Proxy Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fproxy%2Fpackage.json&query=version&label=proxy-production&color=%2333ca55) -->
-<!-- ![Admin Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fadmin%2Fpackage.json&query=version&label=admin-develop&color=%2333ca55) -->
-<!-- ![Admin Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fadmin%2Fpackage.json&query=version&label=admin-production&color=%2333ca55) -->
-<!-- ![Demo1 Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fdemo1%2Fpackage.json&query=version&label=demo1-develop&color=%2333ca55) -->
-<!-- ![Demo1 Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fdemo1%2Fpackage.json&query=version&label=demo1-production&color=%2333ca55) -->
-
-
-## Features
-
-### Proxy Features
-
-The OAuth proxy provides secure token management for Eagle Eye Networks authentication:
-
-- **OAuth Token Exchange** - Securely exchanges authorization codes for access tokens, keeping CLIENT_SECRET server-side
-- **Token Refresh** - Automatic refresh token management with server-side storage in Cloudflare KV
-- **Token Revocation** - Clean logout with EEN token revocation and session cleanup
-- **Session Management** - Server-side sessions with configurable TTL and automatic expiration
-- **Health Monitoring** - Public health endpoint for uptime monitoring (supports HEAD requests)
-- **Multi-Region Support** - Automatically handles EEN regional API endpoints (httpsBaseUrl)
-
-### Security Features
-
-The proxy implements multiple layers of security:
-
-- **Rate Limiting** - Configurable per-endpoint rate limits to prevent abuse:
-  - `/health`: 60 requests/minute (default)
-  - `/proxy/*`: 30 requests/minute (default)
-  - `/admin/*`: 60 requests/minute (default)
-  - Unknown clients (no IP identification): 5 requests/minute
-  - Configurable via environment variables (`RATE_LIMIT_*`)
-- **CORS Protection** - Strict origin validation with configurable allowlist
-- **CSRF Protection** - Origin header required for state-changing requests (POST/DELETE)
-- **Secure Cookies** - HttpOnly, Secure, SameSite=None session cookies
-- **Header-Based Auth** - Supports `Authorization: Bearer <sessionId>` for mobile/cross-site compatibility (ITP bypass). *Note: This requires storing the session ID in client storage (localStorage), which has different security trade-offs compared to HttpOnly cookies.*
-- **Input Validation** - Length limits and format validation on all inputs
-- **Session ID Security** - Cryptographically random UUIDs with format validation
-- **No Secret Exposure** - CLIENT_SECRET and refresh tokens never sent to frontend
-- **Security Headers** - X-Content-Type-Options, X-Frame-Options, CSP, HSTS (production)
-- **Admin Access Control** - Email-based allowlist for administrative functions
-- **Open Redirect Prevention** - Redirect URI validation against allowed origins
-- **Timing Attack Prevention** - Constant-time comparison for sensitive operations
-
-### Admin App Features
-
-The admin application provides monitoring and management capabilities:
-
-- **Dashboard Overview** - Real-time proxy health status and version information
-- **Session Monitoring** - View count of active user sessions
-- **Rate Limit Statistics** - Monitor rate limiting activity across endpoints
-- **Session Management** - Remove other users' sessions while preserving your own
-- **Emergency Revocation** - Revoke all tokens system-wide (logs out all users)
-- **Activity Log** - Real-time log of admin actions with timestamps
-- **Dark Mode** - Toggle between light and dark themes (persisted)
-- **Resizable Panels** - Adjustable dashboard layout (persisted)
-- **Auto-Refresh** - Automatic health check updates with countdown timer
-- **Non-Admin Rejection** - Clear error messages for users not in admin list
 
 ## Project Structure
 
@@ -175,33 +117,51 @@ ENVIRONMENT=development
 
 For production deployment, also create `proxy/.env` with the same values (used by the deploy script to set Cloudflare secrets).
 
-**Demo App (`./demo1/.env`):**
+**Demo App (`./demo1`):**
 ```bash
 cd demo1
 cp .env.example .env
+cp .env.prod.example .env.prod  # Optional: for testing with Cloudflare proxy
 ```
 
 Edit `demo1/.env`:
 ```env
-VITE_PROXY_URL=http://localhost:8787
 VITE_EEN_CLIENT_ID=your-een-client-id
-VITE_EEN_AUTH_URL=https://auth.eagleeyenetworks.com/oauth2/authorize
-VITE_REDIRECT_URI=http://127.0.0.1:3333
+TEST_USER=your-test-email@example.com
+TEST_PASSWORD=your-test-password
 ```
 
-**Admin App (`./admin/.env`):**
+Edit `demo1/.env.prod` (optional, for `npm run dev:prod`):
+```env
+VITE_PROXY_URL=https://your-proxy.your-subdomain.workers.dev
+```
+
+**Admin App (`./admin`):**
 ```bash
 cd admin
 cp .env.example .env
+cp .env.prod.example .env.prod  # Optional: for testing with Cloudflare proxy
 ```
 
 Edit `admin/.env`:
 ```env
-VITE_PROXY_URL=http://localhost:8787
 VITE_EEN_CLIENT_ID=your-een-client-id
-VITE_EEN_AUTH_URL=https://auth.eagleeyenetworks.com/oauth2/authorize
-VITE_REDIRECT_URI=http://127.0.0.1:3333
+ADMIN_TEST_USER=your-admin-email@example.com
+ADMIN_TEST_PASSWORD=your-admin-password
 ```
+
+Edit `admin/.env.prod` (optional, for `npm run dev:prod`):
+```env
+VITE_PROXY_URL=https://your-proxy.your-subdomain.workers.dev
+```
+
+**Mode-Based Environment Loading:**
+
+Both demo1 and admin apps support mode-based environment loading:
+- `npm run dev` - Uses local proxy (localhost:8787), loads `.env`
+- `npm run dev:prod` - Uses Cloudflare proxy, loads `.env` AND `.env.prod`
+
+The `.env.prod` file should contain `VITE_PROXY_URL` pointing to your deployed Cloudflare Worker.
 
 ### Step 3: Create Cloudflare KV Namespace
 
@@ -261,33 +221,6 @@ To switch between apps locally:
 cd demo1 && npm run stop   # Stop current app on port 3333
 cd admin && npm run dev    # Start the other app
 ```
-
-### Running Against Production Proxy
-
-You can run the demo or admin app locally while connecting to your production Cloudflare proxy. This is useful for testing production configurations without deploying the frontend.
-
-**Prerequisites:**
-1. Your production proxy must have `http://127.0.0.1:3333` in `ALLOWED_ORIGINS`
-2. Unix-like environment (macOS, Linux, or WSL/Git Bash on Windows)
-3. Export `VITE_PROD_PROXY_URL` in your shell
-
-**Setup and run:**
-```bash
-# Export the production proxy URL (add to your ~/.bashrc or ~/.zshrc for persistence)
-export VITE_PROD_PROXY_URL=https://your-proxy.your-subdomain.workers.dev
-
-# Demo app against production proxy
-cd demo1
-npm run dev:prod
-
-# Admin app against production proxy
-cd admin
-npm run dev:prod
-```
-
-> **Note:** The `dev:prod` script uses shell variable expansion (`$VITE_PROD_PROXY_URL`), which requires the variable to be exported in your shell environment. Simply adding it to `.env` is not sufficient - you must use `export` or source it from a shell profile.
-
-> **Security Note:** Adding `http://127.0.0.1:3333` to production `ALLOWED_ORIGINS` is safe because `127.0.0.1` only resolves to the local machine and browsers cannot spoof the `Origin` header.
 
 ### Step 5: Run Tests
 
@@ -351,9 +284,11 @@ npx playwright test --debug # Run in debug mode
 
 The admin tests require environment variables in `admin/.env`:
 ```env
-TEST_USER=your-test-email@example.com
-TEST_PASSWORD=your-test-password
-VITE_PROXY_URL=http://localhost:8787
+VITE_EEN_CLIENT_ID=your-een-client-id
+ADMIN_TEST_USER=your-admin-email@example.com
+ADMIN_TEST_PASSWORD=your-admin-password
+TEST_USER=your-non-admin-email@example.com  # Optional: for rejection tests
+TEST_PASSWORD=your-non-admin-password
 ```
 
 **Important:** Destructive tests (remove sessions, revoke all) only run against local proxy (`localhost` or `127.0.0.1`) to protect production data.
@@ -379,9 +314,9 @@ npm run test:ui             # Run with Playwright UI
 
 The demo tests require environment variables in `demo1/.env`:
 ```env
+VITE_EEN_CLIENT_ID=your-een-client-id
 TEST_USER=your-test-email@example.com
 TEST_PASSWORD=your-test-password
-VITE_PROXY_URL=http://localhost:8787
 ```
 
 ### Running All Tests
@@ -686,14 +621,14 @@ Values outside the min/max range are automatically clamped. Adjust this value ba
 
 | Method | Endpoint | Auth Required | Description |
 |--------|----------|---------------|-------------|
-| POST | `/proxy/getAccessToken` | No (uses OAuth code) | Exchange authorization code for access token. Returns access token and `sessionId` (in body), stores refresh token server-side. |
-| POST | `/proxy/refreshAccessToken` | Session cookie OR Header | Refresh access token using stored refresh token. |
-| POST | `/proxy/revoke` | Session cookie OR Header | Revoke tokens at EEN and clear server-side session. |
+| POST | `/proxy/getAccessToken` | No (uses OAuth code) | Exchange authorization code for access token. Returns access token, stores refresh token server-side. |
+| POST | `/proxy/refreshAccessToken` | Session cookie | Refresh access token using stored refresh token. |
+| POST | `/proxy/revoke` | Session cookie | Revoke tokens at EEN and clear server-side session. |
 
 ### Admin Endpoints (Admin User Required)
 
 These endpoints require:
-1. A valid session (`sessionId`) provided via `Cookie` OR `Authorization: Bearer <sessionId>` header
+1. A valid session cookie (`sessionId`)
 2. The session's `userEmail` must be in the `ADMIN_EMAILS` environment variable
 
 | Method | Endpoint | Description |
@@ -718,7 +653,6 @@ For example, if you modify files in `proxy/`, the `proxy/package.json` version w
 - **CLIENT_SECRET** is never exposed to the frontend
 - **Refresh tokens** are stored server-side only in Cloudflare KV
 - **Session cookies** are HttpOnly, Secure, and SameSite=None
-- **Header-Based Auth** is supported for mobile clients where third-party cookies are blocked (ITP). This mechanism uses `localStorage` on the client, which is accessible to JavaScript. While necessary for functionality in some environments, it relies on XSS protection (CSP, input sanitization) rather than the HttpOnly flag for security.
 - **CORS validation** on all proxy requests
 - **Admin endpoints** require email verification against allowlist
 - **Automatic token expiration** via KV TTL
