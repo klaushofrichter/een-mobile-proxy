@@ -260,7 +260,14 @@ async function handleGetAccessToken(url, request, env) {
         const host = tokens.httpsBaseUrl.hostname || tokens.httpsBaseUrl.host
         const port = tokens.httpsBaseUrl.port
         // Validate host before constructing URL
-        if (host && typeof host === 'string') {
+        // DNS hostnames have a max length of 253 characters
+        // Regex allows 1-char labels and prevents consecutive dots/leading/trailing hyphens
+        if (
+          host &&
+          typeof host === 'string' &&
+          host.length <= 253 &&
+          /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$/.test(host)
+        ) {
           baseUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
         }
       }
@@ -325,7 +332,7 @@ async function handleGetAccessToken(url, request, env) {
  * POST /proxy/refreshAccessToken
  */
 async function handleRefreshAccessToken(request, env) {
-  const sessionId = getSessionIdFromCookie(request, env)
+  const sessionId = getSessionId(request, env)
   if (!sessionId) {
     return jsonResponse({ error: 'No session found' }, 401)
   }
@@ -384,7 +391,7 @@ async function handleRefreshAccessToken(request, env) {
  * POST /proxy/revoke
  */
 async function handleRevoke(request, env) {
-  const sessionId = getSessionIdFromCookie(request, env)
+  const sessionId = getSessionId(request, env)
   if (!sessionId) {
     return jsonResponse({ error: 'No session found' }, 401)
   }
@@ -462,7 +469,7 @@ async function handleHealth(env) {
  */
 async function handleAdminVersion(request, env) {
   // Require authenticated session
-  const sessionId = getSessionIdFromCookie(request, env)
+  const sessionId = getSessionId(request, env)
   if (!sessionId) {
     return jsonResponse({ error: 'Authentication required' }, 401)
   }
@@ -518,7 +525,7 @@ async function handleAdminRemoveSessions(request, env) {
     return jsonResponse({ error: adminCheck.error }, adminCheck.status)
   }
 
-  const currentSessionId = getSessionIdFromCookie(request, env)
+  const currentSessionId = getSessionId(request, env)
   const listResult = await env.EEN_OAUTH_SESSIONS.list()
 
   let deletedCount = 0
@@ -554,7 +561,7 @@ async function handleAdminRevokeAll(request, env) {
     return jsonResponse({ error: adminCheck.error }, adminCheck.status)
   }
 
-  const currentSessionId = getSessionIdFromCookie(request, env)
+  const currentSessionId = getSessionId(request, env)
   const listResult = await env.EEN_OAUTH_SESSIONS.list()
 
   let revokedCount = 0
@@ -689,7 +696,7 @@ function getClientIdentifier(request, env) {
   }
 
   // Fall back to session ID if available
-  const sessionId = getSessionIdFromCookie(request, env)
+  const sessionId = getSessionId(request, env)
   if (sessionId) {
     return { identifier: `session|${sessionId}`, isUnknown: false }
   }
@@ -1038,7 +1045,7 @@ function getCorsHeaders(origin, env = null) {
 // Minimum 20 characters to prevent brute force attacks (UUIDs are 36 chars)
 const SESSION_ID_REGEX = /^[a-zA-Z0-9_-]{20,50}$/
 
-function getSessionIdFromCookie(request, env) {
+function getSessionId(request, env) {
   // Check Authorization header first (Bearer token)
   const authHeader = request.headers.get('Authorization')
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -1098,7 +1105,7 @@ function isAdminUser(userEmail, env) {
  * If userEmail is missing, attempts to fetch it from EEN API
  */
 async function checkAdminAccess(request, env) {
-  const sessionId = getSessionIdFromCookie(request, env)
+  const sessionId = getSessionId(request, env)
   if (!sessionId) {
     return { error: 'Authentication required', status: 401 }
   }

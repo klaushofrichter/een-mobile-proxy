@@ -7,6 +7,7 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref(null)
   const tokenExpiration = ref(null)
   const refreshTokenMarker = ref(null)
+  const sessionId = ref(null) // Added for mobile/cross-site support
   const hostname = ref(null)
   const port = ref(null)
   const userProfile = ref(null)
@@ -25,44 +26,80 @@ export const useAuthStore = defineStore('auth', () => {
     const portPart = port.value && port.value !== 443 ? `:${port.value}` : ''
     return `https://${hostname.value}${portPart}`
   })
+  function safeSetItem(key, value) {
+    try {
+      window.localStorage.setItem(key, value)
+    } catch (e) {
+      console.warn(`[Storage] Failed to set ${key} in localStorage:`, e.message)
+    }
+  }
+
+  function safeRemoveItem(key) {
+    try {
+      window.localStorage.removeItem(key)
+    } catch (e) {
+      console.warn(`[Storage] Failed to remove ${key} from localStorage:`, e.message)
+    }
+  }
 
   // Actions
   function initialize() {
-    // Restore from localStorage
-    const storedToken = localStorage.getItem('auth_token')
-    const storedExpiration = localStorage.getItem('token_expiration')
-    const storedRefresh = localStorage.getItem('refresh_token')
-    const storedHostname = localStorage.getItem('hostname')
-    const storedPort = localStorage.getItem('port')
-    const storedProfile = localStorage.getItem('user_profile')
+    try {
+      // Restore from localStorage
+      const storedToken = localStorage.getItem('auth_token')
+      const storedExpiration = localStorage.getItem('token_expiration')
+      const storedRefresh = localStorage.getItem('refresh_token')
+      const storedSessionId = localStorage.getItem('session_id')
+      const storedHostname = localStorage.getItem('hostname')
+      const storedPort = localStorage.getItem('port')
+      const storedProfile = localStorage.getItem('user_profile')
 
-    if (storedToken) {
-      token.value = storedToken
-    }
-    if (storedExpiration) {
-      tokenExpiration.value = parseInt(storedExpiration, 10)
-    }
-    if (storedRefresh) {
-      refreshTokenMarker.value = storedRefresh
-    }
-    if (storedHostname) {
-      hostname.value = storedHostname
-    }
-    if (storedPort) {
-      port.value = parseInt(storedPort, 10)
-    }
-    if (storedProfile) {
-      try {
-        userProfile.value = JSON.parse(storedProfile)
-      } catch (e) {
-        console.error('Failed to parse stored user profile:', e)
+      if (storedToken) {
+        token.value = storedToken
       }
-    }
+      if (storedExpiration) {
+        tokenExpiration.value = parseInt(storedExpiration, 10)
+      }
+      if (storedRefresh) {
+        refreshTokenMarker.value = storedRefresh
+      }
+      if (storedSessionId) {
+        sessionId.value = storedSessionId
+      }
+      if (storedHostname) {
+        hostname.value = storedHostname
+      }
+      if (storedPort) {
+        port.value = parseInt(storedPort, 10)
+      }
+      if (storedProfile) {
+        try {
+          userProfile.value = JSON.parse(storedProfile)
+        } catch (e) {
+          console.error('Failed to parse stored user profile:', e)
+        }
+      }
 
-    // Set up auto-refresh if we have a refresh token
-    // setupAutoRefresh() handles all edge cases including expired tokens and minimum time buffers
-    if (refreshTokenMarker.value && tokenExpiration.value) {
-      setupAutoRefresh()
+      // Set up auto-refresh if we have a refresh token
+      // setupAutoRefresh() handles all edge cases including expired tokens and minimum time buffers
+      if (refreshTokenMarker.value && tokenExpiration.value) {
+        setupAutoRefresh()
+      }
+    } catch (e) {
+      console.error('[Auth] Failed to initialize from localStorage:', e)
+    }
+  }
+
+  function setSessionId(newId) {
+    sessionId.value = newId
+    if (newId) {
+      // SECURITY WARNING: Storing session ID in localStorage makes it accessible to JavaScript.
+      // This is necessary for mobile/cross-site support where cookies are blocked (ITP),
+      // but it increases XSS risk compared to HttpOnly cookies.
+      // Ensure strict CSP and other security measures are in place.
+      safeSetItem('session_id', newId)
+    } else {
+      safeRemoveItem('session_id')
     }
   }
 
@@ -70,17 +107,17 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = newToken
 
     if (newToken) {
-      localStorage.setItem('auth_token', newToken)
+      safeSetItem('auth_token', newToken)
 
       if (expiresIn) {
         const expiration = Date.now() + expiresIn * 1000
         tokenExpiration.value = expiration
-        localStorage.setItem('token_expiration', expiration.toString())
+        safeSetItem('token_expiration', expiration.toString())
         setupAutoRefresh()
       }
     } else {
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('token_expiration')
+      safeRemoveItem('auth_token')
+      safeRemoveItem('token_expiration')
       tokenExpiration.value = null
       clearAutoRefresh()
     }
@@ -89,9 +126,9 @@ export const useAuthStore = defineStore('auth', () => {
   function setRefreshToken(marker) {
     refreshTokenMarker.value = marker
     if (marker) {
-      localStorage.setItem('refresh_token', marker)
+      safeSetItem('refresh_token', marker)
     } else {
-      localStorage.removeItem('refresh_token')
+      safeRemoveItem('refresh_token')
     }
   }
 
@@ -100,22 +137,22 @@ export const useAuthStore = defineStore('auth', () => {
       hostname.value = data.hostname || data
       port.value = data.port || 443
 
-      localStorage.setItem('hostname', hostname.value)
-      localStorage.setItem('port', port.value.toString())
+      safeSetItem('hostname', hostname.value)
+      safeSetItem('port', port.value.toString())
     } else {
       hostname.value = null
       port.value = null
-      localStorage.removeItem('hostname')
-      localStorage.removeItem('port')
+      safeRemoveItem('hostname')
+      safeRemoveItem('port')
     }
   }
 
   function setUserProfile(profile) {
     userProfile.value = profile
     if (profile) {
-      localStorage.setItem('user_profile', JSON.stringify(profile))
+      safeSetItem('user_profile', JSON.stringify(profile))
     } else {
-      localStorage.removeItem('user_profile')
+      safeRemoveItem('user_profile')
     }
   }
 
@@ -185,6 +222,7 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = null
     tokenExpiration.value = null
     refreshTokenMarker.value = null
+    sessionId.value = null
     hostname.value = null
     port.value = null
     userProfile.value = null
@@ -192,13 +230,14 @@ export const useAuthStore = defineStore('auth', () => {
     refreshFailedMessage.value = ''
 
     // Clear localStorage
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('token_expiration')
-    localStorage.removeItem('refresh_token')
-    localStorage.removeItem('hostname')
-    localStorage.removeItem('port')
-    localStorage.removeItem('user_profile')
-    localStorage.removeItem('redirectAfterLogin')
+    safeRemoveItem('auth_token')
+    safeRemoveItem('token_expiration')
+    safeRemoveItem('refresh_token')
+    safeRemoveItem('session_id')
+    safeRemoveItem('hostname')
+    safeRemoveItem('port')
+    safeRemoveItem('user_profile')
+    safeRemoveItem('redirectAfterLogin')
 
     clearAutoRefresh()
   }
@@ -226,6 +265,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     tokenExpiration,
     refreshTokenMarker,
+    sessionId,
     hostname,
     port,
     userProfile,
@@ -238,6 +278,7 @@ export const useAuthStore = defineStore('auth', () => {
     initialize,
     setToken,
     setRefreshToken,
+    setSessionId,
     setBaseUrl,
     setUserProfile,
     getTokenTimeRemaining,

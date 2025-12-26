@@ -12,6 +12,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'html',
   timeout: 60000,
+  maxFailures: 1,
 
   use: {
     baseURL: 'http://127.0.0.1:3333',

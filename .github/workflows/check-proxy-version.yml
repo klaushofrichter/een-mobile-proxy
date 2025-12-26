@@ -1,0 +1,85 @@
+name: Check Proxy Deployment Status
+
+on:
+  pull_request:
+    branches:
+      - production
+    paths:
+      - 'proxy/**'
+
+jobs:
+  check-version:
+    name: Check Proxy Version
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get PR Proxy Version
+        id: pr_version
+        working-directory: proxy
+        run: |
+          VERSION=$(jq -r .version package.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Local (PR) version: $VERSION"
+
+      - name: Get Deployed Proxy Version
+        id: deployed_version
+        env:
+          # Use the repository variable if set, otherwise fallback to the known production URL
+          PROXY_URL: ${{ vars.VITE_PROXY_URL || 'https://een-oauth-proxy.klaushofrichter.workers.dev' }}
+        run: |
+          echo "Checking deployed version at $PROXY_URL/health..."
+          
+          # Fetch health endpoint with timeout
+          # Use -s (silent) but show errors
+          RESPONSE_FILE="response-${{ github.run_id }}.json"
+          HTTP_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" --max-time 10 "$PROXY_URL/health")
+          
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::warning title=Proxy Unreachable::Could not fetch deployed version from $PROXY_URL/health (HTTP $HTTP_CODE). Assuming deployment needed."
+            echo "deployed_version=unknown" >> $GITHUB_OUTPUT
+            rm -f "$RESPONSE_FILE"
+            exit 0
+          fi
+          
+          FULL_VERSION=$(jq -r .version "$RESPONSE_FILE")
+          rm -f "$RESPONSE_FILE"
+          echo "Full deployed version string: $FULL_VERSION"
+
+          if [ "$FULL_VERSION" == "null" ] || [ -z "$FULL_VERSION" ]; then
+             echo "::warning::Version field missing in health response."
+             echo "deployed_version=unknown" >> $GITHUB_OUTPUT
+             exit 0
+          fi
+          
+          # Parse out the semantic version (the middle part between " - ")
+          # If parsing fails, default to the full string or "unknown"
+          REGEX='-[[:space:]]([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]-'
+          if [[ "$FULL_VERSION" =~ $REGEX ]]; then
+            DEPLOYED_VERSION="${BASH_REMATCH[1]}"
+          else
+            # Try to grab just the version if the format is different or simple
+            DEPLOYED_VERSION=$(echo "$FULL_VERSION" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          fi
+          
+          if [ -z "$DEPLOYED_VERSION" ]; then
+             DEPLOYED_VERSION="unknown"
+          fi
+          
+          echo "deployed_version=$DEPLOYED_VERSION" >> $GITHUB_OUTPUT
+          echo "Parsed deployed version: $DEPLOYED_VERSION"
+
+      - name: Compare and Warn
+        run: |
+          PR_VER="${{ steps.pr_version.outputs.version }}"
+          DEP_VER="${{ steps.deployed_version.outputs.deployed_version }}"
+          
+          echo "Comparing PR version ($PR_VER) with Deployed version ($DEP_VER)"
+          
+          if [ "$PR_VER" != "$DEP_VER" ]; then
+            echo "::warning title=Manual Proxy Deployment Needed::Proxy version mismatch! Deployed: v$DEP_VER, PR: v$PR_VER. Because Cloudflare secrets are not in GitHub, you must manually run 'npm run deploy:proxy' locally after merging."
+          else
+            echo "Versions match. No deployment required."
+          fi
