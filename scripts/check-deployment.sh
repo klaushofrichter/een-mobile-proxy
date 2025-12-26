@@ -21,6 +21,10 @@ echo "  Proxy Deployment Check"
 echo "========================================"
 
 # Get the local version
+if [ ! -f "proxy/package.json" ]; then
+    echo "Error: proxy/package.json not found."
+    exit 1
+fi
 local_version=$(node -p "require('./proxy/package.json').version" 2>/dev/null)
 
 # Try to get deployed version from health endpoint
