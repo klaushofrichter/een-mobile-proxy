@@ -1,7 +1,7 @@
 {
   "name": "een-oauth-demo1",
   "displayName": "EEN OAuth Demo1",
-  "version": "0.0.30",
+  "version": "0.0.31",
   "private": true,
   "type": "module",
   "scripts": {
@@ -24,6 +24,7 @@
     "@tailwindcss/vite": "^4.1.18",
     "@vitejs/plugin-vue": "^6.0.3",
     "dotenv": "^17.2.3",
+    "husky": "^9.1.7",
     "tailwindcss": "^4.1.18",
     "vite": "^7.3.0"
   }
