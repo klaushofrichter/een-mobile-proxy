@@ -27,9 +27,13 @@ jobs:
       - name: Get Deployed Proxy Version
         id: deployed_version
         env:
-          # Use the repository variable if set, otherwise fallback to the known production URL
-          PROXY_URL: ${{ vars.VITE_PROXY_URL || 'https://een-oauth-proxy.klaushofrichter.workers.dev' }}
+          # VITE_PROXY_URL must be set as a repository variable
+          PROXY_URL: ${{ vars.VITE_PROXY_URL }}
         run: |
+          if [ -z "$PROXY_URL" ]; then
+            echo "::error::VITE_PROXY_URL repository variable is not set. Please configure it in Settings > Secrets and variables > Actions > Variables."
+            exit 1
+          fi
           echo "Checking deployed version at $PROXY_URL/health..."
           
           # Fetch health endpoint with timeout

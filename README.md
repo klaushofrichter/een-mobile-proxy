@@ -167,6 +167,14 @@ ENVIRONMENT=development
 
 For production deployment, also create `proxy/.env` with the same values (used by the deploy script to set Cloudflare secrets).
 
+**Mode-Based Environment Loading:**
+
+Both demo1 and admin apps support mode-based environment loading:
+- `npm run dev` - Uses local proxy (localhost:8787), loads `.env`
+- `npm run dev:prod` - Uses Cloudflare proxy, loads `.env` AND `.env.prod`
+
+The `.env.prod` file should contain `VITE_PROXY_URL` pointing to your deployed Cloudflare Worker.
+
 **Demo App (`./demo1`):**
 ```bash
 cd demo1
@@ -204,14 +212,6 @@ Edit `admin/.env.prod` (optional, for `npm run dev:prod`):
 ```env
 VITE_PROXY_URL=https://your-proxy.your-subdomain.workers.dev
 ```
-
-**Mode-Based Environment Loading:**
-
-Both demo1 and admin apps support mode-based environment loading:
-- `npm run dev` - Uses local proxy (localhost:8787), loads `.env`
-- `npm run dev:prod` - Uses Cloudflare proxy, loads `.env` AND `.env.prod`
-
-The `.env.prod` file should contain `VITE_PROXY_URL` pointing to your deployed Cloudflare Worker.
 
 ### Step 3: Create Cloudflare KV Namespace
 

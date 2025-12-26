@@ -19,8 +19,13 @@ export function cspPlugin() {
   return {
     name: 'csp-plugin',
     configResolved(config) {
-      // Defensive validation for config.mode
-      const mode = config?.mode || 'development'
+      // Defensive validation for config.mode - must be a string
+      let mode = 'development'
+      if (config?.mode && typeof config.mode === 'string') {
+        mode = config.mode
+      } else if (config?.mode) {
+        console.warn(`CSP plugin: config.mode is not a string (${typeof config.mode}), using default 'development'`)
+      }
       try {
         // Load environment variables based on Vite's mode
         const env = loadEnv(mode, process.cwd(), 'VITE_')
