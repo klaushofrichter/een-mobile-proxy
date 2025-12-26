@@ -25,6 +25,8 @@ export const useAuthStore = defineStore('auth', () => {
     if (!hostname.value) return null
     const portPart = port.value && port.value !== 443 ? `:${port.value}` : ''
     return `https://${hostname.value}${portPart}`
+  })
+
   // Helpers for safe localStorage access
   function safeSetItem(key, value) {
     try {
