@@ -14,15 +14,29 @@ import { loadEnv } from 'vite'
  */
 export function cspPlugin() {
   let proxyUrl = 'http://localhost:8787'
+  let configInitialized = false
   
   return {
     name: 'csp-plugin',
     configResolved(config) {
-      // Load environment variables based on Vite's mode
-      const env = loadEnv(config.mode, process.cwd(), 'VITE_')
-      proxyUrl = env.VITE_PROXY_URL || 'http://localhost:8787'
+      // Defensive validation for config.mode
+      const mode = config?.mode || 'development'
+      try {
+        // Load environment variables based on Vite's mode
+        const env = loadEnv(mode, process.cwd(), 'VITE_')
+        proxyUrl = env.VITE_PROXY_URL || 'http://localhost:8787'
+        configInitialized = true
+      } catch (error) {
+        console.warn(`CSP plugin: Failed to load environment variables for mode "${mode}":`, error.message)
+        // Keep default proxyUrl
+        configInitialized = true
+      }
     },
     transformIndexHtml(html) {
+      // Lifecycle check: warn if configResolved wasn't called
+      if (!configInitialized) {
+        console.warn('CSP plugin: transformIndexHtml called before configResolved, using default proxy URL')
+      }
       
       // Build connect-src directive - always include localhost for dev compatibility
       // Users can select between localhost and VITE_PROXY_URL at runtime,

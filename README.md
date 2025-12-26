@@ -10,6 +10,56 @@ This repository is provided as is without any warranty, functionality guarantee 
 This repository uses EENs services, but it is not associated to EEN. 
 
 
+## Features
+
+### Proxy Features
+
+The OAuth proxy provides secure token management for Eagle Eye Networks authentication:
+
+- **OAuth Token Exchange** - Securely exchanges authorization codes for access tokens, keeping CLIENT_SECRET server-side
+- **Token Refresh** - Automatic refresh token management with server-side storage in Cloudflare KV
+- **Token Revocation** - Clean logout with EEN token revocation and session cleanup
+- **Session Management** - Server-side sessions with configurable TTL and automatic expiration
+- **Health Monitoring** - Public health endpoint for uptime monitoring (supports HEAD requests)
+- **Multi-Region Support** - Automatically handles EEN regional API endpoints (httpsBaseUrl)
+
+### Security Features
+
+The proxy implements multiple layers of security:
+
+- **Rate Limiting** - Configurable per-endpoint rate limits to prevent abuse:
+  - `/health`: 60 requests/minute (default)
+  - `/proxy/*`: 30 requests/minute (default)
+  - `/admin/*`: 60 requests/minute (default)
+  - Unknown clients (no IP identification): 5 requests/minute
+  - Configurable via environment variables (`RATE_LIMIT_*`)
+- **CORS Protection** - Strict origin validation with configurable allowlist
+- **CSRF Protection** - Origin header required for state-changing requests (POST/DELETE)
+- **Secure Cookies** - HttpOnly, Secure, SameSite=None session cookies
+- **Header-Based Auth** - Supports `Authorization: Bearer <sessionId>` for mobile/cross-site compatibility (ITP bypass). *Note: This requires storing the session ID in client storage (localStorage), which has different security trade-offs compared to HttpOnly cookies.*
+- **Input Validation** - Length limits and format validation on all inputs
+- **Session ID Security** - Cryptographically random UUIDs with format validation
+- **No Secret Exposure** - CLIENT_SECRET and refresh tokens never sent to frontend
+- **Security Headers** - X-Content-Type-Options, X-Frame-Options, CSP, HSTS (production)
+- **Admin Access Control** - Email-based allowlist for administrative functions
+- **Open Redirect Prevention** - Redirect URI validation against allowed origins
+- **Timing Attack Prevention** - Constant-time comparison for sensitive operations
+
+### Admin App Features
+
+The admin application provides monitoring and management capabilities:
+
+- **Dashboard Overview** - Real-time proxy health status and version information
+- **Session Monitoring** - View count of active user sessions
+- **Rate Limit Statistics** - Monitor rate limiting activity across endpoints
+- **Session Management** - Remove other users' sessions while preserving your own
+- **Emergency Revocation** - Revoke all tokens system-wide (logs out all users)
+- **Activity Log** - Real-time log of admin actions with timestamps
+- **Dark Mode** - Toggle between light and dark themes (persisted)
+- **Resizable Panels** - Adjustable dashboard layout (persisted)
+- **Auto-Refresh** - Automatic health check updates with countdown timer
+- **Non-Admin Rejection** - Clear error messages for users not in admin list
+
 ## Project Structure
 
 ```
@@ -621,14 +671,14 @@ Values outside the min/max range are automatically clamped. Adjust this value ba
 
 | Method | Endpoint | Auth Required | Description |
 |--------|----------|---------------|-------------|
-| POST | `/proxy/getAccessToken` | No (uses OAuth code) | Exchange authorization code for access token. Returns access token, stores refresh token server-side. |
-| POST | `/proxy/refreshAccessToken` | Session cookie | Refresh access token using stored refresh token. |
-| POST | `/proxy/revoke` | Session cookie | Revoke tokens at EEN and clear server-side session. |
+| POST | `/proxy/getAccessToken` | No (uses OAuth code) | Exchange authorization code for access token. Returns access token and `sessionId` (in body), stores refresh token server-side. |
+| POST | `/proxy/refreshAccessToken` | Session cookie OR Header | Refresh access token using stored refresh token. |
+| POST | `/proxy/revoke` | Session cookie OR Header | Revoke tokens at EEN and clear server-side session. |
 
 ### Admin Endpoints (Admin User Required)
 
 These endpoints require:
-1. A valid session cookie (`sessionId`)
+1. A valid session (`sessionId`) provided via `Cookie` OR `Authorization: Bearer <sessionId>` header
 2. The session's `userEmail` must be in the `ADMIN_EMAILS` environment variable
 
 | Method | Endpoint | Description |
@@ -653,6 +703,7 @@ For example, if you modify files in `proxy/`, the `proxy/package.json` version w
 - **CLIENT_SECRET** is never exposed to the frontend
 - **Refresh tokens** are stored server-side only in Cloudflare KV
 - **Session cookies** are HttpOnly, Secure, and SameSite=None
+- **Header-Based Auth** is supported for mobile clients where third-party cookies are blocked (ITP). This mechanism uses `localStorage` on the client, which is accessible to JavaScript. While necessary for functionality in some environments, it relies on XSS protection (CSP, input sanitization) rather than the HttpOnly flag for security.
 - **CORS validation** on all proxy requests
 - **Admin endpoints** require email verification against allowlist
 - **Automatic token expiration** via KV TTL
