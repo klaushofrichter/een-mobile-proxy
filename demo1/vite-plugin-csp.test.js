@@ -4,27 +4,41 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { cspPlugin } from './vite-plugin-csp.js'
+
+// Mock vite's loadEnv before importing the plugin
+let mockProxyUrl = 'http://localhost:8787'
+vi.mock('vite', () => ({
+  loadEnv: () => ({
+    VITE_PROXY_URL: mockProxyUrl
+  })
+}))
+
+// Import plugin after mock is set up
+const { cspPlugin } = await import('./vite-plugin-csp.js')
 
 describe('CSP Plugin URL Matching', () => {
-  let originalEnv
-
   beforeEach(() => {
-    // Save original env
-    originalEnv = { ...process.env }
-    // Clear VITE_PROXY_URL for each test
-    delete process.env.VITE_PROXY_URL
+    // Reset to default
+    mockProxyUrl = 'http://localhost:8787'
   })
 
   afterEach(() => {
-    // Restore original env
-    process.env = originalEnv
+    vi.clearAllMocks()
   })
+
+  // Helper to create and initialize plugin
+  function createPlugin(proxyUrl = 'http://localhost:8787') {
+    mockProxyUrl = proxyUrl
+    const plugin = cspPlugin()
+    // Simulate Vite calling configResolved
+    plugin.configResolved({ mode: 'development' })
+    return plugin
+  }
 
   describe('Localhost Detection', () => {
     it('should detect localhost correctly', () => {
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\' http://localhost:8787;" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin('http://localhost:8787')
       const result = plugin.transformIndexHtml(html)
       
       // Should not add localhost again if already present
@@ -33,9 +47,8 @@ describe('CSP Plugin URL Matching', () => {
     })
 
     it('should detect 127.0.0.1 correctly', () => {
-      process.env.VITE_PROXY_URL = 'http://127.0.0.1:8787'
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\';" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin('http://127.0.0.1:8787')
       const result = plugin.transformIndexHtml(html)
       
       // Should not add 127.0.0.1 if it's already in the default list
@@ -47,9 +60,8 @@ describe('CSP Plugin URL Matching', () => {
     })
 
     it('should detect IPv6 localhost [::1]', () => {
-      process.env.VITE_PROXY_URL = 'http://[::1]:8787'
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\';" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin('http://[::1]:8787')
       const result = plugin.transformIndexHtml(html)
       
       // Should not add [::1] as it's a localhost variant
@@ -58,9 +70,8 @@ describe('CSP Plugin URL Matching', () => {
     })
 
     it('should detect 127.x.x.x subnets', () => {
-      process.env.VITE_PROXY_URL = 'http://127.1.2.3:8787'
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\';" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin('http://127.1.2.3:8787')
       const result = plugin.transformIndexHtml(html)
       
       // Should not add 127.x.x.x as it's a localhost variant
@@ -69,9 +80,8 @@ describe('CSP Plugin URL Matching', () => {
     })
 
     it('should detect .localhost TLD', () => {
-      process.env.VITE_PROXY_URL = 'http://myapp.localhost:8787'
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\';" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin('http://myapp.localhost:8787')
       const result = plugin.transformIndexHtml(html)
       
       // Should not add .localhost domains as they're localhost variants
@@ -82,9 +92,8 @@ describe('CSP Plugin URL Matching', () => {
 
   describe('False Positive Prevention', () => {
     it('should not match "my-localhost-server.com" as localhost', () => {
-      process.env.VITE_PROXY_URL = 'https://my-localhost-server.com'
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\';" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin('https://my-localhost-server.com')
       const result = plugin.transformIndexHtml(html)
       
       // Should add the URL since it's not actually localhost
@@ -93,9 +102,8 @@ describe('CSP Plugin URL Matching', () => {
     })
 
     it('should not match "127example.com" as localhost', () => {
-      process.env.VITE_PROXY_URL = 'https://127example.com'
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\';" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin('https://127example.com')
       const result = plugin.transformIndexHtml(html)
       
       // Should add the URL since it's not actually 127.x.x.x
@@ -104,9 +112,8 @@ describe('CSP Plugin URL Matching', () => {
     })
 
     it('should handle URLs with different ports correctly', () => {
-      process.env.VITE_PROXY_URL = 'http://localhost:9999'
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\';" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin('http://localhost:9999')
       const result = plugin.transformIndexHtml(html)
       
       // Should not add localhost:9999 as it's still localhost
@@ -115,9 +122,8 @@ describe('CSP Plugin URL Matching', () => {
     })
 
     it('should handle duplicate URLs correctly', () => {
-      process.env.VITE_PROXY_URL = 'https://example.com'
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\' https://example.com;" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin('https://example.com')
       const result = plugin.transformIndexHtml(html)
       
       // Should not duplicate the URL
@@ -127,9 +133,8 @@ describe('CSP Plugin URL Matching', () => {
     })
 
     it('should handle URLs with same hostname but different protocols', () => {
-      process.env.VITE_PROXY_URL = 'https://example.com'
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\' http://example.com;" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin('https://example.com')
       const result = plugin.transformIndexHtml(html)
       
       // Plugin replaces entire connect-src, so https://example.com should be added
@@ -144,7 +149,7 @@ describe('CSP Plugin URL Matching', () => {
   describe('Wildcard Validation', () => {
     it('should allow the specific EEN wildcard pattern', () => {
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\';" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin()
       const result = plugin.transformIndexHtml(html)
       
       // Should include the allowed wildcard
@@ -156,7 +161,7 @@ describe('CSP Plugin URL Matching', () => {
       // This test verifies the validation logic works
       // We can't easily test this without modifying the plugin, but the logic is covered
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\';" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin()
       
       // The default CSP includes the allowed wildcard, so this should pass
       expect(() => plugin.transformIndexHtml(html)).not.toThrow()
@@ -164,7 +169,7 @@ describe('CSP Plugin URL Matching', () => {
 
     it('should warn if allowed wildcard appears multiple times', () => {
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\';" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin()
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       
       // The default implementation shouldn't create duplicates, but test the warning logic
@@ -179,9 +184,8 @@ describe('CSP Plugin URL Matching', () => {
 
   describe('URL Parsing Edge Cases', () => {
     it('should handle invalid URLs gracefully', () => {
-      process.env.VITE_PROXY_URL = 'not-a-valid-url'
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\';" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin('not-a-valid-url')
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       
       const result = plugin.transformIndexHtml(html)
@@ -195,9 +199,8 @@ describe('CSP Plugin URL Matching', () => {
     })
 
     it('should handle empty VITE_PROXY_URL', () => {
-      process.env.VITE_PROXY_URL = ''
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\';" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin('')
       const result = plugin.transformIndexHtml(html)
       
       // Should use default localhost
@@ -206,9 +209,8 @@ describe('CSP Plugin URL Matching', () => {
     })
 
     it('should handle URLs with paths', () => {
-      process.env.VITE_PROXY_URL = 'https://example.com/api'
       const html = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; connect-src \'self\';" />'
-      const plugin = cspPlugin()
+      const plugin = createPlugin('https://example.com/api')
       const result = plugin.transformIndexHtml(html)
       
       // Should add the full URL including path
@@ -217,4 +219,3 @@ describe('CSP Plugin URL Matching', () => {
     })
   })
 })
-

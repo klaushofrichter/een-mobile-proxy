@@ -1,3 +1,5 @@
+import { loadEnv } from 'vite'
+
 /**
  * Vite plugin to inject proxy URL into CSP meta tag from VITE_PROXY_URL
  * Dynamically builds the connect-src directive based on environment
@@ -11,10 +13,35 @@
  * if it's different from localhost.
  */
 export function cspPlugin() {
+  let proxyUrl = 'http://localhost:8787'
+  let configInitialized = false
+  
   return {
     name: 'csp-plugin',
+    configResolved(config) {
+      // Defensive validation for config.mode - must be a string
+      let mode = 'development'
+      if (config?.mode && typeof config.mode === 'string') {
+        mode = config.mode
+      } else if (config?.mode) {
+        console.warn(`CSP plugin: config.mode is not a string (${typeof config.mode}), using default 'development'`)
+      }
+      try {
+        // Load environment variables based on Vite's mode
+        const env = loadEnv(mode, process.cwd(), 'VITE_')
+        proxyUrl = env.VITE_PROXY_URL || 'http://localhost:8787'
+        configInitialized = true
+      } catch (error) {
+        console.warn(`CSP plugin: Failed to load environment variables for mode "${mode}":`, error.message)
+        // Keep default proxyUrl
+        configInitialized = true
+      }
+    },
     transformIndexHtml(html) {
-      const proxyUrl = process.env.VITE_PROXY_URL || 'http://localhost:8787'
+      // Lifecycle check: warn if configResolved wasn't called
+      if (!configInitialized) {
+        console.warn('CSP plugin: transformIndexHtml called before configResolved, using default proxy URL')
+      }
       
       // Build connect-src directive - always include localhost for dev compatibility
       // Users can select between localhost and VITE_PROXY_URL at runtime,

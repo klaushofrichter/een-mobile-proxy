@@ -9,14 +9,6 @@ See the [Eagleeye Networks Developer Portal](https://developer.eagleeyenetworks.
 This repository is provided as is without any warranty, functionality guarantee or assurance of availability. 
 This repository uses EENs services, but it is not associated to EEN. 
 
-<!-- Version badges - replace 'your-username' with your GitHub username to enable -->
-<!-- ![Proxy Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fproxy%2Fpackage.json&query=version&label=proxy-develop&color=%2333ca55) -->
-<!-- ![Proxy Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fproxy%2Fpackage.json&query=version&label=proxy-production&color=%2333ca55) -->
-<!-- ![Admin Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fadmin%2Fpackage.json&query=version&label=admin-develop&color=%2333ca55) -->
-<!-- ![Admin Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fadmin%2Fpackage.json&query=version&label=admin-production&color=%2333ca55) -->
-<!-- ![Demo1 Dev Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fdevelop%2Fdemo1%2Fpackage.json&query=version&label=demo1-develop&color=%2333ca55) -->
-<!-- ![Demo1 Prod Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyour-username%2Feen-oauth-proxy%2Frefs%2Fheads%2Fproduction%2Fdemo1%2Fpackage.json&query=version&label=demo1-production&color=%2333ca55) -->
-
 
 ## Features
 
@@ -175,32 +167,50 @@ ENVIRONMENT=development
 
 For production deployment, also create `proxy/.env` with the same values (used by the deploy script to set Cloudflare secrets).
 
-**Demo App (`./demo1/.env`):**
+**Mode-Based Environment Loading:**
+
+Both demo1 and admin apps support mode-based environment loading:
+- `npm run dev` - Uses local proxy (localhost:8787), loads `.env`
+- `npm run dev:prod` - Uses Cloudflare proxy, loads `.env` AND `.env.prod`
+
+The `.env.prod` file should contain `VITE_PROXY_URL` pointing to your deployed Cloudflare Worker.
+
+**Demo App (`./demo1`):**
 ```bash
 cd demo1
 cp .env.example .env
+cp .env.prod.example .env.prod  # Optional: for testing with Cloudflare proxy
 ```
 
 Edit `demo1/.env`:
 ```env
-VITE_PROXY_URL=http://localhost:8787
 VITE_EEN_CLIENT_ID=your-een-client-id
-VITE_EEN_AUTH_URL=https://auth.eagleeyenetworks.com/oauth2/authorize
-VITE_REDIRECT_URI=http://127.0.0.1:3333
+TEST_USER=your-test-email@example.com
+TEST_PASSWORD=your-test-password
 ```
 
-**Admin App (`./admin/.env`):**
+Edit `demo1/.env.prod` (optional, for `npm run dev:prod`):
+```env
+VITE_PROXY_URL=https://your-proxy.your-subdomain.workers.dev
+```
+
+**Admin App (`./admin`):**
 ```bash
 cd admin
 cp .env.example .env
+cp .env.prod.example .env.prod  # Optional: for testing with Cloudflare proxy
 ```
 
 Edit `admin/.env`:
 ```env
-VITE_PROXY_URL=http://localhost:8787
 VITE_EEN_CLIENT_ID=your-een-client-id
-VITE_EEN_AUTH_URL=https://auth.eagleeyenetworks.com/oauth2/authorize
-VITE_REDIRECT_URI=http://127.0.0.1:3333
+ADMIN_TEST_USER=your-admin-email@example.com
+ADMIN_TEST_PASSWORD=your-admin-password
+```
+
+Edit `admin/.env.prod` (optional, for `npm run dev:prod`):
+```env
+VITE_PROXY_URL=https://your-proxy.your-subdomain.workers.dev
 ```
 
 ### Step 3: Create Cloudflare KV Namespace
@@ -261,33 +271,6 @@ To switch between apps locally:
 cd demo1 && npm run stop   # Stop current app on port 3333
 cd admin && npm run dev    # Start the other app
 ```
-
-### Running Against Production Proxy
-
-You can run the demo or admin app locally while connecting to your production Cloudflare proxy. This is useful for testing production configurations without deploying the frontend.
-
-**Prerequisites:**
-1. Your production proxy must have `http://127.0.0.1:3333` in `ALLOWED_ORIGINS`
-2. Unix-like environment (macOS, Linux, or WSL/Git Bash on Windows)
-3. Export `VITE_PROD_PROXY_URL` in your shell
-
-**Setup and run:**
-```bash
-# Export the production proxy URL (add to your ~/.bashrc or ~/.zshrc for persistence)
-export VITE_PROD_PROXY_URL=https://your-proxy.your-subdomain.workers.dev
-
-# Demo app against production proxy
-cd demo1
-npm run dev:prod
-
-# Admin app against production proxy
-cd admin
-npm run dev:prod
-```
-
-> **Note:** The `dev:prod` script uses shell variable expansion (`$VITE_PROD_PROXY_URL`), which requires the variable to be exported in your shell environment. Simply adding it to `.env` is not sufficient - you must use `export` or source it from a shell profile.
-
-> **Security Note:** Adding `http://127.0.0.1:3333` to production `ALLOWED_ORIGINS` is safe because `127.0.0.1` only resolves to the local machine and browsers cannot spoof the `Origin` header.
 
 ### Step 5: Run Tests
 
@@ -351,9 +334,11 @@ npx playwright test --debug # Run in debug mode
 
 The admin tests require environment variables in `admin/.env`:
 ```env
-TEST_USER=your-test-email@example.com
-TEST_PASSWORD=your-test-password
-VITE_PROXY_URL=http://localhost:8787
+VITE_EEN_CLIENT_ID=your-een-client-id
+ADMIN_TEST_USER=your-admin-email@example.com
+ADMIN_TEST_PASSWORD=your-admin-password
+TEST_USER=your-non-admin-email@example.com  # Optional: for rejection tests
+TEST_PASSWORD=your-non-admin-password
 ```
 
 **Important:** Destructive tests (remove sessions, revoke all) only run against local proxy (`localhost` or `127.0.0.1`) to protect production data.
@@ -379,9 +364,9 @@ npm run test:ui             # Run with Playwright UI
 
 The demo tests require environment variables in `demo1/.env`:
 ```env
+VITE_EEN_CLIENT_ID=your-een-client-id
 TEST_USER=your-test-email@example.com
 TEST_PASSWORD=your-test-password
-VITE_PROXY_URL=http://localhost:8787
 ```
 
 ### Running All Tests
