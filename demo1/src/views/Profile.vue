@@ -20,9 +20,14 @@
 
       <!-- Profile content -->
       <div v-else class="space-y-6">
-        <!-- Header row with title and version -->
+        <!-- Header row with title, proxy URL, and version -->
         <div class="flex justify-between items-center">
-          <h1 class="text-2xl font-bold text-gray-900">{{ appTitle }}</h1>
+          <div class="flex items-center gap-4">
+            <h1 class="text-2xl font-bold text-gray-900">{{ appTitle }}</h1>
+            <span class="text-sm text-gray-500">
+              OAuth Proxy: <span class="font-mono text-gray-700">{{ proxyUrl }}</span>
+            </span>
+          </div>
           <a
             :href="githubRepoUrl"
             target="_blank"
@@ -185,6 +190,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getUserProfile } from '../services/user'
 import { refreshToken as refreshTokenService } from '../services/auth'
+import { getProxyUrl } from '../services/proxy'
 import packageJson from '../../package.json'
 
 const router = useRouter()
@@ -207,6 +213,7 @@ const githubRepoUrl = computed(() => {
   const branch = import.meta.env.VITE_GITHUB_BRANCH || 'develop'
   return `${baseUrl}/tree/${branch}`
 })
+const proxyUrl = computed(() => getProxyUrl())
 
 const tokenExpirationText = computed(() => {
   forceUpdate.value // Trigger reactivity
