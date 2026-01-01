@@ -80,8 +80,9 @@ export function cspPlugin() {
           
           // Only add if not already in list and not a localhost variant
           // Use hostname comparison instead of string includes to avoid false positives
-          const isLocalhost = proxyHostname === 'localhost' || 
-                             proxyHostname === '127.0.0.1' || 
+          const isLocalhost = proxyHostname === 'localhost' ||
+                             proxyHostname === '127.0.0.1' ||
+                             proxyHostname === '0.0.0.0' ||
                              proxyHostname === '[::1]' ||
                              proxyHostname.startsWith('127.') ||
                              proxyHostname.endsWith('.localhost')

@@ -81,8 +81,9 @@ export function getProxyOptions() {
  * Validate if a URL is an allowed proxy URL
  * @param {string} url - URL to validate
  * @returns {boolean} - True if URL is valid and allowed
+ * @exported for testing
  */
-function isValidProxyUrl(url) {
+export function isValidProxyUrl(url) {
   try {
     const parsedUrl = new URL(url)
     const hostname = parsedUrl.hostname
