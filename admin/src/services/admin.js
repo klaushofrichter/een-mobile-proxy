@@ -81,12 +81,12 @@ export function getProxyOptions() {
   // In production, only show configured proxy; in dev, show local option too
   if (isProduction()) {
     if (ENV_PROXY_URL) {
-      options.push({ label: 'Configured Proxy', value: ENV_PROXY_URL })
+      options.push({ label: ENV_PROXY_URL, value: ENV_PROXY_URL })
     }
   } else {
-    options.push({ label: 'Local (localhost:8787)', value: LOCAL_PROXY_URL })
+    options.push({ label: LOCAL_PROXY_URL, value: LOCAL_PROXY_URL })
     if (ENV_PROXY_URL && ENV_PROXY_URL !== LOCAL_PROXY_URL) {
-      options.push({ label: 'Configured Proxy', value: ENV_PROXY_URL })
+      options.push({ label: ENV_PROXY_URL, value: ENV_PROXY_URL })
     }
   }
 

@@ -185,6 +185,7 @@ cp .env.prod.example .env.prod  # Optional: for testing with Cloudflare proxy
 Edit `demo1/.env`:
 ```env
 VITE_EEN_CLIENT_ID=your-een-client-id
+VITE_GITHUB_REPO=https://github.com/your-username/een-oauth-proxy
 TEST_USER=your-test-email@example.com
 TEST_PASSWORD=your-test-password
 ```
@@ -204,6 +205,7 @@ cp .env.prod.example .env.prod  # Optional: for testing with Cloudflare proxy
 Edit `admin/.env`:
 ```env
 VITE_EEN_CLIENT_ID=your-een-client-id
+VITE_GITHUB_REPO=https://github.com/your-username/een-oauth-proxy
 ADMIN_TEST_USER=your-admin-email@example.com
 ADMIN_TEST_PASSWORD=your-admin-password
 ```
@@ -658,6 +660,7 @@ Values outside the min/max range are automatically clamped. Adjust this value ba
 | `VITE_EEN_CLIENT_ID` | EEN OAuth Client ID | `YOUR-CLIENT-ID` |
 | `VITE_EEN_AUTH_URL` | EEN OAuth authorize URL | `https://auth.eagleeyenetworks.com/oauth2/authorize` |
 | `VITE_REDIRECT_URI` | OAuth callback URL (must exactly match EEN config) | `http://127.0.0.1:3333` |
+| `VITE_GITHUB_REPO` | GitHub repository URL for version links in the app footer | `https://github.com/your-username/een-oauth-proxy` |
 
 ## API Endpoints
 
