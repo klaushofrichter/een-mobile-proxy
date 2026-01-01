@@ -1,3 +1,7 @@
+# This workflow runs on PRs to production branch when proxy code changes.
+# It checks if the proxy version in the PR differs from the deployed version.
+# A version mismatch indicates manual deployment will be needed post-merge
+# (Cloudflare secrets are not stored in GitHub, so deployment must be done locally).
 name: Check Proxy Deployment Status
 
 on:
@@ -66,9 +70,13 @@ jobs:
           else
             # Try to grab just the version if the format is different or simple
             DEPLOYED_VERSION=$(echo "$FULL_VERSION" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+            if [ -n "$DEPLOYED_VERSION" ]; then
+              echo "::notice::Version format different than expected, extracted: $DEPLOYED_VERSION from: $FULL_VERSION"
+            fi
           fi
-          
+
           if [ -z "$DEPLOYED_VERSION" ]; then
+             echo "::warning::Failed to parse semantic version from: $FULL_VERSION"
              DEPLOYED_VERSION="unknown"
           fi
           

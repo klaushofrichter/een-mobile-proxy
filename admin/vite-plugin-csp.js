@@ -23,8 +23,10 @@ export function cspPlugin() {
       let mode = 'development'
       if (config?.mode && typeof config.mode === 'string') {
         mode = config.mode
-      } else if (config?.mode) {
-        console.warn(`CSP plugin: config.mode is not a string (${typeof config.mode}), using default 'development'`)
+      } else if (!config?.mode) {
+        console.warn('CSP plugin: config.mode is undefined, defaulting to development')
+      } else {
+        console.error(`CSP plugin: config.mode has invalid type (${typeof config.mode}), defaulting to development`)
       }
       try {
         // Load environment variables based on Vite's mode
@@ -80,8 +82,9 @@ export function cspPlugin() {
           
           // Only add if not already in list and not a localhost variant
           // Use hostname comparison instead of string includes to avoid false positives
-          const isLocalhost = proxyHostname === 'localhost' || 
-                             proxyHostname === '127.0.0.1' || 
+          const isLocalhost = proxyHostname === 'localhost' ||
+                             proxyHostname === '127.0.0.1' ||
+                             proxyHostname === '0.0.0.0' ||
                              proxyHostname === '[::1]' ||
                              proxyHostname.startsWith('127.') ||
                              proxyHostname.endsWith('.localhost')

@@ -71,6 +71,21 @@ export function isValidProxyUrl(url) {
 }
 
 /**
+ * Format a proxy URL for display in dropdown
+ * Shows hostname and port only to prevent overly long labels
+ * @param {string} url - Full proxy URL
+ * @returns {string} - Formatted label (hostname:port or hostname)
+ */
+function formatProxyLabel(url) {
+  try {
+    const urlObj = new URL(url)
+    return urlObj.hostname + (urlObj.port ? `:${urlObj.port}` : '')
+  } catch {
+    return url
+  }
+}
+
+/**
  * Get available proxy options based on environment
  * - In production: only the configured VITE_PROXY_URL
  * - In development: local and configured options
@@ -81,12 +96,12 @@ export function getProxyOptions() {
   // In production, only show configured proxy; in dev, show local option too
   if (isProduction()) {
     if (ENV_PROXY_URL) {
-      options.push({ label: 'Configured Proxy', value: ENV_PROXY_URL })
+      options.push({ label: formatProxyLabel(ENV_PROXY_URL), value: ENV_PROXY_URL })
     }
   } else {
-    options.push({ label: 'Local (localhost:8787)', value: LOCAL_PROXY_URL })
+    options.push({ label: formatProxyLabel(LOCAL_PROXY_URL), value: LOCAL_PROXY_URL })
     if (ENV_PROXY_URL && ENV_PROXY_URL !== LOCAL_PROXY_URL) {
-      options.push({ label: 'Configured Proxy', value: ENV_PROXY_URL })
+      options.push({ label: formatProxyLabel(ENV_PROXY_URL), value: ENV_PROXY_URL })
     }
   }
 

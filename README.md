@@ -175,6 +175,8 @@ Both demo1 and admin apps support mode-based environment loading:
 
 The `.env.prod` file should contain `VITE_PROXY_URL` pointing to your deployed Cloudflare Worker.
 
+> **Security Note**: `.env.prod` files are gitignored. Never commit production URLs with sensitive paths or tokens.
+
 **Demo App (`./demo1`):**
 ```bash
 cd demo1
@@ -185,6 +187,7 @@ cp .env.prod.example .env.prod  # Optional: for testing with Cloudflare proxy
 Edit `demo1/.env`:
 ```env
 VITE_EEN_CLIENT_ID=your-een-client-id
+VITE_GITHUB_REPO=https://github.com/your-username/een-oauth-proxy
 TEST_USER=your-test-email@example.com
 TEST_PASSWORD=your-test-password
 ```
@@ -204,6 +207,7 @@ cp .env.prod.example .env.prod  # Optional: for testing with Cloudflare proxy
 Edit `admin/.env`:
 ```env
 VITE_EEN_CLIENT_ID=your-een-client-id
+VITE_GITHUB_REPO=https://github.com/your-username/een-oauth-proxy
 ADMIN_TEST_USER=your-admin-email@example.com
 ADMIN_TEST_PASSWORD=your-admin-password
 ```
@@ -658,6 +662,7 @@ Values outside the min/max range are automatically clamped. Adjust this value ba
 | `VITE_EEN_CLIENT_ID` | EEN OAuth Client ID | `YOUR-CLIENT-ID` |
 | `VITE_EEN_AUTH_URL` | EEN OAuth authorize URL | `https://auth.eagleeyenetworks.com/oauth2/authorize` |
 | `VITE_REDIRECT_URI` | OAuth callback URL (must exactly match EEN config) | `http://127.0.0.1:3333` |
+| `VITE_GITHUB_REPO` | GitHub repository URL for version links in the app footer | `https://github.com/your-username/een-oauth-proxy` |
 
 ## API Endpoints
 
@@ -766,6 +771,10 @@ The same applies to the `demo1` application.
 ### "Forbidden: Invalid origin" error
 - Check that the request origin is in `ALLOWED_ORIGINS`
 - In development, only `http://127.0.0.1:3333` is automatically allowed (to match EEN OAuth redirect URI)
+- **Security Note**: Including `http://127.0.0.1:3333` in production `ALLOWED_ORIGINS` is safe because:
+  - Browsers enforce the Same-Origin Policy, preventing remote sites from making requests that appear to come from localhost
+  - Only code actually running on localhost can send requests with a `127.0.0.1` origin
+  - This allows developers to test against the production proxy while developing locally
 
 ### "Admin access required" error
 - Ensure your email is in the `ADMIN_EMAILS` list
