@@ -8,6 +8,12 @@
 
 set -euo pipefail
 
+# Check node is available (required for JSON parsing)
+if ! command -v node &> /dev/null; then
+    echo "Error: node is required but not installed"
+    exit 1
+fi
+
 PROXY_URL="${PROXY_URL:-https://een-oauth-proxy.klaushofrichter.workers.dev}"
 
 # Validate PROXY_URL format to prevent command injection

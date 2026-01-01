@@ -35,29 +35,35 @@ increment_version() {
     fi
 }
 
-# Check if proxy folder has staged changes
-if git diff --cached --name-only | grep -q "^proxy/"; then
+# Cache staged files to avoid multiple git diff calls
+STAGED_FILES=$(git diff --cached --name-only)
+
+# Check which folders have staged changes
+proxy_has_changes=$(echo "$STAGED_FILES" | grep -q "^proxy/" && echo "1" || echo "0")
+demo1_has_changes=$(echo "$STAGED_FILES" | grep -q "^demo1/" && echo "1" || echo "0")
+admin_has_changes=$(echo "$STAGED_FILES" | grep -q "^admin/" && echo "1" || echo "0")
+
+# Increment versions for folders with changes
+if [ "$proxy_has_changes" = "1" ]; then
     if ! increment_version "proxy"; then
         exit 1
     fi
 fi
 
-# Check if demo1 folder has staged changes
-if git diff --cached --name-only | grep -q "^demo1/"; then
+if [ "$demo1_has_changes" = "1" ]; then
     if ! increment_version "demo1"; then
         exit 1
     fi
 fi
 
-# Check if admin folder has staged changes
-if git diff --cached --name-only | grep -q "^admin/"; then
+if [ "$admin_has_changes" = "1" ]; then
     if ! increment_version "admin"; then
         exit 1
     fi
 fi
 
-# Check if proxy folder has staged changes - if so, check deployment status
-if git diff --cached --name-only | grep -q "^proxy/"; then
+# Check deployment status if proxy has changes
+if [ "$proxy_has_changes" = "1" ]; then
     if [ "${SKIP_DEPLOYMENT_CHECK:-0}" != "1" ]; then
         echo ""
         echo "Checking proxy deployment status..."

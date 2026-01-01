@@ -175,6 +175,8 @@ Both demo1 and admin apps support mode-based environment loading:
 
 The `.env.prod` file should contain `VITE_PROXY_URL` pointing to your deployed Cloudflare Worker.
 
+> **Security Note**: `.env.prod` files are gitignored. Never commit production URLs with sensitive paths or tokens.
+
 **Demo App (`./demo1`):**
 ```bash
 cd demo1
@@ -769,6 +771,10 @@ The same applies to the `demo1` application.
 ### "Forbidden: Invalid origin" error
 - Check that the request origin is in `ALLOWED_ORIGINS`
 - In development, only `http://127.0.0.1:3333` is automatically allowed (to match EEN OAuth redirect URI)
+- **Security Note**: Including `http://127.0.0.1:3333` in production `ALLOWED_ORIGINS` is safe because:
+  - Browsers enforce the Same-Origin Policy, preventing remote sites from making requests that appear to come from localhost
+  - Only code actually running on localhost can send requests with a `127.0.0.1` origin
+  - This allows developers to test against the production proxy while developing locally
 
 ### "Admin access required" error
 - Ensure your email is in the `ADMIN_EMAILS` list
