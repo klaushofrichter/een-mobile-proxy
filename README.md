@@ -6,9 +6,10 @@ The repository is intended as example implementation of an OAuth proxy. Users wi
 and CLIENT_SECRET for OAuth with [Eagleeye Networks (EEN)](https://www.een.com/), and at least one user account. 
 See the [Eagleeye Networks Developer Portal](https://developer.eagleeyenetworks.com/) for more details. 
 
-This repository is provided as is without any warranty, functionality guarantee or assurance of availability. 
-This repository uses EENs services, but it is not associated to EEN. 
+This repository is provided as is without any warranty, functionality guarantee or assurance of availability.
+This repository uses EENs services, but it is not associated to EEN.
 
+![Architecture diagram showing EEN OAuth Proxy with secure OAuth token management, multi-layered security features including rate limiting and CORS protection, and automated CI/CD pipeline with Claude AI code review](een-oauth-proxy-infograph.png)
 
 ## Features
 
