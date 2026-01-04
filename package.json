@@ -11,9 +11,11 @@
     "test:demo": "cd demo1 && npm test",
     "test:admin": "cd admin && npm test",
     "deploy:pages": "./scripts/deploy-pages.sh",
-    "deploy:proxy": "cd proxy && npm run deploy"
+    "deploy:proxy": "cd proxy && npm run deploy",
+    "build:presentation": "node scripts/generate-presentation.js && marp PRESENTATION.md -o PRESENTATION.html"
   },
   "devDependencies": {
+    "@marp-team/marp-cli": "^4.2.3",
     "gh-pages": "^6.3.0",
     "husky": "^9.1.7"
   }

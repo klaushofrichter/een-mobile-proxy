@@ -160,3 +160,7 @@ test-results/
 playwright-report/
 playwright/.cache/
 RECOMMENDATIONS.txt
+
+# generated documentation
+PRESENTATION.md
+PRESENTATION.html 
