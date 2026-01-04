@@ -70,7 +70,14 @@ jobs:
           # Store content as outputs using unique delimiters to prevent injection
           # Generate random delimiter and ensure it doesn't appear in file content
           DELIMITER="GHOUTPUT_$(openssl rand -hex 8)"
+          ATTEMPTS=0
+          MAX_ATTEMPTS=10
           while grep -qF "$DELIMITER" pr_diff_truncated.txt 2>/dev/null || grep -qF "$DELIMITER" changed_files.txt 2>/dev/null; do
+            ATTEMPTS=$((ATTEMPTS + 1))
+            if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; then
+              echo "::error::Failed to generate unique delimiter after $MAX_ATTEMPTS attempts"
+              exit 1
+            fi
             DELIMITER="GHOUTPUT_$(openssl rand -hex 8)"
           done
 
