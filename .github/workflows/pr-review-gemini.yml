@@ -52,9 +52,12 @@ jobs:
           fi
 
           # Truncate if too large (Gemini has token limits)
-          if [ "$(wc -c < pr_diff.txt)" -gt 100000 ]; then
-            echo "::warning::Diff truncated to 100KB for Gemini review"
-            head -c 100000 pr_diff.txt > pr_diff_truncated.txt
+          # Use 50KB limit to stay well under GITHUB_OUTPUT limits
+          if [ "$(wc -c < pr_diff.txt)" -gt 50000 ]; then
+            echo "::warning::Diff truncated to 50KB for Gemini review"
+            head -c 50000 pr_diff.txt > pr_diff_truncated.txt
+            # Ensure file ends with newline (head -c may truncate mid-line)
+            echo "" >> pr_diff_truncated.txt
           else
             cp pr_diff.txt pr_diff_truncated.txt
           fi
@@ -72,9 +75,11 @@ jobs:
           cat changed_files.txt >> $GITHUB_OUTPUT
           echo "${DELIMITER}" >> $GITHUB_OUTPUT
 
+          # For diff content, ensure proper newline handling
           echo "diff_content<<${DELIMITER}" >> $GITHUB_OUTPUT
           cat pr_diff_truncated.txt >> $GITHUB_OUTPUT
-          echo "${DELIMITER}" >> $GITHUB_OUTPUT
+          # Ensure delimiter is on its own line
+          printf "\n%s\n" "${DELIMITER}" >> $GITHUB_OUTPUT
 
       - name: Run Gemini Code Review
         id: gemini-review
