@@ -9,7 +9,7 @@ See the [Eagleeye Networks Developer Portal](https://developer.eagleeyenetworks.
 This repository is provided as is without any warranty, functionality guarantee or assurance of availability.
 This repository uses EENs services, but it is not associated to EEN.
 
-![EEN OAuth Proxy Overview](een-oauth-proxy-infograph.png)
+![Architecture diagram showing EEN OAuth Proxy with secure OAuth token management, multi-layered security features including rate limiting and CORS protection, and automated CI/CD pipeline with Claude AI code review](een-oauth-proxy-infograph.png)
 
 ## Features
 
