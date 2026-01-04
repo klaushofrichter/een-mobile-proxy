@@ -68,8 +68,11 @@ jobs:
           cat changed_files.txt
 
           # Store content as outputs using unique delimiters to prevent injection
-          # Generate random delimiter to avoid conflicts with file content
+          # Generate random delimiter and ensure it doesn't appear in file content
           DELIMITER="GHOUTPUT_$(openssl rand -hex 8)"
+          while grep -qF "$DELIMITER" pr_diff_truncated.txt 2>/dev/null || grep -qF "$DELIMITER" changed_files.txt 2>/dev/null; do
+            DELIMITER="GHOUTPUT_$(openssl rand -hex 8)"
+          done
 
           echo "changed_files<<${DELIMITER}" >> $GITHUB_OUTPUT
           cat changed_files.txt >> $GITHUB_OUTPUT
