@@ -28,7 +28,7 @@ const outputPath = path.join(__dirname, '..', 'PRESENTATION.md');
 
 try {
   let content = fs.readFileSync(templatePath, 'utf8');
-  content = content.replaceAll('{{REPO_URL}}', repoUrl);
+  content = content.replace(/\{\{REPO_URL\}\}/g, repoUrl);
   fs.writeFileSync(outputPath, content);
   console.log('PRESENTATION.md generated successfully.');
 } catch (err) {
