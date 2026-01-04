@@ -52,9 +52,13 @@ jobs:
           fi
 
           # Truncate if too large (Gemini has token limits)
-          if [ "$(wc -c < pr_diff.txt)" -gt 100000 ]; then
-            echo "::warning::Diff truncated to 100KB for Gemini review"
-            head -c 100000 pr_diff.txt > pr_diff_truncated.txt
+          # Use 50KB limit to stay well under GITHUB_OUTPUT limits
+          # Truncate by lines to avoid splitting multi-byte UTF-8 characters
+          if [ "$(wc -c < pr_diff.txt)" -gt 50000 ]; then
+            echo "::warning::Diff truncated for Gemini review (keeping ~50KB)"
+            # Count lines that fit within ~50KB, truncate by complete lines
+            LINES_TO_KEEP=$(head -c 50000 pr_diff.txt | wc -l)
+            head -n "$LINES_TO_KEEP" pr_diff.txt > pr_diff_truncated.txt
           else
             cp pr_diff.txt pr_diff_truncated.txt
           fi
@@ -65,16 +69,28 @@ jobs:
           cat changed_files.txt
 
           # Store content as outputs using unique delimiters to prevent injection
-          # Generate random delimiter to avoid conflicts with file content
+          # Generate random delimiter and ensure it doesn't appear in file content
           DELIMITER="GHOUTPUT_$(openssl rand -hex 8)"
+          ATTEMPTS=0
+          MAX_ATTEMPTS=10
+          while grep -qF "$DELIMITER" pr_diff_truncated.txt 2>/dev/null || grep -qF "$DELIMITER" changed_files.txt 2>/dev/null; do
+            ATTEMPTS=$((ATTEMPTS + 1))
+            if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; then
+              echo "::error::Failed to generate unique delimiter after $MAX_ATTEMPTS attempts"
+              exit 1
+            fi
+            DELIMITER="GHOUTPUT_$(openssl rand -hex 8)"
+          done
 
           echo "changed_files<<${DELIMITER}" >> $GITHUB_OUTPUT
           cat changed_files.txt >> $GITHUB_OUTPUT
           echo "${DELIMITER}" >> $GITHUB_OUTPUT
 
+          # For diff content, ensure proper newline handling
           echo "diff_content<<${DELIMITER}" >> $GITHUB_OUTPUT
           cat pr_diff_truncated.txt >> $GITHUB_OUTPUT
-          echo "${DELIMITER}" >> $GITHUB_OUTPUT
+          # Ensure delimiter is on its own line
+          printf "\n%s\n" "${DELIMITER}" >> $GITHUB_OUTPUT
 
       - name: Run Gemini Code Review
         id: gemini-review

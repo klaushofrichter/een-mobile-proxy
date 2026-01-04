@@ -703,6 +703,30 @@ This project uses Husky to automatically increment the patch version in each sub
 
 For example, if you modify files in `proxy/`, the `proxy/package.json` version will be incremented from `0.1.0` to `0.1.1` on commit.
 
+## Documentation Generation
+
+This project includes tooling to generate presentation slides from a template:
+
+```bash
+# Generate PRESENTATION.md and PRESENTATION.html
+npm run build:presentation
+```
+
+The script:
+- Detects the repository URL from git remote (supports SSH and HTTPS)
+- Injects the URL into the template placeholders
+- Generates Marp-compatible Markdown that can be converted to HTML slides
+
+Files:
+- `scripts/generate-presentation.js` - Generation script with URL sanitization
+- `scripts/PRESENTATION_TEMPLATE.md` - Template file with `{{REPO_URL}}` placeholders
+- `PRESENTATION.md` / `PRESENTATION.html` - Generated output (gitignored)
+
+Run tests for the generation script:
+```bash
+node scripts/generate-presentation.test.js
+```
+
 ## Security
 
 - **CLIENT_SECRET** is never exposed to the frontend
