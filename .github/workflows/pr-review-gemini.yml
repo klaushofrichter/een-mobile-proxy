@@ -53,11 +53,12 @@ jobs:
 
           # Truncate if too large (Gemini has token limits)
           # Use 50KB limit to stay well under GITHUB_OUTPUT limits
+          # Truncate by lines to avoid splitting multi-byte UTF-8 characters
           if [ "$(wc -c < pr_diff.txt)" -gt 50000 ]; then
-            echo "::warning::Diff truncated to 50KB for Gemini review"
-            head -c 50000 pr_diff.txt > pr_diff_truncated.txt
-            # Ensure file ends with newline (head -c may truncate mid-line)
-            echo "" >> pr_diff_truncated.txt
+            echo "::warning::Diff truncated for Gemini review (keeping ~50KB)"
+            # Count lines that fit within ~50KB, truncate by complete lines
+            LINES_TO_KEEP=$(head -c 50000 pr_diff.txt | wc -l)
+            head -n "$LINES_TO_KEEP" pr_diff.txt > pr_diff_truncated.txt
           else
             cp pr_diff.txt pr_diff_truncated.txt
           fi
