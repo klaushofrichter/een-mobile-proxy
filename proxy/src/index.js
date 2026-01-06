@@ -104,15 +104,19 @@ function isValidEenUrl(url, env) {
 
     // Block IP addresses (IPv4, IPv6, and numeric representations)
     // IPv4: 192.168.1.1
-    // IPv6: [::1], ::1, fe80::1, or bracketed notation
+    // IPv6: [::1], [fe80::1], or with :: shorthand
     // Numeric: 2130706433 (decimal representation of 127.0.0.1)
-    // Octal/Hex: 0177.0.0.1, 0x7f.0.0.1 (caught by non-digit check)
+    // Octal/Hex: 0177.0.0.1, 0x7f.0.0.1
     const isIPv4 = /^\d+\.\d+\.\d+\.\d+$/.test(hostname)
-    const isIPv6 = /^(\[.*\]|[0-9a-f]*:[0-9a-f:]*:[0-9a-f]*)$/i.test(hostname)
+    // IPv6 detection: bracketed format [xxx] or contains :: (IPv6 shorthand)
+    // or has 2+ colons with hex segments (full IPv6 like 2001:db8:85a3::1)
+    const isIPv6Bracketed = /^\[.+\]$/.test(hostname)
+    const isIPv6Shorthand = hostname.includes('::')
+    const isIPv6Full = /^[0-9a-f]+:[0-9a-f]+:/i.test(hostname)
     const isNumericIP = /^\d+$/.test(hostname)
     const isOctalOrHex = /^0[0-7x]/i.test(hostname) || /\.0[0-7x]/i.test(hostname)
 
-    if (isIPv4 || isIPv6 || isNumericIP || isOctalOrHex) {
+    if (isIPv4 || isIPv6Bracketed || isIPv6Shorthand || isIPv6Full || isNumericIP || isOctalOrHex) {
       return false
     }
 
