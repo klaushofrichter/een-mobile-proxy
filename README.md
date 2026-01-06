@@ -39,6 +39,7 @@ The proxy implements multiple layers of security:
 - **Secure Cookies** - HttpOnly, Secure, SameSite=None session cookies
 - **Header-Based Auth** - Supports `Authorization: Bearer <sessionId>` for mobile/cross-site compatibility (ITP bypass). *Note: This requires storing the session ID in client storage (localStorage), which has different security trade-offs compared to HttpOnly cookies.*
 - **Input Validation** - Length limits and format validation on all inputs
+- **SSRF Protection** - Server-side URL validation with configurable domain allowlist (`ALLOWED_API_DOMAINS`, default: `eagleeyenetworks.com`) prevents attacks via malicious `httpsBaseUrl` values
 - **Session ID Security** - Cryptographically random UUIDs with format validation
 - **No Secret Exposure** - CLIENT_SECRET and refresh tokens never sent to frontend
 - **Security Headers** - X-Content-Type-Options, X-Frame-Options, CSP, HSTS (production)
@@ -635,6 +636,7 @@ This project includes a Claude Code skill for automating the PR creation and rev
 | `CLIENT_SECRET` | EEN OAuth Client Secret | `your-secret` |
 | `ADMIN_EMAILS` | Comma-separated admin emails | `admin@example.com` |
 | `ALLOWED_ORIGINS` | Comma-separated CORS origins | `https://example.com` |
+| `ALLOWED_API_DOMAINS` | Comma-separated allowed API domains for SSRF protection | `eagleeyenetworks.com` |
 | `ENVIRONMENT` | `development` or `production` | `development` |
 | `REFRESH_TOKEN_TTL` | Session TTL buffer in seconds (see below) | `86400` |
 
@@ -735,6 +737,7 @@ node scripts/generate-presentation.test.js
 - **Session cookies** are HttpOnly, Secure, and SameSite=None
 - **Header-Based Auth** is supported for mobile clients where third-party cookies are blocked (ITP). This mechanism uses `localStorage` on the client, which is accessible to JavaScript. While necessary for functionality in some environments, it relies on XSS protection (CSP, input sanitization) rather than the HttpOnly flag for security.
 - **CORS validation** on all proxy requests
+- **SSRF protection** on `httpsBaseUrl` from EEN token responses - only domains configured in `ALLOWED_API_DOMAINS` (default: `eagleeyenetworks.com`) are allowed, preventing attackers from redirecting API calls to internal services or cloud metadata endpoints
 - **Admin endpoints** require email verification against allowlist
 - **Automatic token expiration** via KV TTL
 
