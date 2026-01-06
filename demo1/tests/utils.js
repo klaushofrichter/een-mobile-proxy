@@ -83,10 +83,17 @@ export async function selectLocalProxy(page) {
   try {
     // Wait for proxy dropdown with short timeout - it may not exist in all environments
     await proxySelect.waitFor({ state: 'visible', timeout: 2000 })
-    await proxySelect.selectOption(proxyUrl)
-    console.log(`📡 Selected proxy: ${proxyUrl}`)
+
+    // Verify the option exists before selecting
+    const optionExists = (await proxySelect.locator(`option[value="${proxyUrl}"]`).count()) > 0
+    if (optionExists) {
+      await proxySelect.selectOption(proxyUrl)
+      console.log(`📡 Selected proxy: ${proxyUrl}`)
+    } else {
+      console.log(`⚠️ Proxy ${proxyUrl} not in dropdown, using default`)
+    }
   } catch {
-    // Proxy dropdown not available or selection failed - this is expected in some environments
+    // Proxy dropdown not available - this is expected in some environments
   }
 }
 
