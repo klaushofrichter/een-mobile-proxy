@@ -120,7 +120,7 @@ function isValidEenUrl(url, env) {
     // Get allowed domains from environment (default: eagleeyenetworks.com)
     // Filter out empty strings and wildcard patterns
     const allowedDomainsStr = env.ALLOWED_API_DOMAINS || 'eagleeyenetworks.com'
-    const allowedDomains = allowedDomainsStr
+    let allowedDomains = allowedDomainsStr
       .split(',')
       .map((d) => d.trim().toLowerCase())
       .filter((d) => d && !/[*?]/.test(d))
@@ -170,8 +170,16 @@ function parseHttpsBaseUrl(httpsBaseUrl, env) {
     const host = httpsBaseUrl.hostname || httpsBaseUrl.host
     const port = httpsBaseUrl.port
 
-    // Validate hostname format (DNS-compliant, ASCII only)
-    if (!host || typeof host !== 'string' || !/^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$/.test(host)) {
+    // Validate hostname format:
+    // - Must be a non-empty string
+    // - Max 253 chars per DNS spec (RFC 1035)
+    // - DNS-compliant: starts/ends with alphanumeric, allows dots/hyphens internally
+    if (
+      !host ||
+      typeof host !== 'string' ||
+      host.length > 253 ||
+      !/^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$/.test(host)
+    ) {
       return null
     }
 
