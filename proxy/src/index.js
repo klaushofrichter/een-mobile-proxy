@@ -85,6 +85,38 @@ function getRefreshTokenTtl(env) {
 }
 
 /**
+ * Validates that a URL is a legitimate EEN API endpoint.
+ * Prevents SSRF attacks by allowlisting only *.eagleeyenetworks.com domains.
+ * @param {string} url - The URL to validate
+ * @returns {boolean} - True if URL is safe to use
+ */
+function isValidEenUrl(url) {
+  try {
+    const parsed = new URL(url)
+
+    // Must be HTTPS protocol
+    if (parsed.protocol !== 'https:') {
+      return false
+    }
+
+    // Allowlist: must be eagleeyenetworks.com or a subdomain
+    const hostname = parsed.hostname.toLowerCase()
+    if (hostname !== 'eagleeyenetworks.com' && !hostname.endsWith('.eagleeyenetworks.com')) {
+      return false
+    }
+
+    // No credentials allowed in URL
+    if (parsed.username || parsed.password) {
+      return false
+    }
+
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Main request handler
  */
 export default {
@@ -249,27 +281,27 @@ async function handleGetAccessToken(url, request, env) {
   // Fetch user profile to get email for admin verification
   // Use the httpsBaseUrl from token response (regional endpoint)
   // httpsBaseUrl can be a string URL or an object {hostname, port}
+  // SECURITY: Validate URL against allowlist to prevent SSRF attacks
   let userEmail = null
   try {
     let baseUrl = 'https://api.eagleeyenetworks.com'
     if (tokens.httpsBaseUrl) {
+      let candidateUrl = null
       if (typeof tokens.httpsBaseUrl === 'string') {
-        baseUrl = tokens.httpsBaseUrl
+        candidateUrl = tokens.httpsBaseUrl
       } else if (typeof tokens.httpsBaseUrl === 'object') {
         // Handle object format: {hostname: "c001.eagleeyenetworks.com", port: 443}
         const host = tokens.httpsBaseUrl.hostname || tokens.httpsBaseUrl.host
         const port = tokens.httpsBaseUrl.port
-        // Validate host before constructing URL
-        // DNS hostnames have a max length of 253 characters
-        // Regex allows 1-char labels and prevents consecutive dots/leading/trailing hyphens
-        if (
-          host &&
-          typeof host === 'string' &&
-          host.length <= 253 &&
-          /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$/.test(host)
-        ) {
-          baseUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
+        if (host && typeof host === 'string') {
+          candidateUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
         }
+      }
+      // Validate against EEN domain allowlist to prevent SSRF
+      if (candidateUrl && isValidEenUrl(candidateUrl)) {
+        baseUrl = candidateUrl
+      } else if (candidateUrl) {
+        debugError(env, 'Rejected invalid httpsBaseUrl (SSRF protection):', candidateUrl)
       }
     }
     debugLog(env, 'Fetching user profile from:', `${baseUrl}/api/v3.0/users/self`)
@@ -1138,17 +1170,24 @@ async function checkAdminAccess(request, env) {
         const tokens = await tokenResponse.json()
 
         // Parse httpsBaseUrl - can be string or object {hostname, port}
+        // SECURITY: Validate URL against allowlist to prevent SSRF attacks
         let baseUrl = 'https://api.eagleeyenetworks.com'
         if (tokens.httpsBaseUrl) {
+          let candidateUrl = null
           if (typeof tokens.httpsBaseUrl === 'string') {
-            baseUrl = tokens.httpsBaseUrl
+            candidateUrl = tokens.httpsBaseUrl
           } else if (typeof tokens.httpsBaseUrl === 'object') {
             const host = tokens.httpsBaseUrl.hostname || tokens.httpsBaseUrl.host
             const port = tokens.httpsBaseUrl.port
-            // Validate host before constructing URL
             if (host && typeof host === 'string') {
-              baseUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
+              candidateUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
             }
+          }
+          // Validate against EEN domain allowlist to prevent SSRF
+          if (candidateUrl && isValidEenUrl(candidateUrl)) {
+            baseUrl = candidateUrl
+          } else if (candidateUrl) {
+            debugError(env, 'Rejected invalid httpsBaseUrl (SSRF protection):', candidateUrl)
           }
         }
         debugLog(env, 'On-demand fetch: using baseUrl:', baseUrl)
