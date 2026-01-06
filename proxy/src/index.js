@@ -85,12 +85,13 @@ function getRefreshTokenTtl(env) {
 }
 
 /**
- * Validates that a URL is a legitimate EEN API endpoint.
- * Prevents SSRF attacks by allowlisting only *.eagleeyenetworks.com domains.
+ * Validates that a URL is a legitimate API endpoint based on configured allowlist.
+ * Prevents SSRF attacks by only allowing configured domains.
  * @param {string} url - The URL to validate
+ * @param {Object} env - Environment bindings containing ALLOWED_API_DOMAINS
  * @returns {boolean} - True if URL is safe to use
  */
-function isValidEenUrl(url) {
+function isValidEenUrl(url, env) {
   try {
     const parsed = new URL(url)
 
@@ -99,9 +100,16 @@ function isValidEenUrl(url) {
       return false
     }
 
-    // Allowlist: must be eagleeyenetworks.com or a subdomain
+    // Get allowed domains from environment (default: eagleeyenetworks.com)
+    const allowedDomainsStr = env.ALLOWED_API_DOMAINS || 'eagleeyenetworks.com'
+    const allowedDomains = allowedDomainsStr.split(',').map((d) => d.trim().toLowerCase())
+
+    // Check hostname against allowlist (exact match or subdomain)
     const hostname = parsed.hostname.toLowerCase()
-    if (hostname !== 'eagleeyenetworks.com' && !hostname.endsWith('.eagleeyenetworks.com')) {
+    const isAllowed = allowedDomains.some(
+      (domain) => hostname === domain || hostname.endsWith('.' + domain)
+    )
+    if (!isAllowed) {
       return false
     }
 
@@ -298,7 +306,7 @@ async function handleGetAccessToken(url, request, env) {
         }
       }
       // Validate against EEN domain allowlist to prevent SSRF
-      if (candidateUrl && isValidEenUrl(candidateUrl)) {
+      if (candidateUrl && isValidEenUrl(candidateUrl, env)) {
         baseUrl = candidateUrl
       } else if (candidateUrl) {
         debugError(env, 'Rejected invalid httpsBaseUrl (SSRF protection):', candidateUrl)
@@ -1184,7 +1192,7 @@ async function checkAdminAccess(request, env) {
             }
           }
           // Validate against EEN domain allowlist to prevent SSRF
-          if (candidateUrl && isValidEenUrl(candidateUrl)) {
+          if (candidateUrl && isValidEenUrl(candidateUrl, env)) {
             baseUrl = candidateUrl
           } else if (candidateUrl) {
             debugError(env, 'Rejected invalid httpsBaseUrl (SSRF protection):', candidateUrl)
