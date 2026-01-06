@@ -100,7 +100,7 @@ run('npx wrangler deploy')
 console.log('')
 console.log('Setting secrets...')
 
-const secrets = ['CLIENT_ID', 'CLIENT_SECRET', 'ADMIN_EMAILS', 'ALLOWED_ORIGINS', 'REFRESH_TOKEN_TTL']
+const secrets = ['CLIENT_ID', 'CLIENT_SECRET', 'ADMIN_EMAILS', 'ALLOWED_ORIGINS', 'ALLOWED_API_DOMAINS', 'REFRESH_TOKEN_TTL']
 
 for (const secret of secrets) {
   const value = process.env[secret]

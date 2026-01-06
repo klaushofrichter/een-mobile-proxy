@@ -72,14 +72,28 @@ export async function loginWithEEN(page, customPassword = null) {
 }
 
 /**
- * Select the local proxy from the dropdown (if visible)
+ * Select the appropriate proxy from the dropdown (if visible)
+ * Uses VITE_PROXY_URL env var if set, otherwise defaults to localhost
  * @param {import('@playwright/test').Page} page - Playwright page object
  */
 export async function selectLocalProxy(page) {
   const proxySelect = page.locator('#proxy-select')
-  if (await proxySelect.isVisible()) {
-    await proxySelect.selectOption('http://localhost:8787')
-    console.log('📡 Selected local proxy')
+  const proxyUrl = process.env.VITE_PROXY_URL || 'http://localhost:8787'
+
+  try {
+    // Wait for proxy dropdown with short timeout - it may not exist in all environments
+    await proxySelect.waitFor({ state: 'visible', timeout: 2000 })
+
+    // Verify the option exists before selecting
+    const optionExists = (await proxySelect.locator(`option[value="${proxyUrl}"]`).count()) > 0
+    if (optionExists) {
+      await proxySelect.selectOption(proxyUrl)
+      console.log(`📡 Selected proxy: ${proxyUrl}`)
+    } else {
+      console.log(`⚠️ Proxy ${proxyUrl} not in dropdown, using default`)
+    }
+  } catch {
+    // Proxy dropdown not available - this is expected in some environments
   }
 }
 
