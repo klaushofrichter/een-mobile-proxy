@@ -72,14 +72,25 @@ export async function loginWithEEN(page, customPassword = null) {
 }
 
 /**
- * Select the local proxy from the dropdown (if visible)
+ * Select the appropriate proxy from the dropdown (if visible)
+ * Uses VITE_PROXY_URL env var if set, otherwise defaults to localhost
+ * Waits for the page to fully render before checking dropdown visibility
  * @param {import('@playwright/test').Page} page - Playwright page object
  */
 export async function selectLocalProxy(page) {
+  // Wait for the login button to be visible as a signal the page is fully rendered
+  await page.getByRole('button', { name: 'Sign in with Eagle Eye Networks' }).waitFor({ state: 'visible', timeout: 5000 })
+
+  // Now check if proxy dropdown exists and is visible
   const proxySelect = page.locator('#proxy-select')
+  // Give a small wait for any remaining render, then check visibility
+  await page.waitForTimeout(100)
+
   if (await proxySelect.isVisible()) {
-    await proxySelect.selectOption('http://localhost:8787')
-    console.log('📡 Selected local proxy')
+    // Use VITE_PROXY_URL if set, otherwise default to localhost
+    const proxyUrl = process.env.VITE_PROXY_URL || 'http://localhost:8787'
+    await proxySelect.selectOption(proxyUrl)
+    console.log(`📡 Selected proxy: ${proxyUrl}`)
   }
 }
 
