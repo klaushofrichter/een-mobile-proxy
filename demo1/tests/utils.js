@@ -81,16 +81,21 @@ export async function selectLocalProxy(page) {
   // Wait for the login button to be visible as a signal the page is fully rendered
   await page.getByRole('button', { name: 'Sign in with Eagle Eye Networks' }).waitFor({ state: 'visible', timeout: 5000 })
 
+  // Wait for DOM to stabilize after initial render
+  await page.waitForLoadState('domcontentloaded')
+
   // Now check if proxy dropdown exists and is visible
   const proxySelect = page.locator('#proxy-select')
-  // Give a small wait for any remaining render, then check visibility
-  await page.waitForTimeout(100)
 
   if (await proxySelect.isVisible()) {
-    // Use VITE_PROXY_URL if set, otherwise default to localhost
     const proxyUrl = process.env.VITE_PROXY_URL || 'http://localhost:8787'
-    await proxySelect.selectOption(proxyUrl)
-    console.log(`📡 Selected proxy: ${proxyUrl}`)
+    try {
+      await proxySelect.selectOption(proxyUrl)
+      console.log(`📡 Selected proxy: ${proxyUrl}`)
+    } catch (error) {
+      // Proxy selection is optional - continue if it fails (e.g., element disappeared)
+      console.warn(`⚠️ Could not select proxy ${proxyUrl}: ${error.message}`)
+    }
   }
 }
 
