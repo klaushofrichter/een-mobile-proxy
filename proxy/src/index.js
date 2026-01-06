@@ -103,12 +103,16 @@ function isValidEenUrl(url, env) {
     const hostname = parsed.hostname.toLowerCase()
 
     // Block IP addresses (IPv4, IPv6, and numeric representations)
-    // IPv4: 192.168.1.1, IPv6: [::1] or ::1, Numeric: 2130706433
-    if (
-      /^\d+\.\d+\.\d+\.\d+$/.test(hostname) ||
-      /^\[?[0-9a-f:]+\]?$/i.test(hostname) ||
-      /^\d+$/.test(hostname)
-    ) {
+    // IPv4: 192.168.1.1
+    // IPv6: [::1], ::1, fe80::1, or bracketed notation
+    // Numeric: 2130706433 (decimal representation of 127.0.0.1)
+    // Octal/Hex: 0177.0.0.1, 0x7f.0.0.1 (caught by non-digit check)
+    const isIPv4 = /^\d+\.\d+\.\d+\.\d+$/.test(hostname)
+    const isIPv6 = /^(\[.*\]|[0-9a-f]*:[0-9a-f:]*:[0-9a-f]*)$/i.test(hostname)
+    const isNumericIP = /^\d+$/.test(hostname)
+    const isOctalOrHex = /^0[0-7x]/i.test(hostname) || /\.0[0-7x]/i.test(hostname)
+
+    if (isIPv4 || isIPv6 || isNumericIP || isOctalOrHex) {
       return false
     }
 
@@ -375,6 +379,11 @@ async function handleGetAccessToken(url, request, env) {
     if (validatedUrl) {
       baseUrl = validatedUrl
     } else if (tokens.httpsBaseUrl) {
+      // Log rejection in production for security monitoring
+      console.warn('[SECURITY] SSRF protection: rejected invalid httpsBaseUrl', {
+        type: typeof tokens.httpsBaseUrl,
+        isObject: typeof tokens.httpsBaseUrl === 'object'
+      })
       debugError(env, 'Rejected invalid httpsBaseUrl (SSRF protection):', tokens.httpsBaseUrl)
     }
     debugLog(env, 'Fetching user profile from:', `${baseUrl}/api/v3.0/users/self`)
@@ -1248,6 +1257,11 @@ async function checkAdminAccess(request, env) {
         if (validatedUrl) {
           baseUrl = validatedUrl
         } else if (tokens.httpsBaseUrl) {
+          // Log rejection in production for security monitoring
+          console.warn('[SECURITY] SSRF protection: rejected invalid httpsBaseUrl', {
+            type: typeof tokens.httpsBaseUrl,
+            isObject: typeof tokens.httpsBaseUrl === 'object'
+          })
           debugError(env, 'Rejected invalid httpsBaseUrl (SSRF protection):', tokens.httpsBaseUrl)
         }
         debugLog(env, 'On-demand fetch: using baseUrl:', baseUrl)
@@ -1306,3 +1320,6 @@ function jsonResponse(data, status = 200) {
     headers: { 'Content-Type': 'application/json' }
   })
 }
+
+// Export SSRF validation functions for testing
+export { isValidEenUrl, parseHttpsBaseUrl }
