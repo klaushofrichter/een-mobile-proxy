@@ -85,6 +85,133 @@ function getRefreshTokenTtl(env) {
 }
 
 /**
+ * Validates that a URL is a legitimate API endpoint based on configured allowlist.
+ * Prevents SSRF attacks by only allowing configured domains.
+ * @param {string} url - The URL to validate
+ * @param {Object} env - Environment bindings containing ALLOWED_API_DOMAINS
+ * @returns {boolean} - True if URL is safe to use
+ */
+function isValidEenUrl(url, env) {
+  try {
+    const parsed = new URL(url)
+
+    // Must be HTTPS protocol
+    if (parsed.protocol !== 'https:') {
+      return false
+    }
+
+    const hostname = parsed.hostname.toLowerCase()
+
+    // Block IP addresses (IPv4, IPv6, and numeric representations)
+    // IPv4: 192.168.1.1
+    // IPv6: [::1], [fe80::1], or with :: shorthand
+    // Numeric: 2130706433 (decimal representation of 127.0.0.1)
+    // Octal/Hex: 0177.0.0.1, 0x7f.0.0.1
+    const isIPv4 = /^\d+\.\d+\.\d+\.\d+$/.test(hostname)
+    // IPv6 detection: bracketed format [xxx] or contains :: (IPv6 shorthand)
+    // or has 2+ colons with hex segments (full IPv6 like 2001:db8:85a3::1)
+    const isIPv6Bracketed = /^\[.+\]$/.test(hostname)
+    const isIPv6Shorthand = hostname.includes('::')
+    const isIPv6Full = /^[0-9a-f]+:[0-9a-f]+:/i.test(hostname)
+    const isNumericIP = /^\d+$/.test(hostname)
+    const isOctalOrHex = /^0[0-7x]/i.test(hostname) || /\.0[0-7x]/i.test(hostname)
+
+    if (isIPv4 || isIPv6Bracketed || isIPv6Shorthand || isIPv6Full || isNumericIP || isOctalOrHex) {
+      return false
+    }
+
+    // Block non-ASCII domains (prevent Unicode/IDN homograph attacks)
+    if (!/^[a-z0-9.-]+$/.test(hostname)) {
+      return false
+    }
+
+    // Get allowed domains from environment (default: eagleeyenetworks.com)
+    // Filter out empty strings and wildcard patterns
+    const allowedDomainsStr = env.ALLOWED_API_DOMAINS || 'eagleeyenetworks.com'
+    let allowedDomains = allowedDomainsStr
+      .split(',')
+      .map((d) => d.trim().toLowerCase())
+      .filter((d) => d && !/[*?]/.test(d))
+
+    // Fallback to default if config is invalid
+    if (allowedDomains.length === 0) {
+      allowedDomains.push('eagleeyenetworks.com')
+    }
+
+    // Check hostname against allowlist (exact match or subdomain)
+    const isAllowed = allowedDomains.some(
+      (domain) => hostname === domain || hostname.endsWith('.' + domain)
+    )
+    if (!isAllowed) {
+      return false
+    }
+
+    // No credentials allowed in URL
+    if (parsed.username || parsed.password) {
+      return false
+    }
+
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Constructs and validates a base URL from httpsBaseUrl token response.
+ * Handles both string and object {hostname, port} formats.
+ * @param {string|Object} httpsBaseUrl - The httpsBaseUrl from token response
+ * @param {Object} env - Environment bindings
+ * @returns {string|null} - Valid base URL or null if invalid
+ */
+function parseHttpsBaseUrl(httpsBaseUrl, env) {
+  if (!httpsBaseUrl) {
+    return null
+  }
+
+  let candidateUrl = null
+
+  if (typeof httpsBaseUrl === 'string') {
+    candidateUrl = httpsBaseUrl
+  } else if (typeof httpsBaseUrl === 'object') {
+    // Handle object format: {hostname: "c001.eagleeyenetworks.com", port: 443}
+    const host = httpsBaseUrl.hostname || httpsBaseUrl.host
+    const port = httpsBaseUrl.port
+
+    // Validate hostname format:
+    // - Must be a non-empty string
+    // - Max 253 chars per DNS spec (RFC 1035)
+    // - DNS-compliant: starts/ends with alphanumeric, allows dots/hyphens internally
+    if (
+      !host ||
+      typeof host !== 'string' ||
+      host.length > 253 ||
+      !/^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$/.test(host)
+    ) {
+      return null
+    }
+
+    // Validate port if provided
+    if (port !== undefined && port !== null) {
+      const portNum = parseInt(port, 10)
+      if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
+        return null
+      }
+      candidateUrl = `https://${host}${portNum !== 443 ? ':' + portNum : ''}`
+    } else {
+      candidateUrl = `https://${host}`
+    }
+  }
+
+  // Validate against SSRF allowlist
+  if (candidateUrl && isValidEenUrl(candidateUrl, env)) {
+    return candidateUrl
+  }
+
+  return null
+}
+
+/**
  * Main request handler
  */
 export default {
@@ -248,29 +375,20 @@ async function handleGetAccessToken(url, request, env) {
 
   // Fetch user profile to get email for admin verification
   // Use the httpsBaseUrl from token response (regional endpoint)
-  // httpsBaseUrl can be a string URL or an object {hostname, port}
+  // SECURITY: Validate URL against allowlist to prevent SSRF attacks
   let userEmail = null
   try {
     let baseUrl = 'https://api.eagleeyenetworks.com'
-    if (tokens.httpsBaseUrl) {
-      if (typeof tokens.httpsBaseUrl === 'string') {
-        baseUrl = tokens.httpsBaseUrl
-      } else if (typeof tokens.httpsBaseUrl === 'object') {
-        // Handle object format: {hostname: "c001.eagleeyenetworks.com", port: 443}
-        const host = tokens.httpsBaseUrl.hostname || tokens.httpsBaseUrl.host
-        const port = tokens.httpsBaseUrl.port
-        // Validate host before constructing URL
-        // DNS hostnames have a max length of 253 characters
-        // Regex allows 1-char labels and prevents consecutive dots/leading/trailing hyphens
-        if (
-          host &&
-          typeof host === 'string' &&
-          host.length <= 253 &&
-          /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$/.test(host)
-        ) {
-          baseUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
-        }
-      }
+    const validatedUrl = parseHttpsBaseUrl(tokens.httpsBaseUrl, env)
+    if (validatedUrl) {
+      baseUrl = validatedUrl
+    } else if (tokens.httpsBaseUrl) {
+      // Log rejection in production for security monitoring
+      console.warn('[SECURITY] SSRF protection: rejected invalid httpsBaseUrl', {
+        type: typeof tokens.httpsBaseUrl,
+        isObject: typeof tokens.httpsBaseUrl === 'object'
+      })
+      debugError(env, 'Rejected invalid httpsBaseUrl (SSRF protection):', tokens.httpsBaseUrl)
     }
     debugLog(env, 'Fetching user profile from:', `${baseUrl}/api/v3.0/users/self`)
     const userResponse = await fetch(`${baseUrl}/api/v3.0/users/self`, {
@@ -1137,19 +1255,18 @@ async function checkAdminAccess(request, env) {
       if (tokenResponse.ok) {
         const tokens = await tokenResponse.json()
 
-        // Parse httpsBaseUrl - can be string or object {hostname, port}
+        // Parse httpsBaseUrl - SECURITY: Validate URL against allowlist to prevent SSRF attacks
         let baseUrl = 'https://api.eagleeyenetworks.com'
-        if (tokens.httpsBaseUrl) {
-          if (typeof tokens.httpsBaseUrl === 'string') {
-            baseUrl = tokens.httpsBaseUrl
-          } else if (typeof tokens.httpsBaseUrl === 'object') {
-            const host = tokens.httpsBaseUrl.hostname || tokens.httpsBaseUrl.host
-            const port = tokens.httpsBaseUrl.port
-            // Validate host before constructing URL
-            if (host && typeof host === 'string') {
-              baseUrl = `https://${host}${port && port !== 443 ? ':' + port : ''}`
-            }
-          }
+        const validatedUrl = parseHttpsBaseUrl(tokens.httpsBaseUrl, env)
+        if (validatedUrl) {
+          baseUrl = validatedUrl
+        } else if (tokens.httpsBaseUrl) {
+          // Log rejection in production for security monitoring
+          console.warn('[SECURITY] SSRF protection: rejected invalid httpsBaseUrl', {
+            type: typeof tokens.httpsBaseUrl,
+            isObject: typeof tokens.httpsBaseUrl === 'object'
+          })
+          debugError(env, 'Rejected invalid httpsBaseUrl (SSRF protection):', tokens.httpsBaseUrl)
         }
         debugLog(env, 'On-demand fetch: using baseUrl:', baseUrl)
 
@@ -1207,3 +1324,6 @@ function jsonResponse(data, status = 200) {
     headers: { 'Content-Type': 'application/json' }
   })
 }
+
+// Export SSRF validation functions for testing
+export { isValidEenUrl, parseHttpsBaseUrl }
