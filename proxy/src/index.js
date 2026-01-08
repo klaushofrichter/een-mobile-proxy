@@ -173,8 +173,8 @@ function isValidEenUrl(url, env) {
         // Filter out empty strings, wildcards, and invalid entries
         // Note: Single-char TLDs (e.g., "x") are technically allowed by this regex
         // but will fail the subdomain check unless explicitly configured
-        // Also filter out domains with consecutive dots (e.g., "example..com") which are invalid DNS
-        .filter((d) => d && d.length <= 253 && !/[*?]/.test(d) && /^[a-z0-9.-]+$/.test(d) && !/\.\./.test(d))
+        // Also filter out invalid DNS patterns: consecutive dots, leading/trailing dots
+        .filter((d) => d && d.length <= 253 && !/[*?]/.test(d) && /^[a-z0-9.-]+$/.test(d) && !/\.\./.test(d) && !/^\.|\.$/.test(d))
 
       // Fallback to default if config is invalid
       if (allowedDomains.length === 0) {
