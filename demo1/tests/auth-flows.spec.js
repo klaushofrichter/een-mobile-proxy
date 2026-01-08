@@ -151,7 +151,7 @@ test.describe('Authentication Flows', () => {
     } catch (error) {
       clearTimeout(timeoutId)
       if (error.name === 'AbortError') {
-        throw new Error('Refresh request timed out after 10 seconds')
+        throw new Error(`Refresh request timed out after ${MAX_TEST_TIMEOUT / 1000} seconds`)
       }
       throw error
     }
