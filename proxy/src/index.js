@@ -42,12 +42,20 @@ const DEFAULT_RATE_LIMIT_ADMIN = 60 // requests per window
 const DEFAULT_RATE_LIMIT_WINDOW = 60 // seconds
 const DEFAULT_RATE_LIMIT_UNKNOWN = 5 // very restrictive limit for unidentified clients
 
+// SSRF protection constants
+const MAX_ALLOWED_DOMAINS_CONFIG_LENGTH = 1024 // Max length of ALLOWED_API_DOMAINS config string
+const MAX_DEBUG_LOG_VALUE_LENGTH = 100 // Max length for user-controlled values in debug logs
+
 // Rate limit categories
 const RATE_LIMIT_CATEGORY = {
   HEALTH: 'health',
   OAUTH: 'oauth',
   ADMIN: 'admin'
 }
+
+// Cache for parsed ALLOWED_API_DOMAINS (persists within worker instance)
+let cachedAllowlistConfig = null
+let cachedAllowlist = null
 
 /**
  * Conditional debug logging - only logs in development environment
@@ -74,6 +82,23 @@ function debugError(env, ...args) {
 }
 
 /**
+ * Truncate a value for safe debug logging
+ * Prevents log flooding from large user-controlled values
+ * @param {string} value - Value to truncate
+ * @param {number} maxLength - Maximum length (default: MAX_DEBUG_LOG_VALUE_LENGTH)
+ * @returns {string} - Truncated value with indicator if truncated
+ */
+function truncateForLog(value, maxLength = MAX_DEBUG_LOG_VALUE_LENGTH) {
+  if (typeof value !== 'string') {
+    value = String(value)
+  }
+  if (value.length <= maxLength) {
+    return value
+  }
+  return value.substring(0, maxLength) + '...[truncated]'
+}
+
+/**
  * Get validated refresh token TTL from environment
  * @param {Object} env - Environment bindings
  * @returns {number} - TTL in seconds (bounded between 0 and 30 days)
@@ -97,6 +122,7 @@ function isValidEenUrl(url, env) {
 
     // Must be HTTPS protocol
     if (parsed.protocol !== 'https:') {
+      debugLog(env, `[SSRF] Blocked non-HTTPS URL: ${truncateForLog(parsed.protocol)}`)
       return false
     }
 
@@ -117,25 +143,47 @@ function isValidEenUrl(url, env) {
     const isOctalOrHex = /^0[0-7x]/i.test(hostname) || /\.0[0-7x]/i.test(hostname)
 
     if (isIPv4 || isIPv6Bracketed || isIPv6Shorthand || isIPv6Full || isNumericIP || isOctalOrHex) {
+      debugLog(env, `[SSRF] Blocked IP-based hostname: ${truncateForLog(hostname)}`)
       return false
     }
 
     // Block non-ASCII domains (prevent Unicode/IDN homograph attacks)
     if (!/^[a-z0-9.-]+$/.test(hostname)) {
+      debugLog(env, `[SSRF] Blocked non-ASCII hostname: ${truncateForLog(hostname)}`)
       return false
     }
 
     // Get allowed domains from environment (default: eagleeyenetworks.com)
-    // Filter out empty strings and wildcard patterns
-    const allowedDomainsStr = env.ALLOWED_API_DOMAINS || 'eagleeyenetworks.com'
-    let allowedDomains = allowedDomainsStr
-      .split(',')
-      .map((d) => d.trim().toLowerCase())
-      .filter((d) => d && !/[*?]/.test(d))
+    // Uses caching to avoid re-parsing on every request
+    const rawAllowedDomains = env.ALLOWED_API_DOMAINS || 'eagleeyenetworks.com'
 
-    // Fallback to default if config is invalid
-    if (allowedDomains.length === 0) {
-      allowedDomains.push('eagleeyenetworks.com')
+    // Use cached allowlist if config hasn't changed
+    let allowedDomains
+    if (cachedAllowlistConfig === rawAllowedDomains && cachedAllowlist) {
+      allowedDomains = cachedAllowlist
+    } else {
+      // Parse and cache the allowlist
+      // Limit config string length to prevent DoS via large config
+      const allowedDomainsStr = rawAllowedDomains.length > MAX_ALLOWED_DOMAINS_CONFIG_LENGTH
+        ? rawAllowedDomains.substring(0, MAX_ALLOWED_DOMAINS_CONFIG_LENGTH)
+        : rawAllowedDomains
+      allowedDomains = allowedDomainsStr
+        .split(',')
+        .map((d) => d.trim().toLowerCase())
+        // Filter out empty strings, wildcards, and invalid entries
+        // Note: Single-char TLDs (e.g., "x") are technically allowed by this regex
+        // but will fail the subdomain check unless explicitly configured
+        // Also filter out invalid DNS patterns: consecutive dots, leading/trailing dots
+        .filter((d) => d && d.length <= 253 && !/[*?]/.test(d) && /^[a-z0-9.-]+$/.test(d) && !/\.\./.test(d) && !/^\.|\.$/.test(d))
+
+      // Fallback to default if config is invalid
+      if (allowedDomains.length === 0) {
+        allowedDomains = ['eagleeyenetworks.com']
+      }
+
+      // Update cache
+      cachedAllowlistConfig = rawAllowedDomains
+      cachedAllowlist = allowedDomains
     }
 
     // Check hostname against allowlist (exact match or subdomain)
@@ -143,16 +191,19 @@ function isValidEenUrl(url, env) {
       (domain) => hostname === domain || hostname.endsWith('.' + domain)
     )
     if (!isAllowed) {
+      debugLog(env, `[SSRF] Blocked hostname not in allowlist: ${truncateForLog(hostname)}`)
       return false
     }
 
     // No credentials allowed in URL
     if (parsed.username || parsed.password) {
+      debugLog(env, `[SSRF] Blocked URL with embedded credentials`)
       return false
     }
 
     return true
-  } catch {
+  } catch (e) {
+    debugLog(env, `[SSRF] Blocked malformed URL: ${truncateForLog(e.message)}`)
     return false
   }
 }
@@ -193,7 +244,12 @@ function parseHttpsBaseUrl(httpsBaseUrl, env) {
 
     // Validate port if provided
     if (port !== undefined && port !== null) {
-      const portNum = parseInt(port, 10)
+      // Reject malformed port strings like "8443xyz" - must be purely numeric or a number
+      const portStr = String(port)
+      if (!/^\d+$/.test(portStr)) {
+        return null
+      }
+      const portNum = parseInt(portStr, 10)
       if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
         return null
       }

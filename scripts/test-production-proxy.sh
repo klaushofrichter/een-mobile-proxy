@@ -14,6 +14,14 @@
 
 set -e
 
+# Check for required dependencies
+for cmd in curl jq; do
+  if ! command -v "$cmd" &> /dev/null; then
+    echo "Error: Required command '$cmd' not found. Please install it first."
+    exit 1
+  fi
+done
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
