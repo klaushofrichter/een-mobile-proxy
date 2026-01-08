@@ -122,9 +122,13 @@ test.describe('Authentication Flows', () => {
 
     // Add timeout to prevent test from hanging indefinitely
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000)
+    const timeoutId = setTimeout(() => controller.abort(), MAX_TEST_TIMEOUT)
 
     try {
+      // Using Authorization Bearer header instead of credentials: 'include' because:
+      // 1. The session cookie was cleared by logout, so there's nothing to include
+      // 2. We're explicitly testing with the captured (now-revoked) session ID
+      // 3. The proxy supports Bearer token auth for mobile/cross-site scenarios
       const refreshResponse = await fetch(`${proxyUrl}/proxy/refreshAccessToken`, {
         method: 'POST',
         headers: {

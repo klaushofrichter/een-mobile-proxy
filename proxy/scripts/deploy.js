@@ -179,7 +179,7 @@ if (testResult.success) {
   console.log('The deployment completed but tests failed.')
   if (testResult.error) {
     console.log(`Exit code: ${testResult.error.status || 'unknown'}`)
-    if (testResult.error.stderr) {
+    if (testResult.error.stderr && testResult.error.stderr.length > 0) {
       console.log(`Error output: ${testResult.error.stderr.toString()}`)
     }
   }
