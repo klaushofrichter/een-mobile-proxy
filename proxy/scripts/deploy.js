@@ -144,3 +144,40 @@ console.log('')
 console.log('========================================')
 console.log('Deployment complete!')
 console.log('========================================')
+
+// Verify deployment with production tests
+console.log('')
+console.log('Waiting 5 seconds for deployment to propagate...')
+
+await new Promise(resolve => setTimeout(resolve, 5000))
+
+console.log('')
+console.log('Running production verification tests...')
+console.log('')
+
+const testScript = join(__dirname, '..', '..', 'scripts', 'test-production-proxy.sh')
+const testResult = (() => {
+  try {
+    execSync(`BRIEF=1 bash "${testScript}"`, {
+      cwd: projectRoot,
+      stdio: 'inherit'
+    })
+    return { success: true }
+  } catch (error) {
+    return { success: false, error }
+  }
+})()
+
+console.log('')
+if (testResult.success) {
+  console.log('========================================')
+  console.log('Deployment verified successfully!')
+  console.log('========================================')
+} else {
+  console.log('========================================')
+  console.log('WARNING: Production verification failed!')
+  console.log('The deployment completed but tests failed.')
+  console.log('Please investigate the proxy status.')
+  console.log('========================================')
+  process.exit(1)
+}
