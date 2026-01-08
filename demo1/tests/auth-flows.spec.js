@@ -104,38 +104,53 @@ test.describe('Authentication Flows', () => {
     await expect(page.locator('h3', { hasText: 'User Profile' })).toBeVisible({ timeout: 15000 })
     console.log('✅ Logged in and on profile page')
 
-    // Step 3: Capture the session cookie before logout
+    // Step 3: Capture the session cookie before logout (proxy uses 'sessionId')
     const cookies = await context.cookies()
-    const sessionCookie = cookies.find(c => c.name === 'session_id' || c.name === 'sessionId')
-    const sessionId = sessionCookie?.value
-    console.log(`📋 Session ID captured: ${sessionId ? 'yes' : 'no'}`)
+    const sessionCookie = cookies.find(c => c.name === 'sessionId')
+    expect(sessionCookie, 'Session cookie must exist after login').toBeTruthy()
+    const sessionId = sessionCookie.value
+    console.log('📋 Session ID captured: yes')
 
     // Step 4: Revoke token and logout
     await logoutFromApplication(page)
     console.log('🚪 Token revoked and logged out')
 
     // Step 5: Try to refresh using the old session ID via direct API call
+    // Using Authorization Bearer header (supported by proxy for mobile/cross-site scenarios)
     const proxyUrl = process.env.VITE_PROXY_URL || 'http://localhost:8787'
     console.log(`🔄 Attempting refresh against ${proxyUrl}/proxy/refreshAccessToken`)
 
-    const refreshResponse = await fetch(`${proxyUrl}/proxy/refreshAccessToken`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Origin': 'http://127.0.0.1:3333',
-        ...(sessionId ? { 'Authorization': `Bearer ${sessionId}` } : {})
-      },
-      credentials: 'include'
-    })
+    // Add timeout to prevent test from hanging indefinitely
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
 
-    console.log(`📋 Refresh response status: ${refreshResponse.status}`)
+    try {
+      const refreshResponse = await fetch(`${proxyUrl}/proxy/refreshAccessToken`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'http://127.0.0.1:3333',
+          'Authorization': `Bearer ${sessionId}`
+        },
+        signal: controller.signal
+      })
 
-    // Step 6: Verify refresh fails (401 - session no longer exists)
-    expect(refreshResponse.status).toBe(401)
-    console.log('✅ Refresh correctly rejected with 401 (session revoked)')
+      clearTimeout(timeoutId)
+      console.log(`📋 Refresh response status: ${refreshResponse.status}`)
 
-    const responseData = await refreshResponse.json().catch(() => ({}))
-    console.log(`📋 Response: ${JSON.stringify(responseData)}`)
+      // Step 6: Verify refresh fails (401 - session no longer exists)
+      expect(refreshResponse.status).toBe(401)
+      console.log('✅ Refresh correctly rejected with 401 (session revoked)')
+
+      const responseData = await refreshResponse.json().catch(() => ({}))
+      console.log(`📋 Response: ${JSON.stringify(responseData)}`)
+    } catch (error) {
+      clearTimeout(timeoutId)
+      if (error.name === 'AbortError') {
+        throw new Error('Refresh request timed out after 10 seconds')
+      }
+      throw error
+    }
 
     console.log('\n✅ Token refresh after revocation test completed!\n')
   })
