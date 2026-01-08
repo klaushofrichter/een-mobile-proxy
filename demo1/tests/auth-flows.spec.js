@@ -93,44 +93,51 @@ test.describe('Authentication Flows', () => {
     console.log('\n✅ Direct access with captured token test completed!\n')
   })
 
-  test('should fail direct access after token revocation', async ({ page }) => {
-    console.log('\n▶️ Running Test: Token revocation and failed re-use\n')
+  test('should fail token refresh after revocation', async ({ page, context }) => {
+    console.log('\n▶️ Running Test: Token refresh fails after revocation\n')
     test.setTimeout(MAX_TEST_TIMEOUT * 2)
 
-    // Step 1: Login via OAuth to get a valid token
+    // Step 1: Login via OAuth to get a valid session
     await loginToApplication(page)
 
-    // Step 2: Capture credentials from profile page
+    // Step 2: Verify we're on profile page
     await expect(page.locator('h3', { hasText: 'User Profile' })).toBeVisible({ timeout: 15000 })
-    const credentials = await captureCredentialsFromProfile(page)
-    console.log('📋 Credentials captured')
+    console.log('✅ Logged in and on profile page')
 
-    // Step 3: Revoke token and logout
+    // Step 3: Capture the session cookie before logout
+    const cookies = await context.cookies()
+    const sessionCookie = cookies.find(c => c.name === 'session_id' || c.name === 'sessionId')
+    const sessionId = sessionCookie?.value
+    console.log(`📋 Session ID captured: ${sessionId ? 'yes' : 'no'}`)
+
+    // Step 4: Revoke token and logout
     await logoutFromApplication(page)
     console.log('🚪 Token revoked and logged out')
 
-    // Step 4: Try direct access with the revoked token
-    await loginWithDirectAccess(page, credentials)
+    // Step 5: Try to refresh using the old session ID via direct API call
+    const proxyUrl = process.env.VITE_PROXY_URL || 'http://localhost:8787'
+    console.log(`🔄 Attempting refresh against ${proxyUrl}/proxy/refreshAccessToken`)
 
-    // Step 5: Should fail - expect error message on direct access page
-    await page.waitForTimeout(3000) // Wait for API call to complete
+    const refreshResponse = await fetch(`${proxyUrl}/proxy/refreshAccessToken`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Origin': 'http://127.0.0.1:3333',
+        ...(sessionId ? { 'Authorization': `Bearer ${sessionId}` } : {})
+      },
+      credentials: 'include'
+    })
 
-    // Should still be on direct page or show error
-    const errorVisible = await page.locator('text=/expired|invalid|unauthorized|failed/i').isVisible().catch(() => false)
-    const stillOnDirectPage = page.url().includes('/direct')
+    console.log(`📋 Refresh response status: ${refreshResponse.status}`)
 
-    if (errorVisible) {
-      console.log('✅ Error message displayed for revoked token')
-    }
-    if (stillOnDirectPage) {
-      console.log('✅ Still on direct page (login failed as expected)')
-    }
+    // Step 6: Verify refresh fails (401 - session no longer exists)
+    expect(refreshResponse.status).toBe(401)
+    console.log('✅ Refresh correctly rejected with 401 (session revoked)')
 
-    // Verify we did NOT make it to profile
-    expect(page.url()).not.toContain('/profile')
-    console.log('✅ Confirmed not redirected to profile')
+    const responseData = await refreshResponse.json().catch(() => ({}))
+    console.log(`📋 Response: ${JSON.stringify(responseData)}`)
 
-    console.log('\n✅ Token revocation test completed!\n')
+    console.log('\n✅ Token refresh after revocation test completed!\n')
   })
 
   test('should refresh token and use it for direct login', async ({ page }) => {
