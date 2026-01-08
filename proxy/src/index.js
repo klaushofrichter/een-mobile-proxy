@@ -49,6 +49,10 @@ const RATE_LIMIT_CATEGORY = {
   ADMIN: 'admin'
 }
 
+// Cache for parsed ALLOWED_API_DOMAINS (persists within worker instance)
+let cachedAllowlistConfig = null
+let cachedAllowlist = null
+
 /**
  * Conditional debug logging - only logs in development environment
  * Prevents sensitive information leakage in production
@@ -97,6 +101,7 @@ function isValidEenUrl(url, env) {
 
     // Must be HTTPS protocol
     if (parsed.protocol !== 'https:') {
+      debugLog(env, `[SSRF] Blocked non-HTTPS URL: ${parsed.protocol}`)
       return false
     }
 
@@ -117,25 +122,46 @@ function isValidEenUrl(url, env) {
     const isOctalOrHex = /^0[0-7x]/i.test(hostname) || /\.0[0-7x]/i.test(hostname)
 
     if (isIPv4 || isIPv6Bracketed || isIPv6Shorthand || isIPv6Full || isNumericIP || isOctalOrHex) {
+      debugLog(env, `[SSRF] Blocked IP-based hostname: ${hostname}`)
       return false
     }
 
     // Block non-ASCII domains (prevent Unicode/IDN homograph attacks)
     if (!/^[a-z0-9.-]+$/.test(hostname)) {
+      debugLog(env, `[SSRF] Blocked non-ASCII hostname: ${hostname}`)
       return false
     }
 
     // Get allowed domains from environment (default: eagleeyenetworks.com)
-    // Filter out empty strings and wildcard patterns
-    const allowedDomainsStr = env.ALLOWED_API_DOMAINS || 'eagleeyenetworks.com'
-    let allowedDomains = allowedDomainsStr
-      .split(',')
-      .map((d) => d.trim().toLowerCase())
-      .filter((d) => d && !/[*?]/.test(d))
+    // Uses caching to avoid re-parsing on every request
+    const rawAllowedDomains = env.ALLOWED_API_DOMAINS || 'eagleeyenetworks.com'
 
-    // Fallback to default if config is invalid
-    if (allowedDomains.length === 0) {
-      allowedDomains.push('eagleeyenetworks.com')
+    // Use cached allowlist if config hasn't changed
+    let allowedDomains
+    if (cachedAllowlistConfig === rawAllowedDomains && cachedAllowlist) {
+      allowedDomains = cachedAllowlist
+    } else {
+      // Parse and cache the allowlist
+      // Limit config string length to prevent DoS via large config (max 1KB)
+      const allowedDomainsStr = rawAllowedDomains.length > 1024
+        ? rawAllowedDomains.substring(0, 1024)
+        : rawAllowedDomains
+      allowedDomains = allowedDomainsStr
+        .split(',')
+        .map((d) => d.trim().toLowerCase())
+        // Filter out empty strings, wildcards, and invalid entries
+        // Note: Single-char TLDs (e.g., "x") are technically allowed by this regex
+        // but will fail the subdomain check unless explicitly configured
+        .filter((d) => d && d.length <= 253 && !/[*?]/.test(d) && /^[a-z0-9.-]+$/.test(d))
+
+      // Fallback to default if config is invalid
+      if (allowedDomains.length === 0) {
+        allowedDomains = ['eagleeyenetworks.com']
+      }
+
+      // Update cache
+      cachedAllowlistConfig = rawAllowedDomains
+      cachedAllowlist = allowedDomains
     }
 
     // Check hostname against allowlist (exact match or subdomain)
@@ -143,16 +169,19 @@ function isValidEenUrl(url, env) {
       (domain) => hostname === domain || hostname.endsWith('.' + domain)
     )
     if (!isAllowed) {
+      debugLog(env, `[SSRF] Blocked hostname not in allowlist: ${hostname}`)
       return false
     }
 
     // No credentials allowed in URL
     if (parsed.username || parsed.password) {
+      debugLog(env, `[SSRF] Blocked URL with embedded credentials`)
       return false
     }
 
     return true
-  } catch {
+  } catch (e) {
+    debugLog(env, `[SSRF] Blocked malformed URL: ${e.message}`)
     return false
   }
 }
@@ -193,7 +222,12 @@ function parseHttpsBaseUrl(httpsBaseUrl, env) {
 
     // Validate port if provided
     if (port !== undefined && port !== null) {
-      const portNum = parseInt(port, 10)
+      // Reject malformed port strings like "8443xyz" - must be purely numeric or a number
+      const portStr = String(port)
+      if (!/^\d+$/.test(portStr)) {
+        return null
+      }
+      const portNum = parseInt(portStr, 10)
       if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
         return null
       }
