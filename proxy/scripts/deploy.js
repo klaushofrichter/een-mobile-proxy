@@ -117,9 +117,44 @@ if (missingCritical.length > 0) {
 }
 console.log('All critical secrets present')
 
-// Set secrets BEFORE deploying worker to avoid broken state if secrets fail
-// Note: This requires the worker to already exist (from a previous deployment)
-// For first-time deployments, deploy manually first or use wrangler deploy directly
+// Check if worker exists (required before setting secrets)
+// Distinguish between "no worker" and "command failed" to avoid false positives
+console.log('')
+console.log('Checking if worker exists...')
+let isFirstDeployment = false
+try {
+  const output = execSync('npx wrangler deployments list --limit 1', {
+    cwd: projectRoot,
+    encoding: 'utf-8',
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  // If command succeeds but output is empty or shows no deployments, it's first deployment
+  if (!output || output.trim() === '' || output.includes('No deployments')) {
+    isFirstDeployment = true
+  }
+} catch (error) {
+  const errorMsg = error.stderr?.toString() || error.message || ''
+  // Check for specific error messages indicating worker doesn't exist
+  if (errorMsg.includes('could not find') || errorMsg.includes('not found') ||
+      errorMsg.includes('does not exist') || errorMsg.includes('no deployments')) {
+    isFirstDeployment = true
+  } else {
+    // Other errors (auth, network, etc.) - fail loudly instead of assuming first deployment
+    console.error('Error checking worker status:', errorMsg)
+    console.error('Cannot determine if worker exists. Please check your credentials and network.')
+    process.exit(1)
+  }
+}
+
+if (isFirstDeployment) {
+  console.log('First-time deployment detected, deploying worker first...')
+  run('npx wrangler deploy')
+  console.log('Initial worker deployed, now setting secrets...')
+} else {
+  console.log('Worker exists, proceeding with secrets...')
+}
+
+// Set secrets (after ensuring worker exists)
 console.log('')
 console.log('Setting secrets...')
 
@@ -155,10 +190,15 @@ for (const secret of secrets) {
   }
 }
 
-// Deploy worker (after secrets are set to ensure worker has all configuration)
-console.log('')
-console.log('Deploying worker...')
-run('npx wrangler deploy')
+// Deploy worker with updated secrets (skip if this was a first-time deployment)
+if (isFirstDeployment) {
+  console.log('')
+  console.log('Skipping final deploy (already deployed for first-time setup)')
+} else {
+  console.log('')
+  console.log('Deploying worker...')
+  run('npx wrangler deploy')
+}
 
 // Store version in KV
 console.log('')
