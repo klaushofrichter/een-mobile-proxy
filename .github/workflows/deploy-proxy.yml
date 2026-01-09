@@ -124,6 +124,7 @@ jobs:
 
       - name: Set Cloudflare secrets
         if: steps.check.outputs.should_deploy == 'true'
+        id: set_secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -174,6 +175,7 @@ jobs:
 
       - name: Wait for deployment propagation
         if: steps.check.outputs.should_deploy == 'true'
+        id: wait_propagation
         run: |
           # Poll health endpoint until version matches or timeout (exponential backoff)
           EXPECTED_VERSION="${{ steps.version.outputs.version }}"
@@ -209,23 +211,33 @@ jobs:
         id: rollback_check
         run: |
           # Determine if rollback should be attempted
-          # Rollback triggers if: deploy succeeded but any subsequent step failed
+          # Rollback triggers if deploy succeeded but any post-deployment step failed:
+          # - secrets upload failed, OR
+          # - KV version storage failed, OR
+          # - propagation wait failed, OR
           # - verification failed, OR
-          # - secrets/KV steps failed (deployment_complete not set), OR
-          # - workflow is failing for any reason after deploy
+          # - deployment_complete flag not set
           DEPLOY_SUCCEEDED="${{ steps.deploy.outputs.deployed == 'true' }}"
+          SECRETS_FAILED="${{ steps.set_secrets.outcome == 'failure' }}"
+          STORE_VERSION_FAILED="${{ steps.store_version.outcome == 'failure' }}"
+          PROPAGATION_FAILED="${{ steps.wait_propagation.outcome == 'failure' }}"
+          VERIFY_FAILED="${{ steps.verify.outcome == 'failure' }}"
           DEPLOYMENT_COMPLETE="${{ steps.store_version.outputs.deployment_complete == 'true' }}"
           HAS_PREVIOUS="${{ steps.current_deployment.outputs.has_previous_version == 'true' }}"
-          WORKFLOW_FAILING="${{ failure() }}"
 
           echo "Deploy succeeded: $DEPLOY_SUCCEEDED"
+          echo "Secrets failed: $SECRETS_FAILED"
+          echo "Store version failed: $STORE_VERSION_FAILED"
+          echo "Propagation failed: $PROPAGATION_FAILED"
+          echo "Verify failed: $VERIFY_FAILED"
           echo "Deployment complete: $DEPLOYMENT_COMPLETE"
           echo "Has previous version: $HAS_PREVIOUS"
-          echo "Workflow failing: $WORKFLOW_FAILING"
 
-          # Rollback if deploy succeeded but workflow is failing OR deployment didn't complete
+          # Rollback if deploy succeeded but ANY subsequent step failed
           if [ "$DEPLOY_SUCCEEDED" = "true" ]; then
-            if [ "$WORKFLOW_FAILING" = "true" ] || [ "$DEPLOYMENT_COMPLETE" != "true" ]; then
+            if [ "$SECRETS_FAILED" = "true" ] || [ "$STORE_VERSION_FAILED" = "true" ] || \
+               [ "$PROPAGATION_FAILED" = "true" ] || [ "$VERIFY_FAILED" = "true" ] || \
+               [ "$DEPLOYMENT_COMPLETE" != "true" ]; then
               echo "should_rollback=true" >> $GITHUB_OUTPUT
               if [ "$HAS_PREVIOUS" = "true" ]; then
                 echo "can_rollback=true" >> $GITHUB_OUTPUT
