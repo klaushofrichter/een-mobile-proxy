@@ -553,27 +553,31 @@ Automatically deploys the proxy to Cloudflare Workers with version checking and 
 4. Deploy worker to Cloudflare
 5. Set Cloudflare secrets (CLIENT_ID, CLIENT_SECRET, etc.)
 6. Store deploy version in KV
-7. Wait 10 seconds for propagation
+7. Wait 15 seconds for propagation
 8. Run verification tests against deployed proxy
 9. **On test failure: Automatically rollback to previous version**
-10. Send Slack notification (success or failure with rollback status)
+10. Verify rollback with health check
+11. Send Slack notification (success or failure with rollback status)
 
 *Manual Trigger Inputs:*
 | Input | Description |
 |-------|-------------|
 | `skip_verification` | Skip post-deployment tests (use with caution) |
-| `force_deploy` | Deploy even if versions match |
+| `force_deploy` | Deploy even if versions match (use with caution - bypasses safety check) |
 
 *Automatic Rollback:*
 - If verification tests fail after deployment, the workflow automatically rolls back to the previous version
 - Rollback uses `wrangler versions deploy` to restore the prior deployment
-- Slack notification indicates "(rolled back)" when rollback occurs
+- After rollback, a health check verifies the rolled-back version is working
+- Slack notification indicates "(rolled back to [version])" when rollback occurs
+- If no previous version exists (first deployment), rollback is skipped with appropriate messaging
 - The workflow still reports as failed to alert of the issue
 
 *Version Checking:*
 - Compares the version in `proxy/package.json` with the version reported by `/health` endpoint
+- Supports semver with pre-release tags (e.g., `1.0.0-beta.1`)
 - If versions match, deployment is skipped (logs "Deployment Skipped" in summary)
-- Use `force_deploy: true` to override and deploy anyway
+- Use `force_deploy: true` to override (use with caution - for redeploying same version)
 
 **Deployment Pipeline:**
 1. PR merged to `production` triggers `deploy-admin.yml` and `deploy-proxy.yml`

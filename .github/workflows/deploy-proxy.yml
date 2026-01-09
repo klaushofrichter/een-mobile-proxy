@@ -9,13 +9,16 @@ on:
         default: 'false'
         type: boolean
       force_deploy:
-        description: 'Deploy even if versions match'
+        description: 'Deploy even if versions match (use with caution)'
         required: false
         default: 'false'
         type: boolean
   push:
     branches: [production]
     paths: ['proxy/**']
+
+env:
+  PROXY_URL: https://een-oauth-proxy.klaushofrichter.workers.dev
 
 jobs:
   deploy:
@@ -49,7 +52,8 @@ jobs:
       - name: Get deployed version
         id: deployed
         run: |
-          DEPLOYED=$(curl -sf https://een-oauth-proxy.klaushofrichter.workers.dev/health | jq -r '.version' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
+          # Extract version, handling semver with pre-release tags (e.g., 1.0.0-beta.1)
+          DEPLOYED=$(curl -sf "$PROXY_URL/health" | jq -r '.version' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?' || echo "unknown")
           echo "deployed_version=$DEPLOYED" >> $GITHUB_OUTPUT
           echo "Deployed version: $DEPLOYED"
 
@@ -61,7 +65,7 @@ jobs:
           FORCE_DEPLOY="${{ inputs.force_deploy }}"
 
           if [ "$FORCE_DEPLOY" = "true" ]; then
-            echo "Force deploy requested"
+            echo "::warning::Force deploy requested - bypassing version check"
             echo "should_deploy=true" >> $GITHUB_OUTPUT
           elif [ "$PACKAGE_VERSION" != "$DEPLOYED_VERSION" ]; then
             echo "Version mismatch: $PACKAGE_VERSION != $DEPLOYED_VERSION"
@@ -78,7 +82,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Package version (${{ steps.version.outputs.version }}) matches deployed version (${{ steps.deployed.outputs.deployed_version }})." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Use **force_deploy** input to deploy anyway." >> $GITHUB_STEP_SUMMARY
+          echo "Use **force_deploy** input to deploy anyway (use with caution)." >> $GITHUB_STEP_SUMMARY
 
       - name: Get current deployment version ID (for rollback)
         if: steps.check.outputs.should_deploy == 'true'
@@ -93,21 +97,21 @@ jobs:
           if [ -n "$VERSION_ID" ]; then
             echo "Current version ID: $VERSION_ID"
             echo "version_id=$VERSION_ID" >> $GITHUB_OUTPUT
+            echo "has_previous_version=true" >> $GITHUB_OUTPUT
           else
-            echo "Could not determine current version ID (this may be first deployment)"
+            echo "::notice::No previous version found (this may be first deployment)"
             echo "version_id=" >> $GITHUB_OUTPUT
+            echo "has_previous_version=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Deploy to Cloudflare Workers
         if: steps.check.outputs.should_deploy == 'true'
-        id: deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           cd proxy
           npx wrangler deploy
-          echo "deployed=true" >> $GITHUB_OUTPUT
 
       - name: Set Cloudflare secrets
         if: steps.check.outputs.should_deploy == 'true'
@@ -117,25 +121,26 @@ jobs:
         run: |
           cd proxy
           echo "Setting CLIENT_ID..."
-          echo "${{ secrets.VITE_EEN_CLIENT_ID }}" | npx wrangler secret put CLIENT_ID
+          printf '%s' "${{ secrets.VITE_EEN_CLIENT_ID }}" | npx wrangler secret put CLIENT_ID
 
           echo "Setting CLIENT_SECRET..."
-          echo "${{ secrets.EEN_CLIENT_SECRET }}" | npx wrangler secret put CLIENT_SECRET
+          printf '%s' "${{ secrets.EEN_CLIENT_SECRET }}" | npx wrangler secret put CLIENT_SECRET
 
           echo "Setting ADMIN_EMAILS..."
-          echo "${{ secrets.ADMIN_EMAILS }}" | npx wrangler secret put ADMIN_EMAILS
+          printf '%s' "${{ secrets.ADMIN_EMAILS }}" | npx wrangler secret put ADMIN_EMAILS
 
           echo "Setting ALLOWED_ORIGINS..."
-          echo "${{ secrets.ALLOWED_ORIGINS }}" | npx wrangler secret put ALLOWED_ORIGINS
+          printf '%s' "${{ secrets.ALLOWED_ORIGINS }}" | npx wrangler secret put ALLOWED_ORIGINS
 
           echo "Setting ALLOWED_API_DOMAINS..."
-          echo "${{ secrets.ALLOWED_API_DOMAINS }}" | npx wrangler secret put ALLOWED_API_DOMAINS
+          printf '%s' "${{ secrets.ALLOWED_API_DOMAINS }}" | npx wrangler secret put ALLOWED_API_DOMAINS
 
           echo "Setting REFRESH_TOKEN_TTL..."
-          echo "${{ secrets.REFRESH_TOKEN_TTL }}" | npx wrangler secret put REFRESH_TOKEN_TTL
+          printf '%s' "${{ secrets.REFRESH_TOKEN_TTL }}" | npx wrangler secret put REFRESH_TOKEN_TTL
 
       - name: Store deploy version in KV
         if: steps.check.outputs.should_deploy == 'true'
+        id: store_version
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -152,12 +157,14 @@ jobs:
           fi
           echo "Storing version: $VERSION_STRING"
           npx wrangler kv key put DEPLOY_VERSION "$VERSION_STRING" --namespace-id="$NAMESPACE_ID" --remote
+          # Mark deployment as fully complete (after secrets and KV are set)
+          echo "deployment_complete=true" >> $GITHUB_OUTPUT
 
       - name: Wait for deployment propagation
         if: steps.check.outputs.should_deploy == 'true'
         run: |
-          echo "Waiting 10 seconds for deployment to propagate..."
-          sleep 10
+          echo "Waiting 15 seconds for deployment to propagate..."
+          sleep 15
 
       - name: Verify deployment
         if: steps.check.outputs.should_deploy == 'true' && inputs.skip_verification != 'true'
@@ -170,18 +177,40 @@ jobs:
           BRIEF=1 ./scripts/test-production-proxy.sh
 
       - name: Rollback on verification failure
-        if: failure() && steps.deploy.outputs.deployed == 'true' && steps.current_deployment.outputs.version_id != ''
+        if: failure() && steps.store_version.outputs.deployment_complete == 'true' && steps.current_deployment.outputs.has_previous_version == 'true'
+        id: rollback
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           cd proxy
           ROLLBACK_VERSION="${{ steps.current_deployment.outputs.version_id }}"
-          echo "::warning::Verification failed! Rolling back to version: $ROLLBACK_VERSION"
+          echo "::error::Verification failed! Rolling back to version: $ROLLBACK_VERSION"
           npx wrangler versions deploy "$ROLLBACK_VERSION" --yes
+          echo "rollback_performed=true" >> $GITHUB_OUTPUT
+
+          # Verify rollback was successful
+          echo "Waiting 10 seconds for rollback to propagate..."
+          sleep 10
+          echo "Verifying rollback health..."
+          if curl -sf "$PROXY_URL/health" | jq -e '.status == "ok"' > /dev/null; then
+            echo "::notice::Rollback verified - health check passed"
+          else
+            echo "::error::Rollback health check failed!"
+          fi
+
           echo "## Rollback Performed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Verification tests failed. Rolled back to version: $ROLLBACK_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "Verification tests failed. Rolled back to version: \`$ROLLBACK_VERSION\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Rollback not possible (no previous version)
+        if: failure() && steps.store_version.outputs.deployment_complete == 'true' && steps.current_deployment.outputs.has_previous_version != 'true'
+        run: |
+          echo "::error::Verification failed but rollback not possible - no previous version exists"
+          echo "## Rollback Not Possible" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Verification tests failed but no previous version exists to rollback to." >> $GITHUB_STEP_SUMMARY
+          echo "This may be the first deployment. Manual intervention required." >> $GITHUB_STEP_SUMMARY
 
       - name: Deployment summary
         if: steps.check.outputs.should_deploy == 'true' && success()
@@ -191,7 +220,7 @@ jobs:
           echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Previous:** ${{ steps.deployed.outputs.deployed_version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Worker:** een-oauth-proxy" >> $GITHUB_STEP_SUMMARY
-          echo "**URL:** https://een-oauth-proxy.klaushofrichter.workers.dev" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** $PROXY_URL" >> $GITHUB_STEP_SUMMARY
 
       - name: Notify Slack on success
         if: steps.check.outputs.should_deploy == 'true' && success()
@@ -234,7 +263,7 @@ jobs:
                         "type": "plain_text",
                         "text": "Health Check"
                       },
-                      "url": "https://een-oauth-proxy.klaushofrichter.workers.dev/health"
+                      "url": "'"$PROXY_URL"'/health"
                     },
                     {
                       "type": "button",
@@ -257,9 +286,11 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           VERSION="${VERSION:-unknown}"
-          ROLLBACK_MSG=""
-          if [ -n "${{ steps.current_deployment.outputs.version_id }}" ]; then
-            ROLLBACK_MSG=" (rolled back)"
+          ROLLBACK_STATUS=""
+          if [ "${{ steps.rollback.outputs.rollback_performed }}" = "true" ]; then
+            ROLLBACK_STATUS=" (rolled back to ${{ steps.current_deployment.outputs.version_id }})"
+          elif [ "${{ steps.current_deployment.outputs.has_previous_version }}" != "true" ]; then
+            ROLLBACK_STATUS=" (rollback not possible - no previous version)"
           fi
           # Use env var to prevent webhook URL exposure in error output
           curl -sf -X POST "$SLACK_WEBHOOK" \
@@ -270,7 +301,7 @@ jobs:
                   \"type\": \"header\",
                   \"text\": {
                     \"type\": \"plain_text\",
-                    \"text\": \"Proxy Deployment Failed${ROLLBACK_MSG}\",
+                    \"text\": \"Proxy Deployment Failed${ROLLBACK_STATUS}\",
                     \"emoji\": true
                   }
                 },
