@@ -110,7 +110,7 @@ A Vue 3 demonstration application showing OAuth integration with EEN.
 - Token refresh and revocation
 - Auto-refresh before token expiration
 
-**Deployment:** none, build your own locally. Note that you can not run demo1 and admin on the same local machine as they share a common port 3333
+**Deployment:** Local development only (not deployed to production). The demo1 app is tested via `test-demo1-pr.yml` on PRs but has no deployment workflow. Note that demo1 and admin share port 3333 and cannot run simultaneously on the same machine.
 
 ## Getting Started
 
@@ -497,9 +497,12 @@ The `production` branch is protected with the following rules:
 
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
-| `pr-review.yml` | PR to production | AI code review using Claude Code Action |
-| `pr-review-gemini.yml` | PR to production | AI security review using Google Gemini |
-| `test-admin-pr.yml` | PR to production | Runs Playwright tests against local wrangler proxy |
+| `pr-review.yml` | PR to production/develop | AI code review using Claude Code Action |
+| `pr-review-gemini.yml` | PR to production/develop | AI security review using Google Gemini |
+| `test-admin-pr.yml` | PR to production | Runs admin Playwright tests against local proxy |
+| `test-demo1-pr.yml` | PR to production | Runs demo1 Playwright tests against local proxy |
+| `validate-branch-protection.yml` | PR to production/develop | Validates branch naming conventions |
+| `check-proxy-version.yml` | PR to production (proxy/**) | Checks if proxy version differs from deployed |
 | `codeql.yml` | PR to production | Security vulnerability scanning |
 | `deploy-proxy.yml` | Push to production (proxy/**) or manual | Deploys proxy to Cloudflare Workers with rollback |
 | `deploy-admin.yml` | Push to production | Deploys admin app to GitHub Pages |
@@ -638,8 +641,9 @@ Configure these variables in your repository settings (Settings > Secrets and va
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `VITE_PROXY_URL` | URL of the deployed Cloudflare proxy | `https://your-proxy.workers.dev` |
+| `VITE_REDIRECT_URI` | OAuth redirect URI (admin app URL) | `https://your-username.github.io/een-oauth-proxy` |
 
-**Important:** `VITE_PROXY_URL` must be set as a **Variable** (not a Secret) because:
+**Important:** These must be set as **Variables** (not Secrets) because:
 - The `test-admin-deployed.yml` workflow uses `${{ vars.VITE_PROXY_URL }}` to test against the production proxy
 - Without this variable, tests fall back to `localhost:8787` which doesn't exist in GitHub Actions
 - The workflow will fail early with a clear error if this variable is not configured
@@ -713,6 +717,12 @@ This project includes a Claude Code skill for automating the PR creation and rev
 | `ALLOWED_API_DOMAINS` | Comma-separated allowed API domains for SSRF protection | `eagleeyenetworks.com` |
 | `ENVIRONMENT` | `development` or `production` | `development` |
 | `REFRESH_TOKEN_TTL` | Session TTL buffer in seconds (see below) | `86400` |
+| `RATE_LIMIT_ENABLED` | Enable/disable rate limiting | `true` (default) |
+| `RATE_LIMIT_WINDOW` | Rate limit window in seconds | `60` (default) |
+| `RATE_LIMIT_HEALTH` | Max requests per window for `/health` | `60` (default) |
+| `RATE_LIMIT_OAUTH` | Max requests per window for `/proxy/*` | `30` (default) |
+| `RATE_LIMIT_ADMIN` | Max requests per window for `/admin/*` | `60` (default) |
+| `RATE_LIMIT_UNKNOWN` | Max requests per window for unidentified clients | `5` (default) |
 
 **Session TTL and Refresh Token Expiration:**
 
@@ -767,6 +777,7 @@ These endpoints require:
 |--------|----------|-------------|
 | GET | `/admin/version` | Get proxy version and deploy time |
 | GET | `/admin/sessionsCount` | Count active sessions stored in KV |
+| GET | `/admin/rateLimitStats` | Get rate limiting statistics by client IP |
 | DELETE | `/admin/removeSessions` | Remove all sessions except current user's session |
 | POST | `/admin/revokeAll` | Emergency: revoke all tokens at EEN and delete all sessions |
 
