@@ -110,10 +110,15 @@ const VALID_SECRET_NAMES = new Set([
   'REFRESH_TOKEN_TTL'
 ])
 
+// Critical secrets that must be set for the proxy to function
+const CRITICAL_SECRETS = new Set(['CLIENT_ID', 'CLIENT_SECRET'])
+
 const secrets = ['CLIENT_ID', 'CLIENT_SECRET', 'ADMIN_EMAILS', 'ALLOWED_ORIGINS', 'ALLOWED_API_DOMAINS', 'REFRESH_TOKEN_TTL']
 
 for (const secret of secrets) {
   const value = process.env[secret]
+  const isCritical = CRITICAL_SECRETS.has(secret)
+
   if (value) {
     // Validate secret name against allowlist (defense in depth)
     if (!VALID_SECRET_NAMES.has(secret)) {
@@ -130,9 +135,17 @@ for (const secret of secrets) {
         input: value
       })
     } catch (error) {
+      if (isCritical) {
+        console.error(`Error: Failed to set critical secret ${secret}`)
+        process.exit(1)
+      }
       console.warn(`Warning: Failed to set ${secret}`)
     }
   } else {
+    if (isCritical) {
+      console.error(`Error: Critical secret ${secret} not found in environment`)
+      process.exit(1)
+    }
     console.warn(`Warning: ${secret} not found in environment`)
   }
 }
