@@ -242,7 +242,7 @@
               Clear
             </button>
           </div>
-          <div class="flex-1 overflow-y-auto text-xs space-y-1 font-mono" ref="logContainer">
+          <div :class="['flex-1 overflow-y-auto text-xs space-y-1 font-mono', isDarkMode ? 'scrollbar-dark' : 'scrollbar-light']" ref="logContainer">
             <div
               v-for="(entry, index) in activityLog"
               :key="index"
@@ -734,6 +734,47 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Custom scrollbar styles for dark/light mode */
+.scrollbar-dark::-webkit-scrollbar {
+  width: 8px;
+}
+.scrollbar-dark::-webkit-scrollbar-track {
+  background: #374151; /* gray-700 */
+  border-radius: 4px;
+}
+.scrollbar-dark::-webkit-scrollbar-thumb {
+  background: #4b5563; /* gray-600 */
+  border-radius: 4px;
+}
+.scrollbar-dark::-webkit-scrollbar-thumb:hover {
+  background: #6b7280; /* gray-500 */
+}
+
+.scrollbar-light::-webkit-scrollbar {
+  width: 8px;
+}
+.scrollbar-light::-webkit-scrollbar-track {
+  background: #f3f4f6; /* gray-100 */
+  border-radius: 4px;
+}
+.scrollbar-light::-webkit-scrollbar-thumb {
+  background: #d1d5db; /* gray-300 */
+  border-radius: 4px;
+}
+.scrollbar-light::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af; /* gray-400 */
+}
+
+/* Firefox scrollbar support */
+.scrollbar-dark {
+  scrollbar-width: thin;
+  scrollbar-color: #4b5563 #374151;
+}
+.scrollbar-light {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f3f4f6;
+}
+
 /* Mobile first: stacked layout, full width */
 .resizable-container {
   flex-direction: column;
