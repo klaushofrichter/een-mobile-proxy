@@ -78,8 +78,8 @@ jobs:
           cd proxy
           DEPLOY_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
           VERSION_STRING="een-oauth-proxy - ${{ steps.version.outputs.version }} - $DEPLOY_TIME"
-          # Get namespace ID using wrangler CLI
-          NAMESPACE_ID=$(npx wrangler kv namespace list --json | jq -r '.[] | select(.title | contains("EEN_OAUTH_SESSIONS")) | .id')
+          # Get namespace ID using wrangler CLI (exact match on title)
+          NAMESPACE_ID=$(npx wrangler kv namespace list --json | jq -r '.[] | select(.title == "een-oauth-proxy-EEN_OAUTH_SESSIONS") | .id')
           # Validate namespace ID was found
           if [ -z "$NAMESPACE_ID" ]; then
             echo "Error: Could not find KV namespace EEN_OAUTH_SESSIONS"
@@ -114,7 +114,8 @@ jobs:
         if: success()
         continue-on-error: true
         run: |
-          curl -X POST "${{ secrets.SLACK_WEBHOOK }}" \
+          # Mask webhook URL in any error output
+          curl -sf -X POST "${{ secrets.SLACK_WEBHOOK }}" \
             -H "Content-Type: application/json" \
             -d '{
               "blocks": [
@@ -169,7 +170,8 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           VERSION="${VERSION:-unknown}"
-          curl -X POST "${{ secrets.SLACK_WEBHOOK }}" \
+          # Mask webhook URL in any error output
+          curl -sf -X POST "${{ secrets.SLACK_WEBHOOK }}" \
             -H "Content-Type: application/json" \
             -d "{
               \"blocks\": [
