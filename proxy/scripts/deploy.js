@@ -91,15 +91,6 @@ if (!wranglerToml.includes('id = "') || wranglerToml.includes('# id = "')) {
   }
 }
 
-// Deploy worker
-console.log('')
-console.log('Deploying worker...')
-run('npx wrangler deploy')
-
-// Set secrets
-console.log('')
-console.log('Setting secrets...')
-
 // Allowlist of valid secret names (prevents command injection via modified array)
 const VALID_SECRET_NAMES = new Set([
   'CLIENT_ID',
@@ -111,13 +102,33 @@ const VALID_SECRET_NAMES = new Set([
 ])
 
 // Critical secrets that must be set for the proxy to function
-const CRITICAL_SECRETS = new Set(['CLIENT_ID', 'CLIENT_SECRET'])
+const CRITICAL_SECRETS = ['CLIENT_ID', 'CLIENT_SECRET']
 
 const secrets = ['CLIENT_ID', 'CLIENT_SECRET', 'ADMIN_EMAILS', 'ALLOWED_ORIGINS', 'ALLOWED_API_DOMAINS', 'REFRESH_TOKEN_TTL']
 
+// Pre-validate all critical secrets exist before any deployment actions
+console.log('')
+console.log('Validating critical secrets...')
+const missingCritical = CRITICAL_SECRETS.filter(secret => !process.env[secret])
+if (missingCritical.length > 0) {
+  console.error(`Error: Missing critical secrets: ${missingCritical.join(', ')}`)
+  console.error('Aborting deployment - all critical secrets must be present')
+  process.exit(1)
+}
+console.log('All critical secrets present')
+
+// Deploy worker
+console.log('')
+console.log('Deploying worker...')
+run('npx wrangler deploy')
+
+// Set secrets
+console.log('')
+console.log('Setting secrets...')
+
 for (const secret of secrets) {
   const value = process.env[secret]
-  const isCritical = CRITICAL_SECRETS.has(secret)
+  const isCritical = CRITICAL_SECRETS.includes(secret)
 
   if (value) {
     // Validate secret name against allowlist (defense in depth)
@@ -142,10 +153,7 @@ for (const secret of secrets) {
       console.warn(`Warning: Failed to set ${secret}`)
     }
   } else {
-    if (isCritical) {
-      console.error(`Error: Critical secret ${secret} not found in environment`)
-      process.exit(1)
-    }
+    // Non-critical secrets can be missing (critical ones were pre-validated)
     console.warn(`Warning: ${secret} not found in environment`)
   }
 }
