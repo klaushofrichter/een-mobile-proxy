@@ -17,9 +17,16 @@ const projectRoot = join(__dirname, '..')
 const packageJson = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf-8'))
 const version = packageJson.version
 
+// Validate version format to prevent command injection (semver pattern)
+if (!version || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {
+  console.warn(`Warning: Invalid version format "${version}", skipping local version setup`)
+  process.exit(0)
+}
+
 console.log(`Setting local DEPLOY_VERSION to v${version}`)
 
 try {
+  // Version is validated above, safe to use in command
   execSync(
     `npx wrangler kv key put DEPLOY_VERSION "v${version}" --binding=EEN_OAUTH_SESSIONS --local`,
     {
