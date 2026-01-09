@@ -1,7 +1,7 @@
 {
   "name": "een-oauth-admin",
   "displayName": "EEN OAuth Proxy Admin",
-  "version": "1.0.36",
+  "version": "1.0.37",
   "private": true,
   "type": "module",
   "scripts": {

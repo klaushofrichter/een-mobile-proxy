@@ -2,7 +2,7 @@
  * Unit tests for admin service URL validation functions
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { isValidProxyUrl, setProxyUrl, getProxyUrl, getProxyUrlOrThrow, getProxyOptions } from './admin.js'
+import { isValidProxyUrl, setProxyUrl, getProxyUrl, getProxyUrlOrThrow, getProxyOptions, getRateLimitStats } from './admin.js'
 
 describe('Admin Service - URL Validation', () => {
   beforeEach(() => {
@@ -150,5 +150,106 @@ describe('Admin Service - URL Validation', () => {
     // Note: The throw behavior when getProxyUrl() returns null occurs only in production
     // when VITE_PROXY_URL is not set. This is tested via Playwright integration tests
     // that verify proper error handling when the proxy is misconfigured.
+  })
+})
+
+// Mock the auth-headers module to avoid Pinia dependency
+vi.mock('../utils/auth-headers', () => ({
+  getAuthHeaders: vi.fn().mockResolvedValue({ 'Authorization': 'Bearer test-session-id' })
+}))
+
+describe('Admin Service - getRateLimitStats', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    // Don't restore mocks - we need the auth-headers mock to persist
+    vi.clearAllMocks()
+  })
+
+  it('should fetch rate limit stats successfully', async () => {
+    const mockStats = {
+      enabled: true,
+      window: 60,
+      limits: { health: 100, oauth: 30, admin: 50 },
+      currentBucket: 1234567,
+      activeEntries: 42,
+      byCategory: {
+        health: { count: 150, uniqueClients: 12 },
+        oauth: { count: 45, uniqueClients: 8 },
+        admin: { count: 10, uniqueClients: 2 }
+      }
+    }
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockStats)
+    })
+
+    const result = await getRateLimitStats()
+
+    expect(result).toEqual(mockStats)
+    expect(result.enabled).toBe(true)
+    expect(result.limits.health).toBe(100)
+    expect(result.byCategory.oauth.count).toBe(45)
+  })
+
+  it('should throw error on non-ok response', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: () => Promise.resolve({ error: 'Unauthorized' })
+    })
+
+    await expect(getRateLimitStats()).rejects.toThrow('Unauthorized')
+  })
+
+  it('should throw generic error when response has no error message', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: () => Promise.reject(new Error('Parse error'))
+    })
+
+    await expect(getRateLimitStats()).rejects.toThrow('Failed to get rate limit stats')
+  })
+
+  it('should include credentials in request', async () => {
+    const mockStats = { enabled: true, window: 60, limits: {}, byCategory: {}, activeEntries: 0 }
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockStats)
+    })
+
+    await getRateLimitStats()
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/admin/rateLimitStats'),
+      expect.objectContaining({
+        credentials: 'include'
+      })
+    )
+  })
+
+  it('should handle rate limiting disabled state', async () => {
+    const mockStats = {
+      enabled: false,
+      window: 60,
+      limits: { health: 0, oauth: 0, admin: 0 },
+      currentBucket: 0,
+      activeEntries: 0,
+      byCategory: {
+        health: { count: 0, uniqueClients: 0 },
+        oauth: { count: 0, uniqueClients: 0 },
+        admin: { count: 0, uniqueClients: 0 }
+      }
+    }
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockStats)
+    })
+
+    const result = await getRateLimitStats()
+
+    expect(result.enabled).toBe(false)
+    expect(result.activeEntries).toBe(0)
   })
 })
