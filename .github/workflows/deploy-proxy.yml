@@ -208,22 +208,31 @@ jobs:
         if: always() && steps.check.outputs.should_deploy == 'true'
         id: rollback_check
         run: |
-          # Determine if rollback should be attempted (simplifies subsequent conditions)
-          # Rollback if: verification failed, OR any post-deploy step failed while deploy succeeded
+          # Determine if rollback should be attempted
+          # Rollback triggers if: deploy succeeded but any subsequent step failed
+          # - verification failed, OR
+          # - secrets/KV steps failed (deployment_complete not set), OR
+          # - workflow is failing for any reason after deploy
           DEPLOY_SUCCEEDED="${{ steps.deploy.outputs.deployed == 'true' }}"
-          VERIFICATION_FAILED="${{ steps.verify.outcome == 'failure' }}"
-          SECRETS_FAILED="${{ steps.deploy.outcome == 'success' && steps.store_version.outcome == 'failure' }}"
           DEPLOYMENT_COMPLETE="${{ steps.store_version.outputs.deployment_complete == 'true' }}"
           HAS_PREVIOUS="${{ steps.current_deployment.outputs.has_previous_version == 'true' }}"
+          WORKFLOW_FAILING="${{ failure() }}"
 
-          # Rollback needed if verification failed OR if deploy succeeded but secrets/KV failed
+          echo "Deploy succeeded: $DEPLOY_SUCCEEDED"
+          echo "Deployment complete: $DEPLOYMENT_COMPLETE"
+          echo "Has previous version: $HAS_PREVIOUS"
+          echo "Workflow failing: $WORKFLOW_FAILING"
+
+          # Rollback if deploy succeeded but workflow is failing OR deployment didn't complete
           if [ "$DEPLOY_SUCCEEDED" = "true" ]; then
-            if [ "$VERIFICATION_FAILED" = "true" ] || [ "$SECRETS_FAILED" = "true" ] || [ "$DEPLOYMENT_COMPLETE" != "true" ]; then
+            if [ "$WORKFLOW_FAILING" = "true" ] || [ "$DEPLOYMENT_COMPLETE" != "true" ]; then
               echo "should_rollback=true" >> $GITHUB_OUTPUT
               if [ "$HAS_PREVIOUS" = "true" ]; then
                 echo "can_rollback=true" >> $GITHUB_OUTPUT
+                echo "::notice::Rollback conditions met - will attempt rollback"
               else
                 echo "can_rollback=false" >> $GITHUB_OUTPUT
+                echo "::warning::Rollback needed but no previous version available"
               fi
               exit 0
             fi

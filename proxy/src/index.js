@@ -166,14 +166,12 @@ function isValidEenUrl(url, env) {
       allowedDomains = cachedAllowlist
     } else {
       // Parse and cache the allowlist
-      // Limit config string length to prevent DoS via large config
-      const wasTruncated = rawAllowedDomains.length > MAX_ALLOWED_DOMAINS_CONFIG_LENGTH
-      if (wasTruncated) {
-        debugLog(env, `[WARNING] ALLOWED_API_DOMAINS truncated from ${rawAllowedDomains.length} to ${MAX_ALLOWED_DOMAINS_CONFIG_LENGTH} chars`)
+      // Reject if config exceeds limit (fail-safe to prevent misconfiguration)
+      if (rawAllowedDomains.length > MAX_ALLOWED_DOMAINS_CONFIG_LENGTH) {
+        debugLog(env, `[SSRF] ALLOWED_API_DOMAINS config too long (${rawAllowedDomains.length} > ${MAX_ALLOWED_DOMAINS_CONFIG_LENGTH}), rejecting request`)
+        return false
       }
-      const allowedDomainsStr = wasTruncated
-        ? rawAllowedDomains.substring(0, MAX_ALLOWED_DOMAINS_CONFIG_LENGTH)
-        : rawAllowedDomains
+      const allowedDomainsStr = rawAllowedDomains
       allowedDomains = allowedDomainsStr
         .split(',')
         .map((d) => d.trim().toLowerCase())

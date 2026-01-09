@@ -138,7 +138,7 @@ run_test "No session returns 401" "401" "$NOSESSION"
 [ "$BRIEF" != "1" ] && echo -e "\n${BLUE}7. Authentication - Invalid Session${NC}"
 INVALID_SESSION=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST "$PROXY_URL/proxy/refreshAccessToken" \
   -H "Origin: $ALLOWED_ORIGIN" \
-  -H "Cookie: session_id=invalid-session-12345" 2>/dev/null || echo "000")
+  -H "Cookie: sessionId=invalid-session-12345" 2>/dev/null || echo "000")
 run_test "Invalid session rejected" "401" "$INVALID_SESSION"
 
 # 8. Admin Endpoint Without Auth

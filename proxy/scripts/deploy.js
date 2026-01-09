@@ -100,14 +100,24 @@ run('npx wrangler deploy')
 console.log('')
 console.log('Setting secrets...')
 
+// Allowlist of valid secret names (prevents command injection via modified array)
+const VALID_SECRET_NAMES = new Set([
+  'CLIENT_ID',
+  'CLIENT_SECRET',
+  'ADMIN_EMAILS',
+  'ALLOWED_ORIGINS',
+  'ALLOWED_API_DOMAINS',
+  'REFRESH_TOKEN_TTL'
+])
+
 const secrets = ['CLIENT_ID', 'CLIENT_SECRET', 'ADMIN_EMAILS', 'ALLOWED_ORIGINS', 'ALLOWED_API_DOMAINS', 'REFRESH_TOKEN_TTL']
 
 for (const secret of secrets) {
   const value = process.env[secret]
   if (value) {
-    // Validate secret name contains only safe characters (defense in depth)
-    if (!/^[A-Z_]+$/.test(secret)) {
-      console.warn(`Warning: Invalid secret name format: ${secret}`)
+    // Validate secret name against allowlist (defense in depth)
+    if (!VALID_SECRET_NAMES.has(secret)) {
+      console.warn(`Warning: Secret name '${secret}' not in allowlist, skipping`)
       continue
     }
     console.log(`Setting ${secret}...`)
@@ -135,16 +145,23 @@ console.log('Storing deploy version in KV...')
 const namespaceMatch = wranglerToml.match(/id = "([^"]+)"/)
 if (namespaceMatch) {
   const namespaceId = namespaceMatch[1]
-  try {
-    execSync(
-      `npx wrangler kv key put DEPLOY_VERSION "${versionString}" --namespace-id="${namespaceId}" --remote`,
-      {
-        cwd: projectRoot,
-        stdio: 'inherit'
-      }
-    )
-  } catch (error) {
-    console.warn('Warning: Failed to store deploy version')
+  // Validate namespace ID format (32-char hex) to prevent injection
+  if (!/^[a-f0-9]{32}$/.test(namespaceId)) {
+    console.warn('Warning: Invalid namespace ID format, skipping version storage')
+  } else {
+    try {
+      // Use stdin for version string to prevent shell injection
+      execSync(
+        `npx wrangler kv key put DEPLOY_VERSION --namespace-id="${namespaceId}" --remote`,
+        {
+          cwd: projectRoot,
+          stdio: ['pipe', 'inherit', 'inherit'],
+          input: versionString
+        }
+      )
+    } catch (error) {
+      console.warn('Warning: Failed to store deploy version')
+    }
   }
 }
 
