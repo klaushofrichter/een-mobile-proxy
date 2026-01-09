@@ -572,6 +572,7 @@ Automatically deploys the proxy to Cloudflare Workers with version checking and 
 - Slack notification indicates "(rolled back to [version])" when rollback occurs
 - If no previous version exists (first deployment), rollback is skipped with appropriate messaging
 - The workflow still reports as failed to alert of the issue
+- **Important:** Rollback restores the code version only, not Cloudflare secrets. Ensure secrets are compatible across versions. If you need to update secrets, update GitHub Secrets first, then deploy. Do not change secrets and code in the same deployment if they are incompatible.
 
 *Version Checking:*
 - Compares the version in `proxy/package.json` with the version reported by `/health` endpoint

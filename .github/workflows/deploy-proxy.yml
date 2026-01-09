@@ -94,10 +94,15 @@ jobs:
           cd proxy
           # Get the current active version ID before deploying
           VERSION_ID=$(npx wrangler versions list 2>/dev/null | grep -E '^\S+' | head -1 | awk '{print $1}' || echo "")
-          if [ -n "$VERSION_ID" ]; then
+          # Validate version ID format (UUID-like: alphanumeric with hyphens)
+          if [ -n "$VERSION_ID" ] && [[ "$VERSION_ID" =~ ^[a-f0-9-]+$ ]]; then
             echo "Current version ID: $VERSION_ID"
             echo "version_id=$VERSION_ID" >> $GITHUB_OUTPUT
             echo "has_previous_version=true" >> $GITHUB_OUTPUT
+          elif [ -n "$VERSION_ID" ]; then
+            echo "::warning::Version ID '$VERSION_ID' does not match expected format, ignoring"
+            echo "version_id=" >> $GITHUB_OUTPUT
+            echo "has_previous_version=false" >> $GITHUB_OUTPUT
           else
             echo "::notice::No previous version found (this may be first deployment)"
             echo "version_id=" >> $GITHUB_OUTPUT
@@ -148,11 +153,14 @@ jobs:
           cd proxy
           DEPLOY_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
           VERSION_STRING="een-oauth-proxy - ${{ steps.version.outputs.version }} - $DEPLOY_TIME"
-          # Get namespace ID from wrangler.toml
-          NAMESPACE_ID=$(grep 'id = "' wrangler.toml | head -1 | sed 's/.*id = "\([^"]*\)".*/\1/')
-          # Validate namespace ID was found
+          # Get namespace ID from wrangler.toml (look for id after kv_namespaces section)
+          NAMESPACE_ID=$(awk '/\[\[kv_namespaces\]\]/,/^$/' wrangler.toml | grep 'id = "' | head -1 | sed 's/.*id = "\([^"]*\)".*/\1/')
+          # Validate namespace ID was found and has correct format (32-char hex)
           if [ -z "$NAMESPACE_ID" ]; then
-            echo "Error: Could not find KV namespace EEN_OAUTH_SESSIONS"
+            echo "::error::Could not find KV namespace ID in wrangler.toml"
+            exit 1
+          elif ! [[ "$NAMESPACE_ID" =~ ^[a-f0-9]{32}$ ]]; then
+            echo "::error::KV namespace ID '$NAMESPACE_ID' does not match expected format (32-char hex)"
             exit 1
           fi
           echo "Storing version: $VERSION_STRING"
@@ -177,7 +185,7 @@ jobs:
           BRIEF=1 ./scripts/test-production-proxy.sh
 
       - name: Rollback on verification failure
-        if: failure() && steps.store_version.outputs.deployment_complete == 'true' && steps.current_deployment.outputs.has_previous_version == 'true'
+        if: failure() && steps.verify.outcome == 'failure' && steps.store_version.outputs.deployment_complete == 'true' && steps.current_deployment.outputs.has_previous_version == 'true'
         id: rollback
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -204,7 +212,7 @@ jobs:
           echo "Verification tests failed. Rolled back to version: \`$ROLLBACK_VERSION\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Rollback not possible (no previous version)
-        if: failure() && steps.store_version.outputs.deployment_complete == 'true' && steps.current_deployment.outputs.has_previous_version != 'true'
+        if: failure() && steps.verify.outcome == 'failure' && steps.store_version.outputs.deployment_complete == 'true' && steps.current_deployment.outputs.has_previous_version != 'true'
         run: |
           echo "::error::Verification failed but rollback not possible - no previous version exists"
           echo "## Rollback Not Possible" >> $GITHUB_STEP_SUMMARY
