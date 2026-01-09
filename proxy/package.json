@@ -1,10 +1,10 @@
 {
   "name": "een-oauth-proxy",
-  "version": "1.2.48",
+  "version": "1.2.50",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npm run stop && wrangler dev",
+    "dev": "npm run stop && node scripts/set-local-version.js && wrangler dev",
     "stop": "lsof -ti :8787 | xargs kill -9 2>/dev/null || echo 'Port 8787 is free'",
     "deploy": "node scripts/deploy.js",
     "test": "vitest run",
