@@ -113,9 +113,11 @@ jobs:
       - name: Notify Slack on success
         if: success()
         continue-on-error: true
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
         run: |
-          # Mask webhook URL in any error output
-          curl -sf -X POST "${{ secrets.SLACK_WEBHOOK }}" \
+          # Use env var to prevent webhook URL exposure in error output
+          curl -sf -X POST "$SLACK_WEBHOOK" \
             -H "Content-Type: application/json" \
             -d '{
               "blocks": [
@@ -167,11 +169,13 @@ jobs:
       - name: Notify Slack on failure
         if: failure()
         continue-on-error: true
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           VERSION="${VERSION:-unknown}"
-          # Mask webhook URL in any error output
-          curl -sf -X POST "${{ secrets.SLACK_WEBHOOK }}" \
+          # Use env var to prevent webhook URL exposure in error output
+          curl -sf -X POST "$SLACK_WEBHOOK" \
             -H "Content-Type: application/json" \
             -d "{
               \"blocks\": [

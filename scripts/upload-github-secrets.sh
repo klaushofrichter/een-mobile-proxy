@@ -96,6 +96,8 @@ echo ""
 echo "--- Test Credentials ---"
 upload_secret "TEST_USER" "TEST_USER"
 upload_secret "TEST_PASSWORD" "TEST_PASSWORD"
+# ADMIN_TEST_USER/PASSWORD intentionally use the same credentials as TEST_USER/PASSWORD
+# The test user must be in ADMIN_EMAILS to have admin access for admin app tests
 upload_secret "ADMIN_TEST_USER" "TEST_USER"
 upload_secret "ADMIN_TEST_PASSWORD" "TEST_PASSWORD"
 
