@@ -352,7 +352,7 @@ jobs:
                         "type": "plain_text",
                         "text": "Admin App"
                       },
-                      "url": "https://klaushofrichter.github.io/een-oauth-proxy/admin/"
+                      "url": "https://klaushofrichter.github.io/een-oauth-proxy"
                     },
                     {
                       "type": "button",

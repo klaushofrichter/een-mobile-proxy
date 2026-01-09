@@ -117,9 +117,17 @@ if (missingCritical.length > 0) {
 }
 console.log('All critical secrets present')
 
+// Check if worker exists (required before setting secrets)
+console.log('')
+console.log('Checking if worker exists...')
+const workerExists = runSilent('npx wrangler deployments list --limit 1')
+if (!workerExists) {
+  console.log('First-time deployment detected, deploying worker first...')
+  run('npx wrangler deploy')
+  console.log('Initial worker deployed, now setting secrets...')
+}
+
 // Set secrets BEFORE deploying worker to avoid broken state if secrets fail
-// Note: This requires the worker to already exist (from a previous deployment)
-// For first-time deployments, deploy manually first or use wrangler deploy directly
 console.log('')
 console.log('Setting secrets...')
 
