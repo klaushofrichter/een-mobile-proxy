@@ -547,8 +547,14 @@ Configure these secrets in your repository settings (Settings > Secrets and vari
 
 | Secret | Description | Used By |
 |--------|-------------|---------|
-| `VITE_EEN_CLIENT_ID` | EEN OAuth Client ID | PR tests, deployment |
-| `EEN_CLIENT_SECRET` | EEN OAuth Client Secret | PR tests (local proxy) |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token for Workers deployment (see below) | Proxy deployment workflow |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (from dashboard URL) | Proxy deployment workflow |
+| `VITE_EEN_CLIENT_ID` | EEN OAuth Client ID | PR tests, proxy deployment |
+| `EEN_CLIENT_SECRET` | EEN OAuth Client Secret | PR tests, proxy deployment |
+| `ADMIN_EMAILS` | Comma-separated admin email addresses | Proxy deployment |
+| `ALLOWED_ORIGINS` | Comma-separated CORS allowed origins | Proxy deployment |
+| `ALLOWED_API_DOMAINS` | Comma-separated allowed API domains for SSRF protection | Proxy deployment |
+| `REFRESH_TOKEN_TTL` | Session TTL in seconds (default: 86400) | Proxy deployment |
 | `ADMIN_TEST_USER` | Test admin user email (must be in ADMIN_EMAILS) | Playwright tests |
 | `ADMIN_TEST_PASSWORD` | Test admin user password | Playwright tests |
 | `TEST_USER` | Test user email (must not be in ADMIN_EMAILS) | Playwright tests |
@@ -556,6 +562,35 @@ Configure these secrets in your repository settings (Settings > Secrets and vari
 | `ANTHROPIC_API_KEY` | Anthropic API key for Claude Code reviews | Claude PR review workflow |
 | `GEMINI_API_KEY` | Google Gemini API key for security reviews | Gemini PR review workflow |
 | `SLACK_WEBHOOK` | Slack incoming webhook URL for notifications | Deploy and release workflows |
+
+**Cloudflare API Token:**
+
+To create a Cloudflare API token for automated proxy deployment:
+
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com) → Profile → API Tokens
+2. Click "Create Token"
+3. Use the "Edit Cloudflare Workers" template or create a custom token with:
+   - Account → Workers Scripts → Edit
+   - Account → Workers KV Storage → Edit
+4. Scope the token to your account
+5. Copy the token value for `CLOUDFLARE_API_TOKEN`
+
+The `CLOUDFLARE_ACCOUNT_ID` can be found in your Cloudflare dashboard URL:
+`https://dash.cloudflare.com/<ACCOUNT_ID>/workers/...`
+
+**Upload Secrets Script:**
+
+A convenience script is provided to upload all secrets from your local `proxy/.env` file to GitHub:
+
+```bash
+./scripts/upload-github-secrets.sh
+```
+
+This script reads secrets from `proxy/.env` and uploads them to GitHub using the `gh` CLI. It handles the name mapping between local environment variables and GitHub secret names (e.g., `CLIENT_ID` → `VITE_EEN_CLIENT_ID`).
+
+Requirements:
+- GitHub CLI (`gh`) must be installed and authenticated
+- `proxy/.env` must contain the required secrets
 
 ### Required GitHub Variables
 
