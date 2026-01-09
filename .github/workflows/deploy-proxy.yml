@@ -188,7 +188,8 @@ jobs:
           for i in $(seq 1 $MAX_ATTEMPTS); do
             DEPLOYED=$(curl -sf "$PROXY_URL/health" | jq -r '.version' 2>/dev/null || echo "")
             # Use literal matching with version surrounded by " - " delimiters (format: "name - version - timestamp")
-            if echo "$DEPLOYED" | grep -qF "- $EXPECTED_VERSION -"; then
+            # Use -- to prevent pattern starting with dash from being interpreted as an option
+            if echo "$DEPLOYED" | grep -qF -- "- $EXPECTED_VERSION -"; then
               echo "::notice::Deployment propagated successfully after $i attempt(s) - version: $DEPLOYED"
               exit 0
             fi
@@ -344,6 +345,14 @@ jobs:
                         "text": "Health Check"
                       },
                       "url": "'"$PROXY_URL"'/health"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "Admin App"
+                      },
+                      "url": "https://klaushofrichter.github.io/een-oauth-proxy/admin/"
                     },
                     {
                       "type": "button",
