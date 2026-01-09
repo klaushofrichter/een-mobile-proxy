@@ -501,6 +501,7 @@ The `production` branch is protected with the following rules:
 | `pr-review-gemini.yml` | PR to production | AI security review using Google Gemini |
 | `test-admin-pr.yml` | PR to production | Runs Playwright tests against local wrangler proxy |
 | `codeql.yml` | PR to production | Security vulnerability scanning |
+| `deploy-proxy.yml` | Push to production (proxy/**) or manual | Deploys proxy to Cloudflare Workers with rollback |
 | `deploy-admin.yml` | Push to production | Deploys admin app to GitHub Pages |
 | `test-admin-deployed.yml` | After deploy | Tests the deployed admin app |
 | `release.yml` | After deployed tests pass | Creates GitHub release with version tag |
@@ -534,12 +535,50 @@ The `production` branch is protected with the following rules:
 - Prevents develop from becoming out-of-sync with production
 - **Note:** After a PR is merged, run `git pull` locally before making new commits
 
+**Proxy Deployment (`deploy-proxy.yml`):**
+
+Automatically deploys the proxy to Cloudflare Workers with version checking and automatic rollback on failure.
+
+*Triggers:*
+- **Automatic:** Push to `production` branch when `proxy/**` files change
+- **Manual:** Workflow dispatch with optional inputs
+
+*Workflow Steps:*
+1. Compare `proxy/package.json` version with deployed `/health` version
+2. Skip deployment if versions match (prevents redundant deploys)
+3. Capture current deployment version ID (for potential rollback)
+4. Deploy worker to Cloudflare
+5. Set Cloudflare secrets (CLIENT_ID, CLIENT_SECRET, etc.)
+6. Store deploy version in KV
+7. Wait 10 seconds for propagation
+8. Run verification tests against deployed proxy
+9. **On test failure: Automatically rollback to previous version**
+10. Send Slack notification (success or failure with rollback status)
+
+*Manual Trigger Inputs:*
+| Input | Description |
+|-------|-------------|
+| `skip_verification` | Skip post-deployment tests (use with caution) |
+| `force_deploy` | Deploy even if versions match |
+
+*Automatic Rollback:*
+- If verification tests fail after deployment, the workflow automatically rolls back to the previous version
+- Rollback uses `wrangler versions deploy` to restore the prior deployment
+- Slack notification indicates "(rolled back)" when rollback occurs
+- The workflow still reports as failed to alert of the issue
+
+*Version Checking:*
+- Compares the version in `proxy/package.json` with the version reported by `/health` endpoint
+- If versions match, deployment is skipped (logs "Deployment Skipped" in summary)
+- Use `force_deploy: true` to override and deploy anyway
+
 **Deployment Pipeline:**
-1. PR merged to `production` triggers `deploy-admin.yml`
-2. Admin app deployed to GitHub Pages
-3. `test-admin-deployed.yml` runs tests against deployed app
-4. On success, `release.yml` creates a new GitHub release
-5. Slack notifications sent for deployments and releases
+1. PR merged to `production` triggers `deploy-admin.yml` and `deploy-proxy.yml`
+2. Proxy deployed to Cloudflare Workers (with rollback safety)
+3. Admin app deployed to GitHub Pages
+4. `test-admin-deployed.yml` runs tests against deployed app
+5. On success, `release.yml` creates a new GitHub release
+6. Slack notifications sent for deployments and releases
 
 ### Required GitHub Secrets
 
