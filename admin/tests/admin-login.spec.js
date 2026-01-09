@@ -425,7 +425,7 @@ test.describe('Admin Login and Health', () => {
 
     // Check activity log for rate limit fetch (if stats are available)
     const logEntries = await getActivityLogEntries(page)
-    const hasHealthEntry = logEntries.some(entry => entry.includes('Health:'))
+    const hasHealthEntry = logEntries.some(entry => entry.text && entry.text.includes('Health:'))
     expect(hasHealthEntry).toBe(true)
     console.log('✅ Activity log updated with health status')
 
