@@ -528,7 +528,12 @@ async function fetchRateLimitStats(isManual = false) {
       addLogEntry(`Rate limit stats: ${data.activeEntries} active entries`, 'success')
     }
   } catch (e) {
-    // Don't log error for rate limit stats - it's optional and may not be critical
+    // Auth errors (401/403) are expected for non-admin users - handle silently
+    if (isAuthError(e)) {
+      rateLimitStats.value = null
+      return
+    }
+    // Log other errors only on manual refresh
     if (isManual) {
       addLogEntry(`Failed to fetch rate limit stats: ${e.message}`, 'error')
     }

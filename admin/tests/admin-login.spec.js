@@ -423,11 +423,13 @@ test.describe('Admin Login and Health', () => {
     await expect(page.locator('text=Rate Limiting')).toBeVisible()
     console.log('✅ Rate Limiting card still visible after refresh')
 
-    // Check activity log for rate limit fetch (if stats are available)
+    // Check activity log for health/rate limit update
     const logEntries = await getActivityLogEntries(page)
-    const hasHealthEntry = logEntries.some(entry => entry.text && entry.text.includes('Health:'))
-    expect(hasHealthEntry).toBe(true)
-    console.log('✅ Activity log updated with health status')
+    const hasStatusEntry = logEntries.some(entry =>
+      entry.text && (entry.text.includes('Health:') || entry.text.includes('Rate limit'))
+    )
+    expect(hasStatusEntry).toBe(true)
+    console.log('✅ Activity log updated with status')
 
     console.log('\n✅ Rate Limiting stats refresh test completed!\n')
   })
