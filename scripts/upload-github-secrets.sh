@@ -58,6 +58,8 @@ upload_secret() {
     fi
 
     # Extract value after first '=' and strip surrounding quotes
+    # Note: This simple quote stripping doesn't handle escaped quotes within values.
+    # If your secrets contain literal \" sequences, edit them manually via GitHub UI.
     local value="${line#*=}"
     value="${value#\"}"
     value="${value%\"}"

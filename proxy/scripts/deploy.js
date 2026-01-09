@@ -107,9 +107,12 @@ for (const secret of secrets) {
   if (value) {
     console.log(`Setting ${secret}...`)
     try {
-      execSync(`echo "${value}" | npx wrangler secret put ${secret}`, {
+      // Pass secret value via stdin to prevent shell injection
+      // Using input option instead of shell interpolation for security
+      execSync(`npx wrangler secret put ${secret}`, {
         cwd: projectRoot,
-        stdio: 'pipe'
+        stdio: ['pipe', 'pipe', 'pipe'],
+        input: value
       })
     } catch (error) {
       console.warn(`Warning: Failed to set ${secret}`)

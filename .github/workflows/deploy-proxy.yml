@@ -94,8 +94,8 @@ jobs:
           cd proxy
           # Get the current active version ID before deploying
           VERSION_ID=$(npx wrangler versions list 2>/dev/null | grep -E '^\S+' | head -1 | awk '{print $1}' || echo "")
-          # Validate version ID format (UUID-like: alphanumeric with hyphens)
-          if [ -n "$VERSION_ID" ] && [[ "$VERSION_ID" =~ ^[a-f0-9-]+$ ]]; then
+          # Validate version ID format (UUID: 36 chars with hyphens, or 32-char hex)
+          if [ -n "$VERSION_ID" ] && [[ "$VERSION_ID" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ || "$VERSION_ID" =~ ^[a-f0-9]{32}$ ]]; then
             echo "Current version ID: $VERSION_ID"
             echo "version_id=$VERSION_ID" >> $GITHUB_OUTPUT
             echo "has_previous_version=true" >> $GITHUB_OUTPUT

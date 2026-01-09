@@ -1,6 +1,6 @@
 {
   "name": "een-oauth-proxy",
-  "version": "1.2.33",
+  "version": "1.2.34",
   "private": true,
   "type": "module",
   "scripts": {
