@@ -117,12 +117,9 @@ if (missingCritical.length > 0) {
 }
 console.log('All critical secrets present')
 
-// Deploy worker
-console.log('')
-console.log('Deploying worker...')
-run('npx wrangler deploy')
-
-// Set secrets
+// Set secrets BEFORE deploying worker to avoid broken state if secrets fail
+// Note: This requires the worker to already exist (from a previous deployment)
+// For first-time deployments, deploy manually first or use wrangler deploy directly
 console.log('')
 console.log('Setting secrets...')
 
@@ -157,6 +154,11 @@ for (const secret of secrets) {
     console.warn(`Warning: ${secret} not found in environment`)
   }
 }
+
+// Deploy worker (after secrets are set to ensure worker has all configuration)
+console.log('')
+console.log('Deploying worker...')
+run('npx wrangler deploy')
 
 // Store version in KV
 console.log('')
