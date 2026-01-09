@@ -80,6 +80,11 @@ jobs:
           VERSION_STRING="een-oauth-proxy - ${{ steps.version.outputs.version }} - $DEPLOY_TIME"
           # Get namespace ID using wrangler CLI
           NAMESPACE_ID=$(npx wrangler kv namespace list --json | jq -r '.[] | select(.title | contains("EEN_OAUTH_SESSIONS")) | .id')
+          # Validate namespace ID was found
+          if [ -z "$NAMESPACE_ID" ]; then
+            echo "Error: Could not find KV namespace EEN_OAUTH_SESSIONS"
+            exit 1
+          fi
           echo "Storing version: $VERSION_STRING"
           npx wrangler kv key put DEPLOY_VERSION "$VERSION_STRING" --namespace-id="$NAMESPACE_ID" --remote
 
@@ -162,43 +167,45 @@ jobs:
         if: failure()
         continue-on-error: true
         run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${VERSION:-unknown}"
           curl -X POST "${{ secrets.SLACK_WEBHOOK }}" \
             -H "Content-Type: application/json" \
-            -d '{
-              "blocks": [
+            -d "{
+              \"blocks\": [
                 {
-                  "type": "header",
-                  "text": {
-                    "type": "plain_text",
-                    "text": "Proxy Deployment Failed",
-                    "emoji": true
+                  \"type\": \"header\",
+                  \"text\": {
+                    \"type\": \"plain_text\",
+                    \"text\": \"Proxy Deployment Failed\",
+                    \"emoji\": true
                   }
                 },
                 {
-                  "type": "section",
-                  "fields": [
+                  \"type\": \"section\",
+                  \"fields\": [
                     {
-                      "type": "mrkdwn",
-                      "text": "*Version:*\n${{ steps.version.outputs.version }}"
+                      \"type\": \"mrkdwn\",
+                      \"text\": \"*Version:*\n${VERSION}\"
                     },
                     {
-                      "type": "mrkdwn",
-                      "text": "*Status:*\n:x: Failed"
+                      \"type\": \"mrkdwn\",
+                      \"text\": \"*Status:*\n:x: Failed\"
                     }
                   ]
                 },
                 {
-                  "type": "actions",
-                  "elements": [
+                  \"type\": \"actions\",
+                  \"elements\": [
                     {
-                      "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "View Workflow"
+                      \"type\": \"button\",
+                      \"text\": {
+                        \"type\": \"plain_text\",
+                        \"text\": \"View Workflow\"
                       },
-                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                      \"url\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
                     }
                   ]
                 }
               ]
-            }'
+            }"

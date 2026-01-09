@@ -49,11 +49,28 @@ upload_secret() {
     local env_var_name="$2"
 
     # Extract value from .env file (handles both quoted and unquoted values)
-    local value=$(grep "^${env_var_name}=" "$ENV_FILE" | cut -d'=' -f2- | sed 's/^"//' | sed 's/"$//')
+    # Uses cut -d'=' -f2- to handle values containing '=' characters
+    local line=$(grep "^${env_var_name}=" "$ENV_FILE" 2>/dev/null | head -1)
 
-    if [ -z "$value" ]; then
+    if [ -z "$line" ]; then
         echo -e "${YELLOW}⚠ Skipping $gh_secret_name - $env_var_name not found in .env${NC}"
         return
+    fi
+
+    # Extract value after first '=' and strip surrounding quotes
+    local value="${line#*=}"
+    value="${value#\"}"
+    value="${value%\"}"
+
+    if [ -z "$value" ]; then
+        echo -e "${YELLOW}⚠ Skipping $gh_secret_name - $env_var_name has empty value${NC}"
+        return
+    fi
+
+    # Warn if value contains newlines (not supported)
+    if [[ "$value" == *$'\n'* ]]; then
+        echo -e "${RED}✗ $gh_secret_name contains newlines (not supported)${NC}"
+        return 1
     fi
 
     echo -n "Uploading $gh_secret_name... "
