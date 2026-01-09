@@ -158,8 +158,8 @@ jobs:
           cd proxy
           DEPLOY_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
           VERSION_STRING="een-oauth-proxy - ${{ steps.version.outputs.version }} - $DEPLOY_TIME"
-          # Get namespace ID from wrangler.toml (look for id after kv_namespaces section)
-          NAMESPACE_ID=$(awk '/\[\[kv_namespaces\]\]/,/^$/' wrangler.toml | grep 'id = "' | head -1 | sed 's/.*id = "\([^"]*\)".*/\1/')
+          # Get namespace ID from wrangler.toml (look for id within 10 lines after kv_namespaces section)
+          NAMESPACE_ID=$(grep -A 10 '\[\[kv_namespaces\]\]' wrangler.toml | grep 'id = "' | head -1 | sed 's/.*id = "\([^"]*\)".*/\1/')
           # Validate namespace ID was found and has correct format (32-char hex)
           if [ -z "$NAMESPACE_ID" ]; then
             echo "::error::Could not find KV namespace ID in wrangler.toml"
@@ -178,6 +178,8 @@ jobs:
         id: wait_propagation
         run: |
           # Poll health endpoint until version matches or timeout (exponential backoff)
+          # Note: Health endpoint returns full version string like "een-oauth-proxy - 1.2.37 - timestamp"
+          # so we check if the expected version number is contained in the response
           EXPECTED_VERSION="${{ steps.version.outputs.version }}"
           MAX_ATTEMPTS=6
           WAIT_TIME=5
@@ -185,8 +187,9 @@ jobs:
           echo "Waiting for deployment to propagate (expecting version: $EXPECTED_VERSION)..."
           for i in $(seq 1 $MAX_ATTEMPTS); do
             DEPLOYED=$(curl -sf "$PROXY_URL/health" | jq -r '.version' 2>/dev/null || echo "")
-            if [ "$DEPLOYED" = "$EXPECTED_VERSION" ]; then
-              echo "::notice::Deployment propagated successfully after $i attempt(s)"
+            # Use literal matching with version surrounded by " - " delimiters (format: "name - version - timestamp")
+            if echo "$DEPLOYED" | grep -qF "- $EXPECTED_VERSION -"; then
+              echo "::notice::Deployment propagated successfully after $i attempt(s) - version: $DEPLOYED"
               exit 0
             fi
             echo "Attempt $i/$MAX_ATTEMPTS: version=$DEPLOYED (waiting ${WAIT_TIME}s...)"
@@ -361,6 +364,7 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
         run: |
+          set -o pipefail
           VERSION="${{ steps.version.outputs.version }}"
           VERSION="${VERSION:-unknown}"
           ROLLBACK_STATUS=""
@@ -369,44 +373,23 @@ jobs:
           elif [ "${{ steps.current_deployment.outputs.has_previous_version }}" != "true" ]; then
             ROLLBACK_STATUS=" (rollback not possible - no previous version)"
           fi
+          # Build JSON safely using jq to prevent injection via special characters
           # Use env var to prevent webhook URL exposure in error output
-          curl -sf -X POST "$SLACK_WEBHOOK" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"blocks\": [
-                {
-                  \"type\": \"header\",
-                  \"text\": {
-                    \"type\": \"plain_text\",
-                    \"text\": \"Proxy Deployment Failed${ROLLBACK_STATUS}\",
-                    \"emoji\": true
-                  }
-                },
-                {
-                  \"type\": \"section\",
-                  \"fields\": [
-                    {
-                      \"type\": \"mrkdwn\",
-                      \"text\": \"*Version:*\n${VERSION}\"
-                    },
-                    {
-                      \"type\": \"mrkdwn\",
-                      \"text\": \"*Status:*\n:x: Failed\"
-                    }
-                  ]
-                },
-                {
-                  \"type\": \"actions\",
-                  \"elements\": [
-                    {
-                      \"type\": \"button\",
-                      \"text\": {
-                        \"type\": \"plain_text\",
-                        \"text\": \"View Workflow\"
-                      },
-                      \"url\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
-                    }
-                  ]
-                }
+          jq -n \
+            --arg title "Proxy Deployment Failed${ROLLBACK_STATUS}" \
+            --arg version "$VERSION" \
+            --arg url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{
+              blocks: [
+                {type: "header", text: {type: "plain_text", text: $title, emoji: true}},
+                {type: "section", fields: [
+                  {type: "mrkdwn", text: ("*Version:*\n" + $version)},
+                  {type: "mrkdwn", text: "*Status:*\n:x: Failed"}
+                ]},
+                {type: "actions", elements: [
+                  {type: "button", text: {type: "plain_text", text: "View Workflow"}, url: $url}
+                ]}
               ]
-            }"
+            }' | curl -sf -X POST "$SLACK_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d @-
