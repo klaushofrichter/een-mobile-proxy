@@ -8,6 +8,14 @@ on:
         required: false
         default: 'false'
         type: boolean
+      force_deploy:
+        description: 'Deploy even if versions match'
+        required: false
+        default: 'false'
+        type: boolean
+  push:
+    branches: [production]
+    paths: ['proxy/**']
 
 jobs:
   deploy:
@@ -31,22 +39,78 @@ jobs:
       - name: Install dependencies
         run: cd proxy && npm ci
 
-      - name: Get proxy version
+      - name: Get proxy version from package.json
         id: version
         run: |
           VERSION=$(node -p "require('./proxy/package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Deploying proxy version: $VERSION"
+          echo "Package version: $VERSION"
+
+      - name: Get deployed version
+        id: deployed
+        run: |
+          DEPLOYED=$(curl -sf https://een-oauth-proxy.klaushofrichter.workers.dev/health | jq -r '.version' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
+          echo "deployed_version=$DEPLOYED" >> $GITHUB_OUTPUT
+          echo "Deployed version: $DEPLOYED"
+
+      - name: Check if deployment needed
+        id: check
+        run: |
+          PACKAGE_VERSION="${{ steps.version.outputs.version }}"
+          DEPLOYED_VERSION="${{ steps.deployed.outputs.deployed_version }}"
+          FORCE_DEPLOY="${{ inputs.force_deploy }}"
+
+          if [ "$FORCE_DEPLOY" = "true" ]; then
+            echo "Force deploy requested"
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          elif [ "$PACKAGE_VERSION" != "$DEPLOYED_VERSION" ]; then
+            echo "Version mismatch: $PACKAGE_VERSION != $DEPLOYED_VERSION"
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          else
+            echo "Versions match: $PACKAGE_VERSION = $DEPLOYED_VERSION"
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Skip deployment (versions match)
+        if: steps.check.outputs.should_deploy == 'false'
+        run: |
+          echo "## Deployment Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Package version (${{ steps.version.outputs.version }}) matches deployed version (${{ steps.deployed.outputs.deployed_version }})." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Use **force_deploy** input to deploy anyway." >> $GITHUB_STEP_SUMMARY
+
+      - name: Get current deployment version ID (for rollback)
+        if: steps.check.outputs.should_deploy == 'true'
+        id: current_deployment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd proxy
+          # Get the current active version ID before deploying
+          VERSION_ID=$(npx wrangler versions list 2>/dev/null | grep -E '^\S+' | head -1 | awk '{print $1}' || echo "")
+          if [ -n "$VERSION_ID" ]; then
+            echo "Current version ID: $VERSION_ID"
+            echo "version_id=$VERSION_ID" >> $GITHUB_OUTPUT
+          else
+            echo "Could not determine current version ID (this may be first deployment)"
+            echo "version_id=" >> $GITHUB_OUTPUT
+          fi
 
       - name: Deploy to Cloudflare Workers
+        if: steps.check.outputs.should_deploy == 'true'
+        id: deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           cd proxy
           npx wrangler deploy
+          echo "deployed=true" >> $GITHUB_OUTPUT
 
       - name: Set Cloudflare secrets
+        if: steps.check.outputs.should_deploy == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -71,6 +135,7 @@ jobs:
           echo "${{ secrets.REFRESH_TOKEN_TTL }}" | npx wrangler secret put REFRESH_TOKEN_TTL
 
       - name: Store deploy version in KV
+        if: steps.check.outputs.should_deploy == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -89,12 +154,14 @@ jobs:
           npx wrangler kv key put DEPLOY_VERSION "$VERSION_STRING" --namespace-id="$NAMESPACE_ID" --remote
 
       - name: Wait for deployment propagation
+        if: steps.check.outputs.should_deploy == 'true'
         run: |
           echo "Waiting 10 seconds for deployment to propagate..."
           sleep 10
 
       - name: Verify deployment
-        if: ${{ inputs.skip_verification != 'true' }}
+        if: steps.check.outputs.should_deploy == 'true' && inputs.skip_verification != 'true'
+        id: verify
         run: |
           # Verify curl and jq are available (pre-installed on Ubuntu runners)
           command -v curl >/dev/null 2>&1 || { echo "curl is required but not installed"; exit 1; }
@@ -102,16 +169,32 @@ jobs:
           echo "Running production verification tests..."
           BRIEF=1 ./scripts/test-production-proxy.sh
 
+      - name: Rollback on verification failure
+        if: failure() && steps.deploy.outputs.deployed == 'true' && steps.current_deployment.outputs.version_id != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd proxy
+          ROLLBACK_VERSION="${{ steps.current_deployment.outputs.version_id }}"
+          echo "::warning::Verification failed! Rolling back to version: $ROLLBACK_VERSION"
+          npx wrangler versions deploy "$ROLLBACK_VERSION" --yes
+          echo "## Rollback Performed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Verification tests failed. Rolled back to version: $ROLLBACK_VERSION" >> $GITHUB_STEP_SUMMARY
+
       - name: Deployment summary
+        if: steps.check.outputs.should_deploy == 'true' && success()
         run: |
           echo "## Proxy Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Previous:** ${{ steps.deployed.outputs.deployed_version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Worker:** een-oauth-proxy" >> $GITHUB_STEP_SUMMARY
           echo "**URL:** https://een-oauth-proxy.klaushofrichter.workers.dev" >> $GITHUB_STEP_SUMMARY
 
       - name: Notify Slack on success
-        if: success()
+        if: steps.check.outputs.should_deploy == 'true' && success()
         continue-on-error: true
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
@@ -174,6 +257,10 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           VERSION="${VERSION:-unknown}"
+          ROLLBACK_MSG=""
+          if [ -n "${{ steps.current_deployment.outputs.version_id }}" ]; then
+            ROLLBACK_MSG=" (rolled back)"
+          fi
           # Use env var to prevent webhook URL exposure in error output
           curl -sf -X POST "$SLACK_WEBHOOK" \
             -H "Content-Type: application/json" \
@@ -183,7 +270,7 @@ jobs:
                   \"type\": \"header\",
                   \"text\": {
                     \"type\": \"plain_text\",
-                    \"text\": \"Proxy Deployment Failed\",
+                    \"text\": \"Proxy Deployment Failed${ROLLBACK_MSG}\",
                     \"emoji\": true
                   }
                 },
