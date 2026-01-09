@@ -32,12 +32,13 @@ NC='\033[0m' # No Color
 # Brief mode - compact output for CI/deployment
 BRIEF="${BRIEF:-0}"
 
-# Default production proxy URL
+# Default production proxy URL (can be overridden via first argument or PROXY_URL env var)
 DEFAULT_PROXY_URL="https://een-oauth-proxy.klaushofrichter.workers.dev"
-PROXY_URL="${1:-$DEFAULT_PROXY_URL}"
+PROXY_URL="${1:-${PROXY_URL:-$DEFAULT_PROXY_URL}}"
 
 # Allowed origin for CORS tests (must match proxy's ALLOWED_ORIGINS)
-ALLOWED_ORIGIN="https://klaushofrichter.github.io"
+# Can be overridden via ALLOWED_ORIGIN environment variable for forks/other deployments
+ALLOWED_ORIGIN="${ALLOWED_ORIGIN:-https://klaushofrichter.github.io}"
 
 # Track results
 PASSED=0
@@ -137,7 +138,7 @@ run_test "No session returns 401" "401" "$NOSESSION"
 [ "$BRIEF" != "1" ] && echo -e "\n${BLUE}7. Authentication - Invalid Session${NC}"
 INVALID_SESSION=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST "$PROXY_URL/proxy/refreshAccessToken" \
   -H "Origin: $ALLOWED_ORIGIN" \
-  -H "Cookie: session_id=invalid-session-12345" 2>/dev/null || echo "000")
+  -H "Cookie: sessionId=invalid-session-12345" 2>/dev/null || echo "000")
 run_test "Invalid session rejected" "401" "$INVALID_SESSION"
 
 # 8. Admin Endpoint Without Auth

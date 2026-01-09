@@ -102,8 +102,8 @@ jobs:
           echo "=== Proxy Process ==="
           ps aux | grep wrangler || true
           echo ""
-          echo "=== Test OAuth Token Endpoint (expect error - no valid code) ==="
-          curl -v -X POST http://localhost:8787/oauth/token \
+          echo "=== Test getAccessToken Endpoint (expect error - no valid code) ==="
+          curl -v -X POST http://localhost:8787/proxy/getAccessToken \
             -H "Content-Type: application/json" \
             -H "Origin: http://127.0.0.1:3333" \
             -d '{"code":"test_invalid_code","redirect_uri":"http://127.0.0.1:3333"}' 2>&1 || true

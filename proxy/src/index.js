@@ -131,6 +131,7 @@ function isValidEenUrl(url, env) {
     // Block IP addresses (IPv4, IPv6, and numeric representations)
     // IPv4: 192.168.1.1
     // IPv6: [::1], [fe80::1], or with :: shorthand
+    // IPv4-mapped IPv6: ::ffff:192.0.2.1, 0:0:0:0:0:ffff:192.0.2.1
     // Numeric: 2130706433 (decimal representation of 127.0.0.1)
     // Octal/Hex: 0177.0.0.1, 0x7f.0.0.1
     const isIPv4 = /^\d+\.\d+\.\d+\.\d+$/.test(hostname)
@@ -139,10 +140,12 @@ function isValidEenUrl(url, env) {
     const isIPv6Bracketed = /^\[.+\]$/.test(hostname)
     const isIPv6Shorthand = hostname.includes('::')
     const isIPv6Full = /^[0-9a-f]+:[0-9a-f]+:/i.test(hostname)
+    // IPv4-mapped/compatible IPv6 addresses (e.g., ::ffff:192.168.1.1 or containing IPv4 after colon)
+    const isIPv4Mapped = /:[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/.test(hostname)
     const isNumericIP = /^\d+$/.test(hostname)
     const isOctalOrHex = /^0[0-7x]/i.test(hostname) || /\.0[0-7x]/i.test(hostname)
 
-    if (isIPv4 || isIPv6Bracketed || isIPv6Shorthand || isIPv6Full || isNumericIP || isOctalOrHex) {
+    if (isIPv4 || isIPv6Bracketed || isIPv6Shorthand || isIPv6Full || isIPv4Mapped || isNumericIP || isOctalOrHex) {
       debugLog(env, `[SSRF] Blocked IP-based hostname: ${truncateForLog(hostname)}`)
       return false
     }
@@ -163,14 +166,12 @@ function isValidEenUrl(url, env) {
       allowedDomains = cachedAllowlist
     } else {
       // Parse and cache the allowlist
-      // Limit config string length to prevent DoS via large config
-      const wasTruncated = rawAllowedDomains.length > MAX_ALLOWED_DOMAINS_CONFIG_LENGTH
-      if (wasTruncated) {
-        debugLog(env, `[WARNING] ALLOWED_API_DOMAINS truncated from ${rawAllowedDomains.length} to ${MAX_ALLOWED_DOMAINS_CONFIG_LENGTH} chars`)
+      // Reject if config exceeds limit (fail-safe to prevent misconfiguration)
+      if (rawAllowedDomains.length > MAX_ALLOWED_DOMAINS_CONFIG_LENGTH) {
+        debugLog(env, `[SSRF] ALLOWED_API_DOMAINS config too long (${rawAllowedDomains.length} > ${MAX_ALLOWED_DOMAINS_CONFIG_LENGTH}), rejecting request`)
+        return false
       }
-      const allowedDomainsStr = wasTruncated
-        ? rawAllowedDomains.substring(0, MAX_ALLOWED_DOMAINS_CONFIG_LENGTH)
-        : rawAllowedDomains
+      const allowedDomainsStr = rawAllowedDomains
       allowedDomains = allowedDomainsStr
         .split(',')
         .map((d) => d.trim().toLowerCase())
