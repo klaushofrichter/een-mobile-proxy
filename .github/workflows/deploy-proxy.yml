@@ -1,0 +1,198 @@
+name: Deploy Proxy to Cloudflare
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_verification:
+        description: 'Skip post-deployment verification tests'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Only allow deployment from production branch
+    if: github.ref == 'refs/heads/production'
+
+    steps:
+      - name: Checkout production branch
+        uses: actions/checkout@v4
+        with:
+          ref: production
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: proxy/package-lock.json
+
+      - name: Install dependencies
+        run: cd proxy && npm ci
+
+      - name: Get proxy version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./proxy/package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Deploying proxy version: $VERSION"
+
+      - name: Deploy to Cloudflare Workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd proxy
+          npx wrangler deploy
+
+      - name: Set Cloudflare secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd proxy
+          echo "Setting CLIENT_ID..."
+          echo "${{ secrets.VITE_EEN_CLIENT_ID }}" | npx wrangler secret put CLIENT_ID
+
+          echo "Setting CLIENT_SECRET..."
+          echo "${{ secrets.EEN_CLIENT_SECRET }}" | npx wrangler secret put CLIENT_SECRET
+
+          echo "Setting ADMIN_EMAILS..."
+          echo "klaus+developer@klaushofrichter.net,khofrichter+lda@een.com" | npx wrangler secret put ADMIN_EMAILS
+
+          echo "Setting ALLOWED_ORIGINS..."
+          echo "https://klaushofrichter.github.io,http://127.0.0.1:3333" | npx wrangler secret put ALLOWED_ORIGINS
+
+          echo "Setting ALLOWED_API_DOMAINS..."
+          echo "eagleeyenetworks.com" | npx wrangler secret put ALLOWED_API_DOMAINS
+
+          echo "Setting REFRESH_TOKEN_TTL..."
+          echo "86400" | npx wrangler secret put REFRESH_TOKEN_TTL
+
+      - name: Store deploy version in KV
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd proxy
+          DEPLOY_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          VERSION_STRING="een-oauth-proxy - ${{ steps.version.outputs.version }} - $DEPLOY_TIME"
+          NAMESPACE_ID=$(grep 'id = "' wrangler.toml | head -1 | sed 's/.*id = "\([^"]*\)".*/\1/')
+          echo "Storing version: $VERSION_STRING"
+          npx wrangler kv key put DEPLOY_VERSION "$VERSION_STRING" --namespace-id="$NAMESPACE_ID" --remote
+
+      - name: Wait for deployment propagation
+        run: |
+          echo "Waiting 10 seconds for deployment to propagate..."
+          sleep 10
+
+      - name: Verify deployment
+        if: ${{ inputs.skip_verification != 'true' }}
+        run: |
+          echo "Running production verification tests..."
+          BRIEF=1 ./scripts/test-production-proxy.sh
+
+      - name: Deployment summary
+        run: |
+          echo "## Proxy Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Worker:** een-oauth-proxy" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** https://een-oauth-proxy.klaushofrichter.workers.dev" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify Slack on success
+        if: success()
+        run: |
+          curl -X POST "${{ secrets.SLACK_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "Proxy Deployed to Cloudflare",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Version:*\n${{ steps.version.outputs.version }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Status:*\n:white_check_mark: Success"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "Health Check"
+                      },
+                      "url": "https://een-oauth-proxy.klaushofrichter.workers.dev/health"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Workflow"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }'
+
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          curl -X POST "${{ secrets.SLACK_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "Proxy Deployment Failed",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Version:*\n${{ steps.version.outputs.version }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Status:*\n:x: Failed"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Workflow"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }'
