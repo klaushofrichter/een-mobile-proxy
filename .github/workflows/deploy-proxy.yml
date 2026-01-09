@@ -212,20 +212,20 @@ jobs:
           # Rollback triggers if: deploy succeeded but any subsequent step failed
           # - verification failed, OR
           # - secrets/KV steps failed (deployment_complete not set), OR
-          # - workflow is failing for any reason after deploy
+          # - any step after deploy failed
           DEPLOY_SUCCEEDED="${{ steps.deploy.outputs.deployed == 'true' }}"
           DEPLOYMENT_COMPLETE="${{ steps.store_version.outputs.deployment_complete == 'true' }}"
           HAS_PREVIOUS="${{ steps.current_deployment.outputs.has_previous_version == 'true' }}"
-          WORKFLOW_FAILING="${{ failure() }}"
+          VERIFY_FAILED="${{ steps.verify.outcome == 'failure' }}"
 
           echo "Deploy succeeded: $DEPLOY_SUCCEEDED"
           echo "Deployment complete: $DEPLOYMENT_COMPLETE"
           echo "Has previous version: $HAS_PREVIOUS"
-          echo "Workflow failing: $WORKFLOW_FAILING"
+          echo "Verify failed: $VERIFY_FAILED"
 
-          # Rollback if deploy succeeded but workflow is failing OR deployment didn't complete
+          # Rollback if deploy succeeded but verification failed OR deployment didn't complete
           if [ "$DEPLOY_SUCCEEDED" = "true" ]; then
-            if [ "$WORKFLOW_FAILING" = "true" ] || [ "$DEPLOYMENT_COMPLETE" != "true" ]; then
+            if [ "$VERIFY_FAILED" = "true" ] || [ "$DEPLOYMENT_COMPLETE" != "true" ]; then
               echo "should_rollback=true" >> $GITHUB_OUTPUT
               if [ "$HAS_PREVIOUS" = "true" ]; then
                 echo "can_rollback=true" >> $GITHUB_OUTPUT
