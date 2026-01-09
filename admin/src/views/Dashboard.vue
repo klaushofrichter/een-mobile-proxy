@@ -232,7 +232,7 @@
         </div>
 
         <!-- Right Column: Activity Log -->
-        <div :class="['right-panel shadow rounded-lg p-4 flex flex-col', isDarkMode ? 'bg-gray-800' : 'bg-white']" style="max-height: 500px">
+        <div :class="['right-panel shadow rounded-lg p-4 flex flex-col', isDarkMode ? 'bg-gray-800' : 'bg-white']" style="max-height: 650px">
           <div class="flex justify-between items-center mb-2">
             <span :class="['text-sm font-medium', isDarkMode ? 'text-white' : 'text-gray-900']">Activity Log</span>
             <button
