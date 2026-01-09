@@ -78,8 +78,8 @@ jobs:
           cd proxy
           DEPLOY_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
           VERSION_STRING="een-oauth-proxy - ${{ steps.version.outputs.version }} - $DEPLOY_TIME"
-          # Get namespace ID using wrangler CLI (exact match on title)
-          NAMESPACE_ID=$(npx wrangler kv namespace list --json | jq -r '.[] | select(.title == "een-oauth-proxy-EEN_OAUTH_SESSIONS") | .id')
+          # Get namespace ID from wrangler.toml
+          NAMESPACE_ID=$(grep 'id = "' wrangler.toml | head -1 | sed 's/.*id = "\([^"]*\)".*/\1/')
           # Validate namespace ID was found
           if [ -z "$NAMESPACE_ID" ]; then
             echo "Error: Could not find KV namespace EEN_OAUTH_SESSIONS"
