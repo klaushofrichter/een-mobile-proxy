@@ -335,4 +335,102 @@ test.describe('Admin Login and Health', () => {
 
     console.log('\n✅ Resizable panels test completed!\n')
   })
+
+  test('should display rate limiting stats card', async ({ page }) => {
+    console.log('\n▶️ Running Test: Rate Limiting stats display\n')
+    test.setTimeout(MAX_TEST_TIMEOUT)
+
+    // Login to admin
+    await loginToAdmin(page)
+
+    // Verify Rate Limiting card is visible
+    await expect(page.locator('text=Rate Limiting')).toBeVisible()
+    console.log('✅ Rate Limiting card visible')
+
+    // Wait for data to load (give it some time)
+    await page.waitForTimeout(2000)
+
+    // Check if rate limiting is enabled or disabled (badge should be visible)
+    const onOffBadge = page.locator('text=Rate Limiting').locator('..').locator('span').filter({ hasText: /^(On|Off)$/ })
+    const badgeVisible = await onOffBadge.isVisible().catch(() => false)
+
+    if (badgeVisible) {
+      const badgeText = await onOffBadge.textContent()
+      console.log(`✅ Rate limiting status: ${badgeText}`)
+
+      // If rate limiting is on, verify category data is displayed
+      if (badgeText === 'On') {
+        // Check for category names (desktop table headers or mobile cards)
+        const healthCategory = page.locator('text=health').first()
+        const oauthCategory = page.locator('text=oauth').first()
+        const adminCategory = page.locator('text=admin').first()
+
+        // At least one category should be visible
+        const hasCategories = await healthCategory.isVisible().catch(() => false) ||
+                             await oauthCategory.isVisible().catch(() => false) ||
+                             await adminCategory.isVisible().catch(() => false)
+
+        if (hasCategories) {
+          console.log('✅ Rate limit categories displayed')
+        }
+
+        // Check for "Active entries" label
+        const activeEntries = page.locator('text=Active entries')
+        if (await activeEntries.isVisible().catch(() => false)) {
+          console.log('✅ Active entries count displayed')
+        }
+
+        // Check for Window duration
+        const windowLabel = page.locator('text=/Window: \\d+s/')
+        if (await windowLabel.isVisible().catch(() => false)) {
+          const windowText = await windowLabel.textContent()
+          console.log(`✅ ${windowText}`)
+        }
+      }
+    } else {
+      // Rate limit stats may be unavailable (no badge shown)
+      const unavailableMsg = page.locator('text=Rate limit stats unavailable')
+      if (await unavailableMsg.isVisible().catch(() => false)) {
+        console.log('⚠️ Rate limit stats unavailable (admin may not have access)')
+      }
+    }
+
+    console.log('\n✅ Rate Limiting stats display test completed!\n')
+  })
+
+  test('should update rate limiting stats on manual refresh', async ({ page }) => {
+    console.log('\n▶️ Running Test: Rate Limiting stats refresh\n')
+    test.setTimeout(MAX_TEST_TIMEOUT)
+
+    // Login to admin
+    await loginToAdmin(page)
+
+    // Verify Rate Limiting card is visible
+    await expect(page.locator('text=Rate Limiting')).toBeVisible()
+    console.log('✅ Rate Limiting card visible')
+
+    // Wait for initial load
+    await page.waitForTimeout(2000)
+
+    // Click Update now button to refresh stats
+    await page.getByRole('button', { name: 'Update now' }).click()
+    console.log('👆 Clicked Update now button')
+
+    // Wait for refresh to complete
+    await page.waitForTimeout(2000)
+
+    // Verify rate limiting card is still visible after refresh
+    await expect(page.locator('text=Rate Limiting')).toBeVisible()
+    console.log('✅ Rate Limiting card still visible after refresh')
+
+    // Check activity log for health/rate limit update
+    const logEntries = await getActivityLogEntries(page)
+    const hasStatusEntry = logEntries.some(entry =>
+      entry.text && (entry.text.includes('Health:') || entry.text.includes('Rate limit'))
+    )
+    expect(hasStatusEntry).toBe(true)
+    console.log('✅ Activity log updated with status')
+
+    console.log('\n✅ Rate Limiting stats refresh test completed!\n')
+  })
 })

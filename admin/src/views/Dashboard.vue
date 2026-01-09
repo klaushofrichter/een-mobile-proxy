@@ -116,6 +116,81 @@
             </div>
           </div>
 
+          <!-- Rate Limiting Stats -->
+          <div :class="['shadow rounded-lg p-4', isDarkMode ? 'bg-gray-800' : 'bg-white']">
+            <div class="flex justify-between items-center mb-3">
+              <div class="flex items-center space-x-2">
+                <span :class="['text-sm font-medium', isDarkMode ? 'text-white' : 'text-gray-900']">Rate Limiting</span>
+                <span
+                  v-if="rateLimitStats"
+                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium"
+                  :class="rateLimitStats.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'"
+                >
+                  {{ rateLimitStats.enabled ? 'On' : 'Off' }}
+                </span>
+              </div>
+              <span v-if="rateLimitStats" :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+                Window: {{ rateLimitStats.window }}s
+              </span>
+            </div>
+
+            <!-- Loading state -->
+            <div v-if="loadingRateLimitStats && !rateLimitStats" :class="['text-xs text-center py-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+              Loading...
+            </div>
+
+            <!-- No data state -->
+            <div v-else-if="!rateLimitStats" :class="['text-xs text-center py-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+              Rate limit stats unavailable
+            </div>
+
+            <!-- Stats table -->
+            <div v-else>
+              <!-- Mobile: stacked cards -->
+              <div class="sm:hidden space-y-2">
+                <div v-for="category in ['health', 'oauth', 'admin']" :key="category" :class="['rounded p-2', isDarkMode ? 'bg-gray-700' : 'bg-gray-50']">
+                  <div class="flex justify-between items-center">
+                    <span :class="['text-xs font-medium capitalize', isDarkMode ? 'text-gray-300' : 'text-gray-700']">{{ category }}</span>
+                    <span :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                      {{ rateLimitStats.byCategory[category]?.count || 0 }} / {{ rateLimitStats.limits[category] }}
+                    </span>
+                  </div>
+                  <div class="flex justify-between text-xs mt-1">
+                    <span :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'">Clients:</span>
+                    <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-600'">{{ rateLimitStats.byCategory[category]?.uniqueClients || 0 }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Desktop: table layout -->
+              <div class="hidden sm:block">
+                <table class="w-full text-xs">
+                  <thead>
+                    <tr :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'">
+                      <th class="text-left font-normal pb-1">Category</th>
+                      <th class="text-right font-normal pb-1">Limit</th>
+                      <th class="text-right font-normal pb-1">Requests</th>
+                      <th class="text-right font-normal pb-1">Clients</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="category in ['health', 'oauth', 'admin']" :key="category">
+                      <td :class="['py-1 capitalize', isDarkMode ? 'text-gray-300' : 'text-gray-700']">{{ category }}</td>
+                      <td :class="['py-1 text-right font-mono', isDarkMode ? 'text-gray-400' : 'text-gray-500']">{{ rateLimitStats.limits[category] }}</td>
+                      <td :class="['py-1 text-right font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ rateLimitStats.byCategory[category]?.count || 0 }}</td>
+                      <td :class="['py-1 text-right font-mono', isDarkMode ? 'text-gray-300' : 'text-gray-600']">{{ rateLimitStats.byCategory[category]?.uniqueClients || 0 }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Footer with active entries -->
+              <div :class="['mt-2 pt-2 border-t flex justify-between text-xs', isDarkMode ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500']">
+                <span>Active entries: {{ rateLimitStats.activeEntries }}</span>
+              </div>
+            </div>
+          </div>
+
           <!-- Actions -->
           <div :class="['shadow rounded-lg p-4 space-y-3', isDarkMode ? 'bg-gray-800' : 'bg-white']">
             <div :class="['flex items-center justify-between p-3 rounded border', isDarkMode ? 'bg-amber-900/30 border-amber-600' : 'bg-amber-50 border-amber-300']">
@@ -157,7 +232,7 @@
         </div>
 
         <!-- Right Column: Activity Log -->
-        <div :class="['right-panel shadow rounded-lg p-4 flex flex-col', isDarkMode ? 'bg-gray-800' : 'bg-white']" style="max-height: 500px">
+        <div :class="['right-panel shadow rounded-lg p-4 flex flex-col', isDarkMode ? 'bg-gray-800' : 'bg-white']" style="max-height: 650px">
           <div class="flex justify-between items-center mb-2">
             <span :class="['text-sm font-medium', isDarkMode ? 'text-white' : 'text-gray-900']">Activity Log</span>
             <button
@@ -167,7 +242,7 @@
               Clear
             </button>
           </div>
-          <div class="flex-1 overflow-y-auto text-xs space-y-1 font-mono" ref="logContainer">
+          <div :class="['flex-1 overflow-y-auto text-xs space-y-1 font-mono', isDarkMode ? 'scrollbar-dark' : 'scrollbar-light']" ref="logContainer">
             <div
               v-for="(entry, index) in activityLog"
               :key="index"
@@ -239,7 +314,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { getHealth, getProxyUrl, getSessionsCount, removeSessions, revokeAll } from '../services/admin'
+import { getHealth, getProxyUrl, getSessionsCount, getRateLimitStats, removeSessions, revokeAll } from '../services/admin'
 import packageJson from '../../package.json'
 
 const router = useRouter()
@@ -307,6 +382,10 @@ const lastHealthCheck = ref(null)
 const loadingHealth = ref(false)
 const healthError = ref(null)
 const healthAutoRefresh = ref(true)
+
+// Rate limit stats state
+const rateLimitStats = ref(null)
+const loadingRateLimitStats = ref(false)
 
 // Auto-refresh interval
 let healthInterval = null
@@ -384,8 +463,8 @@ async function checkHealth(isManual = false) {
 
 async function manualUpdate() {
   refreshCountdown.value = HEALTH_CHECK_INTERVAL / 1000
-  // Fetch both without individual logging, then log combined result
-  await Promise.all([checkHealth(false), fetchSessionCount(false)])
+  // Fetch all stats without individual logging, then log combined result
+  await Promise.all([checkHealth(false), fetchSessionCount(false), fetchRateLimitStats(false)])
   addLogEntry(`Health: ${healthStatus.value}, Sessions: ${sessionCount.value ?? 0}`, healthStatus.value === 'ok' ? 'success' : 'error')
 }
 
@@ -435,6 +514,32 @@ async function fetchSessionCount(isManual = false) {
     addLogEntry(`Failed to fetch sessions: ${e.message}`, 'error')
   } finally {
     loadingSessions.value = false
+  }
+}
+
+// Fetch rate limit statistics
+async function fetchRateLimitStats(isManual = false) {
+  loadingRateLimitStats.value = true
+
+  try {
+    const data = await getRateLimitStats()
+    rateLimitStats.value = data
+    if (isManual) {
+      addLogEntry(`Rate limit stats: ${data.activeEntries} active entries`, 'success')
+    }
+  } catch (e) {
+    // Auth errors (401/403) are expected for non-admin users - handle silently
+    if (isAuthError(e)) {
+      rateLimitStats.value = null
+      return
+    }
+    // Log other errors only on manual refresh
+    if (isManual) {
+      addLogEntry(`Failed to fetch rate limit stats: ${e.message}`, 'error')
+    }
+    rateLimitStats.value = null
+  } finally {
+    loadingRateLimitStats.value = false
   }
 }
 
@@ -620,6 +725,7 @@ onMounted(async () => {
   await Promise.all([
     checkHealth(false),
     fetchSessionCount(false),
+    fetchRateLimitStats(false),
     fetchUserProfile()
   ])
 
@@ -633,6 +739,47 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Custom scrollbar styles for dark/light mode */
+.scrollbar-dark::-webkit-scrollbar {
+  width: 8px;
+}
+.scrollbar-dark::-webkit-scrollbar-track {
+  background: #374151; /* gray-700 */
+  border-radius: 4px;
+}
+.scrollbar-dark::-webkit-scrollbar-thumb {
+  background: #4b5563; /* gray-600 */
+  border-radius: 4px;
+}
+.scrollbar-dark::-webkit-scrollbar-thumb:hover {
+  background: #6b7280; /* gray-500 */
+}
+
+.scrollbar-light::-webkit-scrollbar {
+  width: 8px;
+}
+.scrollbar-light::-webkit-scrollbar-track {
+  background: #f3f4f6; /* gray-100 */
+  border-radius: 4px;
+}
+.scrollbar-light::-webkit-scrollbar-thumb {
+  background: #d1d5db; /* gray-300 */
+  border-radius: 4px;
+}
+.scrollbar-light::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af; /* gray-400 */
+}
+
+/* Firefox scrollbar support */
+.scrollbar-dark {
+  scrollbar-width: thin;
+  scrollbar-color: #4b5563 #374151;
+}
+.scrollbar-light {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f3f4f6;
+}
+
 /* Mobile first: stacked layout, full width */
 .resizable-container {
   flex-direction: column;

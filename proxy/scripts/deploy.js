@@ -129,7 +129,8 @@ try {
     stdio: ['pipe', 'pipe', 'pipe']
   })
   // If command succeeds but output is empty or shows no deployments, it's first deployment
-  if (!output || output.trim() === '' || output.includes('No deployments')) {
+  // Use case-insensitive check to handle variations in wrangler output
+  if (!output || output.trim() === '' || output.toLowerCase().includes('no deployment')) {
     isFirstDeployment = true
   }
 } catch (error) {

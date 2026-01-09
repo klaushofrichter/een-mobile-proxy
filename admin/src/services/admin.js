@@ -272,6 +272,25 @@ export async function getSessionsCount() {
 }
 
 /**
+ * Get rate limit statistics
+ * Returns current rate limiting configuration and usage stats by category
+ */
+export async function getRateLimitStats() {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${getProxyUrlOrThrow()}/admin/rateLimitStats`, {
+    credentials: 'include',
+    headers
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to get rate limit stats' }))
+    throw new Error(error.error || 'Failed to get rate limit stats')
+  }
+
+  return response.json()
+}
+
+/**
  * Remove all sessions except current
  */
 export async function removeSessions() {
