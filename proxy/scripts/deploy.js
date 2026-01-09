@@ -105,6 +105,11 @@ const secrets = ['CLIENT_ID', 'CLIENT_SECRET', 'ADMIN_EMAILS', 'ALLOWED_ORIGINS'
 for (const secret of secrets) {
   const value = process.env[secret]
   if (value) {
+    // Validate secret name contains only safe characters (defense in depth)
+    if (!/^[A-Z_]+$/.test(secret)) {
+      console.warn(`Warning: Invalid secret name format: ${secret}`)
+      continue
+    }
     console.log(`Setting ${secret}...`)
     try {
       // Pass secret value via stdin to prevent shell injection
