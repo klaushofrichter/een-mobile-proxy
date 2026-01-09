@@ -139,7 +139,6 @@ test.describe('Authentication Flows', () => {
         signal: controller.signal
       })
 
-      clearTimeout(timeoutId)
       console.log(`📋 Refresh response status: ${refreshResponse.status}`)
 
       // Step 6: Verify refresh fails (401 - session no longer exists)
@@ -149,11 +148,12 @@ test.describe('Authentication Flows', () => {
       const responseData = await refreshResponse.json().catch(() => ({}))
       console.log(`📋 Response: ${JSON.stringify(responseData)}`)
     } catch (error) {
-      clearTimeout(timeoutId)
       if (error.name === 'AbortError') {
         throw new Error(`Refresh request timed out after ${MAX_TEST_TIMEOUT / 1000} seconds`)
       }
       throw error
+    } finally {
+      clearTimeout(timeoutId)
     }
 
     console.log('\n✅ Token refresh after revocation test completed!\n')

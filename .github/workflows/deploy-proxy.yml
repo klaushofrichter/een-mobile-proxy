@@ -184,8 +184,29 @@ jobs:
           echo "Running production verification tests..."
           BRIEF=1 ./scripts/test-production-proxy.sh
 
+      - name: Check rollback conditions
+        if: always() && steps.check.outputs.should_deploy == 'true'
+        id: rollback_check
+        run: |
+          # Determine if rollback should be attempted (simplifies subsequent conditions)
+          VERIFICATION_FAILED="${{ steps.verify.outcome == 'failure' }}"
+          DEPLOYMENT_COMPLETE="${{ steps.store_version.outputs.deployment_complete == 'true' }}"
+          HAS_PREVIOUS="${{ steps.current_deployment.outputs.has_previous_version == 'true' }}"
+
+          if [ "$VERIFICATION_FAILED" = "true" ] && [ "$DEPLOYMENT_COMPLETE" = "true" ]; then
+            echo "should_rollback=true" >> $GITHUB_OUTPUT
+            if [ "$HAS_PREVIOUS" = "true" ]; then
+              echo "can_rollback=true" >> $GITHUB_OUTPUT
+            else
+              echo "can_rollback=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "should_rollback=false" >> $GITHUB_OUTPUT
+            echo "can_rollback=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Rollback on verification failure
-        if: failure() && steps.verify.outcome == 'failure' && steps.store_version.outputs.deployment_complete == 'true' && steps.current_deployment.outputs.has_previous_version == 'true'
+        if: failure() && steps.rollback_check.outputs.should_rollback == 'true' && steps.rollback_check.outputs.can_rollback == 'true'
         id: rollback
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -212,7 +233,7 @@ jobs:
           echo "Verification tests failed. Rolled back to version: \`$ROLLBACK_VERSION\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Rollback not possible (no previous version)
-        if: failure() && steps.verify.outcome == 'failure' && steps.store_version.outputs.deployment_complete == 'true' && steps.current_deployment.outputs.has_previous_version != 'true'
+        if: failure() && steps.rollback_check.outputs.should_rollback == 'true' && steps.rollback_check.outputs.can_rollback == 'false'
         run: |
           echo "::error::Verification failed but rollback not possible - no previous version exists"
           echo "## Rollback Not Possible" >> $GITHUB_STEP_SUMMARY
