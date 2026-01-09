@@ -549,8 +549,12 @@ Configure these secrets in your repository settings (Settings > Secrets and vari
 |--------|-------------|---------|
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token for Workers deployment (see below) | Proxy deployment workflow |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (from dashboard URL) | Proxy deployment workflow |
-| `VITE_EEN_CLIENT_ID` | EEN OAuth Client ID | PR tests, deployment |
-| `EEN_CLIENT_SECRET` | EEN OAuth Client Secret | PR tests (local proxy) |
+| `VITE_EEN_CLIENT_ID` | EEN OAuth Client ID | PR tests, proxy deployment |
+| `EEN_CLIENT_SECRET` | EEN OAuth Client Secret | PR tests, proxy deployment |
+| `ADMIN_EMAILS` | Comma-separated admin email addresses | Proxy deployment |
+| `ALLOWED_ORIGINS` | Comma-separated CORS allowed origins | Proxy deployment |
+| `ALLOWED_API_DOMAINS` | Comma-separated allowed API domains for SSRF protection | Proxy deployment |
+| `REFRESH_TOKEN_TTL` | Session TTL in seconds (default: 86400) | Proxy deployment |
 | `ADMIN_TEST_USER` | Test admin user email (must be in ADMIN_EMAILS) | Playwright tests |
 | `ADMIN_TEST_PASSWORD` | Test admin user password | Playwright tests |
 | `TEST_USER` | Test user email (must not be in ADMIN_EMAILS) | Playwright tests |

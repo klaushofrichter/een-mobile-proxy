@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Upload secrets from proxy/.env to GitHub repository secrets
 #
@@ -86,6 +86,13 @@ echo ""
 echo "--- API Keys ---"
 upload_secret "ANTHROPIC_API_KEY" "ANTHROPIC_API_KEY"
 upload_secret "GEMINI_API_KEY" "GEMINI_API_KEY"
+
+echo ""
+echo "--- Proxy Configuration ---"
+upload_secret "ADMIN_EMAILS" "ADMIN_EMAILS"
+upload_secret "ALLOWED_ORIGINS" "ALLOWED_ORIGINS"
+upload_secret "ALLOWED_API_DOMAINS" "ALLOWED_API_DOMAINS"
+upload_secret "REFRESH_TOKEN_TTL" "REFRESH_TOKEN_TTL"
 
 echo ""
 echo "--- Notifications ---"
