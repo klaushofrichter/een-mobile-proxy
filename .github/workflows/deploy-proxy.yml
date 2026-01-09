@@ -310,6 +310,7 @@ jobs:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
         run: |
           # Use env var to prevent webhook URL exposure in error output
+          # Note: Admin App URL is /een-oauth-proxy (not /een-oauth-proxy/admin/) - GitHub Pages serves it from base path
           curl -sf -X POST "$SLACK_WEBHOOK" \
             -H "Content-Type: application/json" \
             -d '{

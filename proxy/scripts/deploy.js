@@ -118,13 +118,41 @@ if (missingCritical.length > 0) {
 console.log('All critical secrets present')
 
 // Check if worker exists (required before setting secrets)
+// Distinguish between "no worker" and "command failed" to avoid false positives
 console.log('')
 console.log('Checking if worker exists...')
-const workerExists = runSilent('npx wrangler deployments list --limit 1')
-if (!workerExists) {
+let workerExists = true
+let isFirstDeployment = false
+try {
+  const output = execSync('npx wrangler deployments list --limit 1', {
+    cwd: projectRoot,
+    encoding: 'utf-8',
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  // If command succeeds but output is empty or shows no deployments, it's first deployment
+  if (!output || output.trim() === '' || output.includes('No deployments')) {
+    isFirstDeployment = true
+  }
+} catch (error) {
+  const errorMsg = error.stderr?.toString() || error.message || ''
+  // Check for specific error messages indicating worker doesn't exist
+  if (errorMsg.includes('could not find') || errorMsg.includes('not found') ||
+      errorMsg.includes('does not exist') || errorMsg.includes('no deployments')) {
+    isFirstDeployment = true
+  } else {
+    // Other errors (auth, network, etc.) - fail loudly instead of assuming first deployment
+    console.error('Error checking worker status:', errorMsg)
+    console.error('Cannot determine if worker exists. Please check your credentials and network.')
+    process.exit(1)
+  }
+}
+
+if (isFirstDeployment) {
   console.log('First-time deployment detected, deploying worker first...')
   run('npx wrangler deploy')
   console.log('Initial worker deployed, now setting secrets...')
+} else {
+  console.log('Worker exists, proceeding with secrets...')
 }
 
 // Set secrets BEFORE deploying worker to avoid broken state if secrets fail
