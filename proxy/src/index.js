@@ -400,8 +400,12 @@ async function handleGetAccessToken(url, request, env) {
   // Parse POST body parameters if Content-Type is form-urlencoded
   let bodyParams = null
   try {
+    const contentLength = parseInt(request.headers.get('Content-Length') || '0', 10)
+    if (contentLength > 10000) {
+      return jsonResponse({ error: 'Request body too large' }, 413)
+    }
     const contentType = (request.headers.get('Content-Type') || '').toLowerCase()
-    if (contentType.includes('application/x-www-form-urlencoded')) {
+    if (contentType.startsWith('application/x-www-form-urlencoded')) {
       // Note: request.text() consumes the body stream (single-read only)
       const bodyText = await request.text()
       bodyParams = new URLSearchParams(bodyText)

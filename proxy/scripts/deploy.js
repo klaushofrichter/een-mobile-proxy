@@ -215,7 +215,7 @@ if (namespaceMatch) {
     console.warn('Warning: Invalid namespace ID format, skipping version storage')
   } else {
     // Write version to temp file to avoid shell injection of versionString
-    const tmpVersionFile = join(tmpdir(), `deploy-version-${Date.now()}.tmp`)
+    const tmpVersionFile = join(tmpdir(), `deploy-version-${process.pid}-${Date.now()}.tmp`)
     try {
       writeFileSync(tmpVersionFile, versionString)
       execSync(
