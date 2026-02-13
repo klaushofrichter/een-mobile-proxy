@@ -11,7 +11,9 @@
  */
 
 import { execSync } from 'child_process'
+import { randomUUID } from 'crypto'
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs'
+import { tmpdir } from 'os'
 import { config } from 'dotenv'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
@@ -214,7 +216,7 @@ if (namespaceMatch) {
     console.warn('Warning: Invalid namespace ID format, skipping version storage')
   } else {
     // Write version to temp file to avoid shell injection of versionString
-    const tmpVersionFile = join(projectRoot, '.deploy-version.tmp')
+    const tmpVersionFile = join(tmpdir(), `deploy-version-${randomUUID()}.tmp`)
     try {
       writeFileSync(tmpVersionFile, versionString)
       execSync(
@@ -227,7 +229,11 @@ if (namespaceMatch) {
     } catch (error) {
       console.warn('Warning: Failed to store deploy version')
     } finally {
-      try { unlinkSync(tmpVersionFile) } catch {}
+      try {
+        unlinkSync(tmpVersionFile)
+      } catch (cleanupError) {
+        console.warn(`Warning: Failed to clean up temp file ${tmpVersionFile}: ${cleanupError.message}`)
+      }
     }
   }
 }

@@ -810,6 +810,8 @@ curl -X POST "http://127.0.0.1:8787/proxy/getAccessToken?code=AUTH_CODE&redirect
 
 When both are provided, POST body parameters take priority over query string parameters.
 
+**Note:** When using POST body (`application/x-www-form-urlencoded`), the `Content-Length` header is required. Requests without it receive a `411 Length Required` response. The POST body is limited to 10KB (OAuth parameters are typically under 1KB). Standard HTTP clients and browsers always include `Content-Length` automatically.
+
 ## Version Management
 
 This project uses Husky to automatically increment the patch version in each subfolder's `package.json` when files in that subfolder are committed.

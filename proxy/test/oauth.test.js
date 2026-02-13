@@ -105,6 +105,20 @@ describe('OAuth endpoints', () => {
       expect(response.status).not.toBe(400)
     })
 
+    it('should accept Content-Type with charset parameter', async () => {
+      const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+        method: 'POST',
+        headers: {
+          Origin: 'http://localhost:5173',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8'
+        },
+        body: 'code=test-code&redirect_uri=http://localhost:5173'
+      })
+
+      // Should not be 400 (missing params) - charset is valid Content-Type parameter
+      expect(response.status).not.toBe(400)
+    })
+
     it('should fall back to query string when no Content-Type header set', async () => {
       const response = await fetchWithMetrics(
         'http://localhost/proxy/getAccessToken?code=test-code&redirect_uri=http://localhost:5173',
