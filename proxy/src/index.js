@@ -42,6 +42,9 @@ const DEFAULT_RATE_LIMIT_ADMIN = 60 // requests per window
 const DEFAULT_RATE_LIMIT_WINDOW = 60 // seconds
 const DEFAULT_RATE_LIMIT_UNKNOWN = 5 // very restrictive limit for unidentified clients
 
+// Request body limits
+const MAX_POST_BODY_SIZE = 10000 // 10KB; OAuth params should be <1KB
+
 // SSRF protection constants
 const MAX_ALLOWED_DOMAINS_CONFIG_LENGTH = 1024 // Max length of ALLOWED_API_DOMAINS config string
 const MAX_DEBUG_LOG_VALUE_LENGTH = 100 // Max length for user-controlled values in debug logs
@@ -400,10 +403,10 @@ async function handleGetAccessToken(url, request, env) {
   // Parse POST body parameters if Content-Type is form-urlencoded
   let bodyParams = null
   try {
-    // Reject oversized POST bodies (10KB limit; OAuth params should be <1KB)
+    // Reject oversized POST bodies; Cloudflare Workers also enforces hard limits
     const contentLength = parseInt(request.headers.get('Content-Length') || '0', 10)
-    if (contentLength > 10000) {
-      return jsonResponse({ error: 'Request body too large' }, 413)
+    if (isNaN(contentLength) || contentLength < 0 || contentLength > MAX_POST_BODY_SIZE) {
+      return jsonResponse({ error: 'Invalid or oversized request body' }, 413)
     }
     const contentType = (request.headers.get('Content-Type') || '').toLowerCase()
     if (contentType.startsWith('application/x-www-form-urlencoded')) {

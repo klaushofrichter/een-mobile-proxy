@@ -613,7 +613,54 @@ describe('Security - POST Body Input Validation', () => {
 
     expect(response.status).toBe(413)
     const data = await response.json()
-    expect(data.error).toContain('too large')
+    expect(data.error).toContain('oversized')
+  })
+
+  it('should accept POST body with Content-Length exactly 10000', async () => {
+    const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:5173',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': '10000'
+      },
+      body: 'code=test&redirect_uri=http://localhost:5173'
+    })
+
+    // Should not be 413 - exactly at the limit is allowed
+    expect(response.status).not.toBe(413)
+  })
+
+  it('should reject POST body with non-numeric Content-Length', async () => {
+    const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:5173',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': 'garbage'
+      },
+      body: 'code=test&redirect_uri=http://localhost:5173'
+    })
+
+    expect(response.status).toBe(413)
+    const data = await response.json()
+    expect(data.error).toContain('Invalid')
+  })
+
+  it('should reject POST body with negative Content-Length', async () => {
+    const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:5173',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': '-100'
+      },
+      body: 'code=test&redirect_uri=http://localhost:5173'
+    })
+
+    expect(response.status).toBe(413)
+    const data = await response.json()
+    expect(data.error).toContain('Invalid')
   })
 
   it('should fall back to query params when POST body is malformed', async () => {
