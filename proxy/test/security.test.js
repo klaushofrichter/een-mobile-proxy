@@ -552,6 +552,75 @@ describe('Security - Redirect URI Validation', () => {
   })
 })
 
+describe('Security - POST Body Input Validation', () => {
+  it('should reject code >2000 chars in POST body', async () => {
+    const longCode = 'a'.repeat(2001)
+    const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:5173',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: `code=${longCode}&redirect_uri=http://localhost:5173`
+    })
+
+    expect(response.status).toBe(400)
+    const data = await response.json()
+    expect(data.error).toContain('too long')
+  })
+
+  it('should reject redirect_uri >2000 chars in POST body', async () => {
+    const longUri = 'http://localhost/' + 'a'.repeat(2001)
+    const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:5173',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: `code=test&redirect_uri=${encodeURIComponent(longUri)}`
+    })
+
+    expect(response.status).toBe(400)
+    const data = await response.json()
+    expect(data.error).toContain('too long')
+  })
+
+  it('should reject disallowed redirect_uri domain in POST body', async () => {
+    const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:5173',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: 'code=test&redirect_uri=https://evil.com/callback'
+    })
+
+    expect(response.status).toBe(400)
+    const data = await response.json()
+    expect(data.error).toContain('domain not allowed')
+  })
+
+  it('should fall back to query params when POST body is malformed', async () => {
+    const response = await fetchWithMetrics(
+      'http://localhost/proxy/getAccessToken?code=test&redirect_uri=http://localhost:5173',
+      {
+        method: 'POST',
+        headers: {
+          Origin: 'http://localhost:5173',
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        // Malformed body - not valid form-urlencoded that would override query params
+        // The body parser won't crash but will just produce empty/partial results
+        // so query params should be used as fallback
+        body: ''
+      }
+    )
+
+    // Should not be 400 for missing params - falls back to query string
+    expect(response.status).not.toBe(400)
+  })
+})
+
 describe('Security - CSRF Protection', () => {
   it('should reject POST request without Origin header', async () => {
     const response = await fetchWithMetrics(

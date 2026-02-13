@@ -768,7 +768,7 @@ Values outside the min/max range are automatically clamped. Adjust this value ba
 
 | Method | Endpoint | Auth Required | Description |
 |--------|----------|---------------|-------------|
-| POST | `/proxy/getAccessToken` | No (uses OAuth code) | Exchange authorization code for access token. Returns access token and `sessionId` (in body), stores refresh token server-side. |
+| POST | `/proxy/getAccessToken` | No (uses OAuth code) | Exchange authorization code for access token. Accepts `code` and `redirect_uri` via POST body (`application/x-www-form-urlencoded`, preferred) or query string (backwards compatible). Returns access token and `sessionId` (in body), stores refresh token server-side. |
 | POST | `/proxy/refreshAccessToken` | Session cookie OR Header | Refresh access token using stored refresh token. |
 | POST | `/proxy/revoke` | Session cookie OR Header | Revoke tokens at EEN and clear server-side session. |
 
@@ -789,6 +789,26 @@ These endpoints require:
 **Authentication Error Responses:**
 - `401 Unauthorized` - No session cookie or session expired/invalid
 - `403 Forbidden` - User is authenticated but email is not in `ADMIN_EMAILS` list
+
+### Token Exchange Parameters
+
+The `/proxy/getAccessToken` endpoint accepts `code` and `redirect_uri` parameters via two methods. POST body is preferred per [RFC 6749 Section 4.1.3](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3) as it avoids exposing the authorization code in server access logs and intermediary logs.
+
+**POST body (preferred):**
+```bash
+curl -X POST http://127.0.0.1:8787/proxy/getAccessToken \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "Origin: http://127.0.0.1:3333" \
+  -d "code=AUTH_CODE&redirect_uri=http://127.0.0.1:3333"
+```
+
+**Query string (backwards compatible):**
+```bash
+curl -X POST "http://127.0.0.1:8787/proxy/getAccessToken?code=AUTH_CODE&redirect_uri=http://127.0.0.1:3333" \
+  -H "Origin: http://127.0.0.1:3333"
+```
+
+When both are provided, POST body parameters take priority over query string parameters.
 
 ## Version Management
 
