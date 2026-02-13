@@ -600,6 +600,22 @@ describe('Security - POST Body Input Validation', () => {
     expect(data.error).toContain('domain not allowed')
   })
 
+  it('should reject POST body with Content-Length > 10000', async () => {
+    const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:5173',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': '10001'
+      },
+      body: 'code=test&redirect_uri=http://localhost:5173'
+    })
+
+    expect(response.status).toBe(413)
+    const data = await response.json()
+    expect(data.error).toContain('too large')
+  })
+
   it('should fall back to query params when POST body is malformed', async () => {
     const response = await fetchWithMetrics(
       'http://localhost/proxy/getAccessToken?code=test&redirect_uri=http://localhost:5173',

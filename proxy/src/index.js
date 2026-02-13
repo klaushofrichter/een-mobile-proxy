@@ -400,6 +400,7 @@ async function handleGetAccessToken(url, request, env) {
   // Parse POST body parameters if Content-Type is form-urlencoded
   let bodyParams = null
   try {
+    // Reject oversized POST bodies (10KB limit; OAuth params should be <1KB)
     const contentLength = parseInt(request.headers.get('Content-Length') || '0', 10)
     if (contentLength > 10000) {
       return jsonResponse({ error: 'Request body too large' }, 413)
