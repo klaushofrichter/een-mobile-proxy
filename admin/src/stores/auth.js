@@ -44,6 +44,18 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // Allowed EEN API domains — hostname must end with one of these
+  const ALLOWED_EEN_DOMAINS = ['.eagleeyenetworks.com', '.een.cloud']
+
+  /** Returns true if hostname is a valid EEN API domain */
+  function isAllowedEenHostname(h) {
+    if (!h || typeof h !== 'string') return false
+    const lower = h.toLowerCase()
+    // Block non-ASCII and whitespace
+    if (!/^[a-z0-9.-]+$/.test(lower)) return false
+    return ALLOWED_EEN_DOMAINS.some((d) => lower.endsWith(d))
+  }
+
   // Actions
   function initialize() {
     try {
@@ -69,9 +81,15 @@ export const useAuthStore = defineStore('auth', () => {
         sessionId.value = storedSessionId
       }
       if (storedHostname) {
-        hostname.value = storedHostname
+        if (isAllowedEenHostname(storedHostname)) {
+          hostname.value = storedHostname
+        } else {
+          console.warn('[Auth] Blocked invalid hostname from localStorage:', storedHostname)
+          safeRemoveItem('hostname')
+          safeRemoveItem('port')
+        }
       }
-      if (storedPort) {
+      if (storedPort && hostname.value) {
         port.value = parseInt(storedPort, 10)
       }
       if (storedProfile) {
@@ -137,7 +155,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   function setBaseUrl(data) {
     if (data) {
-      hostname.value = data.hostname || data
+      const newHostname = data.hostname || data
+      if (!isAllowedEenHostname(newHostname)) {
+        console.warn('[Auth] Blocked invalid EEN hostname:', newHostname)
+        return
+      }
+      hostname.value = newHostname
       port.value = data.port || 443
 
   safeSetItem('hostname', hostname.value)
