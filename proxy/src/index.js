@@ -408,16 +408,20 @@ async function handleGetAccessToken(url, request, env) {
   // Parse POST body parameters if Content-Type is form-urlencoded
   let bodyParams = null
   try {
-    // Reject oversized POST bodies; Cloudflare Workers also enforces hard limits
-    const contentLength = parseInt(request.headers.get('Content-Length') || '0', 10)
-    if (isNaN(contentLength) || contentLength < 0 || contentLength > MAX_POST_BODY_SIZE) {
-      return jsonResponse({ error: 'Invalid or oversized request body' }, 413)
-    }
     const contentType = (request.headers.get('Content-Type') || '').toLowerCase()
     if (contentType.startsWith('application/x-www-form-urlencoded')) {
+      // Require Content-Length header to prevent DoS via unbounded body reads
+      const rawContentLength = request.headers.get('Content-Length')
+      if (rawContentLength === null) {
+        return jsonResponse({ error: 'Content-Length header required' }, 411)
+      }
+      const contentLength = parseInt(rawContentLength, 10)
+      if (isNaN(contentLength) || contentLength < 0 || contentLength > MAX_POST_BODY_SIZE) {
+        return jsonResponse({ error: 'Invalid or oversized request body' }, 413)
+      }
       // Note: request.text() consumes the body stream (single-read only)
       const bodyText = await request.text()
-      // Validate actual body size (Content-Length header can be omitted or mismatched)
+      // Validate actual body size in case Content-Length is mismatched
       if (bodyText.length > MAX_POST_BODY_SIZE) {
         return jsonResponse({ error: 'Invalid or oversized request body' }, 413)
       }

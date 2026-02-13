@@ -663,19 +663,24 @@ describe('Security - POST Body Input Validation', () => {
     expect(data.error).toContain('Invalid')
   })
 
-  it('should accept POST body with missing Content-Length header', async () => {
+  it('should reject oversized actual body even with small Content-Length header', async () => {
+    // Tests the bodyText.length check that catches Content-Length mismatch.
+    // Note: fetch() auto-sets Content-Length to match body, so we set it explicitly
+    // to simulate a mismatch (e.g. from a raw HTTP client).
+    const largeBody = 'code=test&redirect_uri=' + 'x'.repeat(10001)
     const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
       method: 'POST',
       headers: {
         Origin: 'http://localhost:5173',
-        'Content-Type': 'application/x-www-form-urlencoded'
-        // Content-Length intentionally omitted
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': '50'
       },
-      body: 'code=test&redirect_uri=http://localhost:5173'
+      body: largeBody
     })
 
-    // Should work - small body defaults to Content-Length 0 which passes header check
-    expect(response.status).not.toBe(413)
+    expect(response.status).toBe(413)
+    const data = await response.json()
+    expect(data.error).toContain('oversized')
   })
 
   it('should fall back to query params when POST body is malformed', async () => {
