@@ -40,6 +40,24 @@ describe('Integration - EEN API Communication', () => {
       expect(data).toHaveProperty('error')
     })
 
+    it('should receive proper error from EEN for invalid code via POST body', async () => {
+      // This tests that POST body params are correctly forwarded to EEN
+      const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+        method: 'POST',
+        headers: {
+          Origin: 'http://localhost:5173',
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: 'code=invalid-test-code-body&redirect_uri=http://localhost:5173'
+      })
+
+      // Should receive an error response from EEN (not a 400 from proxy validation)
+      expect(response.status).toBeGreaterThanOrEqual(400)
+
+      const data = await response.json()
+      expect(data).toHaveProperty('error')
+    })
+
     it('should handle expired authorization codes correctly', async () => {
       // Authorization codes expire quickly (typically 60 seconds)
       // An expired code should return an error from EEN

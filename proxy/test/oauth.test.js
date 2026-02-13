@@ -42,6 +42,99 @@ describe('OAuth endpoints', () => {
     })
   })
 
+  describe('POST body parameters', () => {
+    it('should accept code and redirect_uri from POST body', async () => {
+      const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+        method: 'POST',
+        headers: {
+          Origin: 'http://localhost:5173',
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: 'code=test-code&redirect_uri=http://localhost:5173'
+      })
+
+      // Should not be 400 (missing params) - may fail at EEN for invalid code
+      expect(response.status).not.toBe(400)
+    })
+
+    it('should return 400 if code is missing from both body and query', async () => {
+      const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+        method: 'POST',
+        headers: {
+          Origin: 'http://localhost:5173',
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: 'redirect_uri=http://localhost:5173'
+      })
+
+      expect(response.status).toBe(400)
+      const data = await response.json()
+      expect(data.error).toContain('Missing')
+    })
+
+    it('should return 400 if redirect_uri is missing from both body and query', async () => {
+      const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+        method: 'POST',
+        headers: {
+          Origin: 'http://localhost:5173',
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: 'code=test-code'
+      })
+
+      expect(response.status).toBe(400)
+      const data = await response.json()
+      expect(data.error).toContain('Missing')
+    })
+
+    it('should prioritize body params over query params', async () => {
+      // Body has valid redirect_uri, query has evil.com
+      const response = await fetchWithMetrics(
+        'http://localhost/proxy/getAccessToken?code=query-code&redirect_uri=https://evil.com/callback',
+        {
+          method: 'POST',
+          headers: {
+            Origin: 'http://localhost:5173',
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: 'code=body-code&redirect_uri=http://localhost:5173'
+        }
+      )
+
+      // Should NOT be 400 for domain validation - body's valid URI takes priority
+      expect(response.status).not.toBe(400)
+    })
+
+    it('should accept Content-Type with charset parameter', async () => {
+      const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+        method: 'POST',
+        headers: {
+          Origin: 'http://localhost:5173',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8'
+        },
+        body: 'code=test-code&redirect_uri=http://localhost:5173'
+      })
+
+      // Should not be 400 (missing params) - charset is valid Content-Type parameter
+      expect(response.status).not.toBe(400)
+    })
+
+    it('should fall back to query string when no Content-Type header set', async () => {
+      const response = await fetchWithMetrics(
+        'http://localhost/proxy/getAccessToken?code=test-code&redirect_uri=http://localhost:5173',
+        {
+          method: 'POST',
+          headers: {
+            Origin: 'http://localhost:5173'
+          }
+        }
+      )
+
+      // Should not be 400 (missing params) - falls back to query string
+      expect(response.status).not.toBe(400)
+    })
+  })
+
   describe('POST /proxy/refreshAccessToken', () => {
     it('should return 401 if no session cookie', async () => {
       const response = await fetchWithMetrics('http://localhost/proxy/refreshAccessToken', {

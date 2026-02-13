@@ -37,10 +37,18 @@ const DEFAULT_REFRESH_TOKEN_TTL = 86400 // 1 day
 
 // Rate limiting defaults
 const DEFAULT_RATE_LIMIT_HEALTH = 60 // requests per window
-const DEFAULT_RATE_LIMIT_OAUTH = 30 // requests per window
+const DEFAULT_RATE_LIMIT_OAUTH = 60 // requests per window
 const DEFAULT_RATE_LIMIT_ADMIN = 60 // requests per window
 const DEFAULT_RATE_LIMIT_WINDOW = 60 // seconds
 const DEFAULT_RATE_LIMIT_UNKNOWN = 5 // very restrictive limit for unidentified clients
+
+/**
+ * Maximum allowed POST body size in bytes for token exchange requests.
+ * OAuth parameters (code + redirect_uri) should be well under 1KB.
+ * This limit prevents DoS via oversized payloads. Cloudflare Workers
+ * also enforces its own hard request size limits (~100MB paid, ~10MB free).
+ */
+const MAX_POST_BODY_SIZE = 10000
 
 // SSRF protection constants
 const MAX_ALLOWED_DOMAINS_CONFIG_LENGTH = 1024 // Max length of ALLOWED_API_DOMAINS config string
@@ -385,11 +393,48 @@ async function routeRequest(url, request, env) {
 
 /**
  * Exchange authorization code for access token
- * POST /proxy/getAccessToken?code=xxx&redirect_uri=xxx
+ * POST /proxy/getAccessToken
+ *
+ * Parameters can be provided via:
+ * 1. POST body (application/x-www-form-urlencoded) - preferred, per RFC 6749 Section 4.1.3
+ * 2. URL query string - supported for backwards compatibility
+ *
+ * Body parameters take priority over query string parameters.
+ *
+ * @param {string} code - Authorization code from OAuth redirect
+ * @param {string} redirect_uri - Redirect URI used in the authorization request
  */
 async function handleGetAccessToken(url, request, env) {
-  const code = url.searchParams.get('code')
-  const redirectUri = url.searchParams.get('redirect_uri')
+  // Parse POST body parameters if Content-Type is form-urlencoded
+  let bodyParams = null
+  try {
+    const contentType = (request.headers.get('Content-Type') || '').toLowerCase().trim()
+    if (contentType.startsWith('application/x-www-form-urlencoded')) {
+      // Require Content-Length header to prevent DoS via unbounded body reads
+      const rawContentLength = request.headers.get('Content-Length')
+      if (rawContentLength === null) {
+        return jsonResponse({ error: 'Content-Length header required' }, 411)
+      }
+      const contentLength = parseInt(rawContentLength, 10)
+      if (isNaN(contentLength) || contentLength < 0 || contentLength > MAX_POST_BODY_SIZE) {
+        return jsonResponse({ error: 'Invalid or oversized request body' }, 413)
+      }
+      // Note: request.text() consumes the body stream (single-read only)
+      const bodyText = await request.text()
+      // Validate actual body size in case Content-Length is mismatched
+      if (bodyText.length > MAX_POST_BODY_SIZE) {
+        return jsonResponse({ error: 'Invalid or oversized request body' }, 413)
+      }
+      bodyParams = new URLSearchParams(bodyText)
+    }
+  } catch (error) {
+    // Malformed body - fall through to query string params
+    debugLog(env, `Failed to parse request body (${error.message}), falling back to query params`)
+  }
+
+  // Body params take priority, fall back to query string
+  const code = bodyParams?.get('code') || url.searchParams.get('code')
+  const redirectUri = bodyParams?.get('redirect_uri') || url.searchParams.get('redirect_uri')
 
   if (!code || !redirectUri) {
     return jsonResponse({ error: 'Missing code or redirect_uri' }, 400)

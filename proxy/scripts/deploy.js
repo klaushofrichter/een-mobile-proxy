@@ -11,7 +11,9 @@
  */
 
 import { execSync } from 'child_process'
-import { readFileSync, existsSync } from 'fs'
+import { randomUUID } from 'crypto'
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs'
+import { tmpdir } from 'os'
 import { config } from 'dotenv'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
@@ -123,7 +125,7 @@ console.log('')
 console.log('Checking if worker exists...')
 let isFirstDeployment = false
 try {
-  const output = execSync('npx wrangler deployments list --limit 1', {
+  const output = execSync('npx wrangler deployments list', {
     cwd: projectRoot,
     encoding: 'utf-8',
     stdio: ['pipe', 'pipe', 'pipe']
@@ -213,18 +215,25 @@ if (namespaceMatch) {
   if (!/^[a-f0-9]{32}$/.test(namespaceId)) {
     console.warn('Warning: Invalid namespace ID format, skipping version storage')
   } else {
+    // Write version to temp file to avoid shell injection of versionString
+    const tmpVersionFile = join(tmpdir(), `deploy-version-${randomUUID()}.tmp`)
     try {
-      // Use stdin for version string to prevent shell injection
+      writeFileSync(tmpVersionFile, versionString)
       execSync(
-        `npx wrangler kv key put DEPLOY_VERSION --namespace-id="${namespaceId}" --remote`,
+        `npx wrangler kv key put DEPLOY_VERSION --namespace-id="${namespaceId}" --remote --path="${tmpVersionFile}"`,
         {
           cwd: projectRoot,
-          stdio: ['pipe', 'inherit', 'inherit'],
-          input: versionString
+          stdio: 'inherit'
         }
       )
     } catch (error) {
       console.warn('Warning: Failed to store deploy version')
+    } finally {
+      try {
+        unlinkSync(tmpVersionFile)
+      } catch (cleanupError) {
+        console.warn(`Warning: Failed to clean up temp file ${tmpVersionFile}: ${cleanupError.message}`)
+      }
     }
   }
 }
