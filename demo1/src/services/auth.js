@@ -54,14 +54,11 @@ export function getAuthUrl() {
  * Exchange authorization code for access token via proxy
  */
 export async function getAccessToken(code) {
-  const params = new URLSearchParams({
-    code,
-    redirect_uri: REDIRECT_URI
-  })
-
-  const response = await fetch(`${getProxyUrlOrThrow()}/proxy/getAccessToken?${params.toString()}`, {
+  const response = await fetch(`${getProxyUrlOrThrow()}/proxy/getAccessToken`, {
     method: 'POST',
-    credentials: 'include'
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ code, redirect_uri: REDIRECT_URI }).toString()
   })
 
   if (!response.ok) {
