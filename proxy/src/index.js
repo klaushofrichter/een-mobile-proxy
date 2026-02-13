@@ -408,7 +408,7 @@ async function handleGetAccessToken(url, request, env) {
   // Parse POST body parameters if Content-Type is form-urlencoded
   let bodyParams = null
   try {
-    const contentType = (request.headers.get('Content-Type') || '').toLowerCase()
+    const contentType = (request.headers.get('Content-Type') || '').toLowerCase().trim()
     if (contentType.startsWith('application/x-www-form-urlencoded')) {
       // Require Content-Length header to prevent DoS via unbounded body reads
       const rawContentLength = request.headers.get('Content-Length')

@@ -663,6 +663,47 @@ describe('Security - POST Body Input Validation', () => {
     expect(data.error).toContain('Invalid')
   })
 
+  it('should accept POST body with Content-Length of 0', async () => {
+    // Content-Length: 0 is valid; body will be empty so params fall back to query string
+    const response = await fetchWithMetrics(
+      'http://localhost/proxy/getAccessToken?code=test&redirect_uri=http://localhost:5173',
+      {
+        method: 'POST',
+        headers: {
+          Origin: 'http://localhost:5173',
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': '0'
+        },
+        body: ''
+      }
+    )
+
+    // Should not be 413 - Content-Length 0 is valid
+    expect(response.status).not.toBe(413)
+    expect(response.status).not.toBe(411)
+  })
+
+  it('should reject POST body with extremely large Content-Length string', async () => {
+    // parseInt of a number exceeding MAX_SAFE_INTEGER; parsed as a large finite number
+    const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:5173',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': '99999999999999999999999'
+      },
+      body: 'code=test&redirect_uri=http://localhost:5173'
+    })
+
+    expect(response.status).toBe(413)
+    const data = await response.json()
+    expect(data.error).toContain('oversized')
+  })
+
+  // Note: Testing missing Content-Length → 411 is not possible in Miniflare/fetch
+  // because fetch() auto-adds Content-Length when a body is present. The 411 code
+  // path protects against raw HTTP clients that omit the header.
+
   it('should reject oversized actual body even with small Content-Length header', async () => {
     // Tests the bodyText.length check that catches Content-Length mismatch.
     // Note: fetch() auto-sets Content-Length to match body, so we set it explicitly
