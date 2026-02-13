@@ -400,14 +400,15 @@ async function handleGetAccessToken(url, request, env) {
   // Parse POST body parameters if Content-Type is form-urlencoded
   let bodyParams = null
   try {
-    const contentType = request.headers.get('Content-Type') || ''
+    const contentType = (request.headers.get('Content-Type') || '').toLowerCase()
     if (contentType.includes('application/x-www-form-urlencoded')) {
+      // Note: request.text() consumes the body stream (single-read only)
       const bodyText = await request.text()
       bodyParams = new URLSearchParams(bodyText)
     }
-  } catch {
+  } catch (error) {
     // Malformed body - fall through to query string params
-    debugLog(env, 'Failed to parse request body, falling back to query params')
+    debugLog(env, `Failed to parse request body (${error.message}), falling back to query params`)
   }
 
   // Body params take priority, fall back to query string
