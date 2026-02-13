@@ -42,8 +42,13 @@ const DEFAULT_RATE_LIMIT_ADMIN = 60 // requests per window
 const DEFAULT_RATE_LIMIT_WINDOW = 60 // seconds
 const DEFAULT_RATE_LIMIT_UNKNOWN = 5 // very restrictive limit for unidentified clients
 
-// Request body limits
-const MAX_POST_BODY_SIZE = 10000 // 10KB; OAuth params should be <1KB
+/**
+ * Maximum allowed POST body size in bytes for token exchange requests.
+ * OAuth parameters (code + redirect_uri) should be well under 1KB.
+ * This limit prevents DoS via oversized payloads. Cloudflare Workers
+ * also enforces its own hard request size limits (~100MB paid, ~10MB free).
+ */
+const MAX_POST_BODY_SIZE = 10000
 
 // SSRF protection constants
 const MAX_ALLOWED_DOMAINS_CONFIG_LENGTH = 1024 // Max length of ALLOWED_API_DOMAINS config string
@@ -412,6 +417,10 @@ async function handleGetAccessToken(url, request, env) {
     if (contentType.startsWith('application/x-www-form-urlencoded')) {
       // Note: request.text() consumes the body stream (single-read only)
       const bodyText = await request.text()
+      // Validate actual body size (Content-Length header can be omitted or mismatched)
+      if (bodyText.length > MAX_POST_BODY_SIZE) {
+        return jsonResponse({ error: 'Invalid or oversized request body' }, 413)
+      }
       bodyParams = new URLSearchParams(bodyText)
     }
   } catch (error) {

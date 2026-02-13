@@ -663,6 +663,21 @@ describe('Security - POST Body Input Validation', () => {
     expect(data.error).toContain('Invalid')
   })
 
+  it('should accept POST body with missing Content-Length header', async () => {
+    const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:5173',
+        'Content-Type': 'application/x-www-form-urlencoded'
+        // Content-Length intentionally omitted
+      },
+      body: 'code=test&redirect_uri=http://localhost:5173'
+    })
+
+    // Should work - small body defaults to Content-Length 0 which passes header check
+    expect(response.status).not.toBe(413)
+  })
+
   it('should fall back to query params when POST body is malformed', async () => {
     const response = await fetchWithMetrics(
       'http://localhost/proxy/getAccessToken?code=test&redirect_uri=http://localhost:5173',
