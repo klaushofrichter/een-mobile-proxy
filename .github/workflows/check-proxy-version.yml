@@ -84,9 +84,10 @@ jobs:
           echo "Parsed deployed version: $DEPLOYED_VERSION"
 
       - name: Compare and Warn
+        env:
+          PR_VER: ${{ steps.pr_version.outputs.version }}
+          DEP_VER: ${{ steps.deployed_version.outputs.deployed_version }}
         run: |
-          PR_VER="${{ steps.pr_version.outputs.version }}"
-          DEP_VER="${{ steps.deployed_version.outputs.deployed_version }}"
           
           echo "Comparing PR version ($PR_VER) with Deployed version ($DEP_VER)"
           

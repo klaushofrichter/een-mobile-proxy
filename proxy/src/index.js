@@ -585,8 +585,15 @@ async function handleRefreshAccessToken(request, env) {
   if (!tokenResponse.ok) {
     const errorText = await tokenResponse.text()
     debugError(env, 'EEN refresh error:', errorText)
-    // Clear invalid session
-    await env.EEN_OAUTH_SESSIONS.delete(sessionId)
+    // Re-read session to check for concurrent refresh
+    const currentSessionStr = await env.EEN_OAUTH_SESSIONS.get(sessionId)
+    if (currentSessionStr) {
+      const currentSession = JSON.parse(currentSessionStr)
+      // Only delete if refresh token hasn't been updated by a concurrent request
+      if (currentSession.refreshToken === sessionData.refreshToken) {
+        await env.EEN_OAUTH_SESSIONS.delete(sessionId)
+      }
+    }
     return jsonResponse({ error: 'Token refresh failed' }, tokenResponse.status)
   }
 

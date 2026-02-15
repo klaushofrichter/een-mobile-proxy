@@ -31,9 +31,13 @@ jobs:
               echo "::error::claude-review.md exceeds ${MAX_SIZE} bytes (${FILE_SIZE} bytes). Please reduce file size to prevent instructions being cut off."
               exit 1
             fi
-            echo "extra_prompt<<EOF" >> $GITHUB_OUTPUT
+            DELIMITER="GHOUTPUT_$(openssl rand -hex 8)"
+            while grep -qF "$DELIMITER" "$PROMPT_FILE" 2>/dev/null; do
+              DELIMITER="GHOUTPUT_$(openssl rand -hex 8)"
+            done
+            echo "extra_prompt<<${DELIMITER}" >> $GITHUB_OUTPUT
             cat "$PROMPT_FILE" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            echo "${DELIMITER}" >> $GITHUB_OUTPUT
           else
             # No custom prompts file found - continue with default prompts only
             echo "extra_prompt=" >> $GITHUB_OUTPUT
