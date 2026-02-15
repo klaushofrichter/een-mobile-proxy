@@ -118,6 +118,38 @@ function getRefreshTokenTtl(env) {
 }
 
 /**
+ * List all KV keys, paginating through results if there are more than 1000.
+ * Cloudflare KV .list() returns at most 1000 keys per call.
+ * Stops after MAX_KEYS (10,000) to prevent runaway loops and excessive memory
+ * usage. This proxy is not designed for high-traffic deployments with very large
+ * key counts. The cap is hardcoded; see GitHub issue #102 for making it configurable.
+ * @param {Object} kvNamespace - Cloudflare KV namespace binding
+ * @param {Object} [options] - Options passed to KV .list() (e.g. { prefix: '...' })
+ * @param {Object} [env] - Environment bindings (for warning log on truncation)
+ * @returns {Promise<{keys: Array<{name: string}>, truncated: boolean}>}
+ */
+async function listAllKVKeys(kvNamespace, options = {}, env = null) {
+  const allKeys = []
+  let cursor = undefined
+  const MAX_KEYS = 10000 // Safety cap — see issue #102
+
+  do {
+    const listOpts = { ...options }
+    if (cursor) listOpts.cursor = cursor
+    const result = await kvNamespace.list(listOpts)
+    allKeys.push(...result.keys)
+    cursor = result.list_complete ? undefined : result.cursor
+  } while (cursor && allKeys.length < MAX_KEYS)
+
+  const truncated = allKeys.length >= MAX_KEYS && !!cursor
+  if (truncated && env) {
+    debugError(env, `listAllKVKeys truncated at ${MAX_KEYS} keys (prefix: ${options.prefix || 'none'})`)
+  }
+
+  return { keys: allKeys, truncated }
+}
+
+/**
  * Validates that a URL is a legitimate API endpoint based on configured allowlist.
  * Prevents SSRF attacks by only allowing configured domains.
  * @param {string} url - The URL to validate
@@ -318,18 +350,12 @@ export default {
 
     // Handle CORS preflight (after rate limit check)
     if (request.method === 'OPTIONS') {
-      // Increment rate limit counter for OPTIONS requests too
-      ctx.waitUntil(incrementRateLimitCounter(request, url, env))
       return handleCorsPreflightRequest(corsResult.origin, env)
     }
 
     try {
       // Route requests
       const response = await routeRequest(url, request, env)
-
-      // Increment rate limit counter for all requests including 404s
-      // This prevents endpoint enumeration attacks where attackers probe for valid paths
-      ctx.waitUntil(incrementRateLimitCounter(request, url, env))
 
       return addCorsHeaders(response, corsResult.origin, env)
     } catch (error) {
@@ -585,15 +611,9 @@ async function handleRefreshAccessToken(request, env) {
   if (!tokenResponse.ok) {
     const errorText = await tokenResponse.text()
     debugError(env, 'EEN refresh error:', errorText)
-    // Re-read session to check for concurrent refresh
-    const currentSessionStr = await env.EEN_OAUTH_SESSIONS.get(sessionId)
-    if (currentSessionStr) {
-      const currentSession = JSON.parse(currentSessionStr)
-      // Only delete if refresh token hasn't been updated by a concurrent request
-      if (currentSession.refreshToken === sessionData.refreshToken) {
-        await env.EEN_OAUTH_SESSIONS.delete(sessionId)
-      }
-    }
+    // Don't delete session on refresh failure — let TTL handle expiration.
+    // Avoids race condition where concurrent successful refresh wrote a new
+    // token but KV eventual consistency returns stale data on re-read.
     return jsonResponse({ error: 'Token refresh failed' }, tokenResponse.status)
   }
 
@@ -733,15 +753,16 @@ async function handleAdminSessionsCount(request, env) {
     return jsonResponse({ error: adminCheck.error }, adminCheck.status)
   }
 
-  const listResult = await env.EEN_OAUTH_SESSIONS.list()
+  const { keys, truncated } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
 
   // Filter out special keys (DEPLOY_* and RATE_LIMIT:*)
-  const sessionKeys = listResult.keys.filter(
+  const sessionKeys = keys.filter(
     key => !key.name.startsWith('DEPLOY_') && !key.name.startsWith('RATE_LIMIT:')
   )
 
   return jsonResponse({
-    sessionCount: sessionKeys.length
+    sessionCount: sessionKeys.length,
+    ...(truncated && { truncated })
   })
 }
 
@@ -757,10 +778,10 @@ async function handleAdminRemoveSessions(request, env) {
   }
 
   const currentSessionId = getSessionId(request, env)
-  const listResult = await env.EEN_OAUTH_SESSIONS.list()
+  const { keys, truncated } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
 
   let deletedCount = 0
-  for (const key of listResult.keys) {
+  for (const key of keys) {
     // Skip current session and special keys (DEPLOY_* and RATE_LIMIT:*)
     if (
       key.name === currentSessionId ||
@@ -777,7 +798,8 @@ async function handleAdminRemoveSessions(request, env) {
   return jsonResponse({
     message: 'Sessions removed successfully',
     deletedSessions: deletedCount,
-    remainingSessions: 1
+    remainingSessions: 1,
+    ...(truncated && { truncated })
   })
 }
 
@@ -793,12 +815,12 @@ async function handleAdminRevokeAll(request, env) {
   }
 
   const currentSessionId = getSessionId(request, env)
-  const listResult = await env.EEN_OAUTH_SESSIONS.list()
+  const { keys, truncated } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
 
   let revokedCount = 0
   let errorCount = 0
 
-  for (const key of listResult.keys) {
+  for (const key of keys) {
     // Skip special keys (DEPLOY_* and RATE_LIMIT:*)
     if (key.name.startsWith('DEPLOY_') || key.name.startsWith('RATE_LIMIT:')) {
       continue
@@ -836,7 +858,8 @@ async function handleAdminRevokeAll(request, env) {
   const response = jsonResponse({
     message: 'All tokens revoked',
     revokedSessions: revokedCount,
-    errors: errorCount
+    errors: errorCount,
+    ...(truncated && { truncated })
   })
 
   response.headers.append(
@@ -952,11 +975,13 @@ function getRateLimitKey(category, identifier, window) {
 }
 
 /**
- * Check if request is rate limited
- * Note: Counter increments are non-atomic due to KV's eventual consistency.
- * This means under high concurrency, some requests may slip through slightly
- * over the limit. This is acceptable for rate limiting purposes - the goal
- * is protection against abuse, not precise counting.
+ * Check if request is rate limited. If not limited, synchronously increments
+ * the counter before returning to reduce (not eliminate) concurrent burst bypass.
+ * The read-modify-write cycle is still non-atomic — two concurrent requests can
+ * both read the same count and each write count+1 instead of count+2. This means
+ * rate limits are approximate under high concurrency: some requests may slip
+ * through slightly over the limit. This is acceptable for abuse prevention —
+ * the goal is deterrence, not precise counting.
  * @param {Request} request - Incoming request
  * @param {URL} url - Parsed URL
  * @param {Object} env - Environment bindings
@@ -1002,50 +1027,17 @@ async function checkRateLimit(request, url, env) {
 
       return { limited: true, retryAfter: Math.max(1, retryAfter) }
     }
+
+    // Increment counter synchronously before returning
+    await env.EEN_OAUTH_SESSIONS.put(key, String(count + 1), {
+      expirationTtl: config.window * 2
+    })
   } catch (e) {
     // If KV fails, allow the request (fail open)
     debugError(env, 'Rate limit check failed:', e)
   }
 
   return { limited: false }
-}
-
-/**
- * Increment rate limit counter for a request
- * @param {Request} request - Incoming request
- * @param {URL} url - Parsed URL
- * @param {Object} env - Environment bindings
- */
-async function incrementRateLimitCounter(request, url, env) {
-  const config = getRateLimitConfig(env)
-
-  // Skip if rate limiting is disabled
-  if (!config.enabled) {
-    return
-  }
-
-  const category = getRateLimitCategory(url.pathname)
-
-  // Skip if path is not rate limited
-  if (!category) {
-    return
-  }
-
-  const { identifier } = getClientIdentifier(request, env)
-  const key = getRateLimitKey(category, identifier, config.window)
-
-  try {
-    const countStr = await env.EEN_OAUTH_SESSIONS.get(key)
-    const count = countStr ? parseInt(countStr, 10) : 0
-
-    // Store with TTL of 2x window to ensure cleanup
-    await env.EEN_OAUTH_SESSIONS.put(key, String(count + 1), {
-      expirationTtl: config.window * 2
-    })
-  } catch (e) {
-    // If KV fails, just log and continue
-    debugError(env, 'Rate limit increment failed:', e)
-  }
 }
 
 /**
@@ -1061,8 +1053,8 @@ async function handleAdminRateLimitStats(request, env) {
 
   const config = getRateLimitConfig(env)
 
-  // Get current rate limit entries from KV
-  const listResult = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:' })
+  // Get current rate limit entries from KV (paginated)
+  const { keys: rateLimitKeys, truncated } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, { prefix: 'RATE_LIMIT:' }, env)
 
   // Parse and aggregate stats
   const stats = {
@@ -1070,7 +1062,7 @@ async function handleAdminRateLimitStats(request, env) {
     window: config.window,
     limits: config.limits,
     currentBucket: Math.floor(Date.now() / (config.window * 1000)),
-    activeEntries: listResult.keys.length,
+    activeEntries: rateLimitKeys.length,
     byCategory: {
       [RATE_LIMIT_CATEGORY.HEALTH]: { count: 0, uniqueClients: 0 },
       [RATE_LIMIT_CATEGORY.OAUTH]: { count: 0, uniqueClients: 0 },
@@ -1085,7 +1077,7 @@ async function handleAdminRateLimitStats(request, env) {
     [RATE_LIMIT_CATEGORY.ADMIN]: new Set()
   }
 
-  for (const key of listResult.keys) {
+  for (const key of rateLimitKeys) {
     // Parse key format: RATE_LIMIT:{category}:{identifier}:{bucket}
     const parts = key.name.split(':')
     if (parts.length >= 4) {
@@ -1120,6 +1112,8 @@ async function handleAdminRateLimitStats(request, env) {
   for (const category of Object.keys(clientsByCategory)) {
     stats.byCategory[category].uniqueClients = clientsByCategory[category].size
   }
+
+  if (truncated) stats.truncated = true
 
   return jsonResponse(stats)
 }
