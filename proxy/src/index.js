@@ -120,14 +120,16 @@ function getRefreshTokenTtl(env) {
 /**
  * List all KV keys, paginating through results if there are more than 1000.
  * Cloudflare KV .list() returns at most 1000 keys per call.
+ * Stops after MAX_KEYS (10,000) to prevent runaway loops and excessive memory
+ * usage. This cap is hardcoded for now; see GitHub issue for making it configurable.
  * @param {Object} kvNamespace - Cloudflare KV namespace binding
  * @param {Object} [options] - Options passed to KV .list() (e.g. { prefix: '...' })
- * @returns {Promise<Array<{name: string}>>} - All matching keys
+ * @returns {Promise<Array<{name: string}>>} - All matching keys (up to MAX_KEYS)
  */
 async function listAllKVKeys(kvNamespace, options = {}) {
   const allKeys = []
   let cursor = undefined
-  const MAX_KEYS = 100000 // Safety cap
+  const MAX_KEYS = 10000 // Safety cap to prevent runaway pagination
 
   do {
     const listOpts = { ...options }
