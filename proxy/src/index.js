@@ -1110,7 +1110,7 @@ async function handleAdminRateLimitStats(request, env) {
   }
 
   // Fetch actual counts for current entries
-  for (const key of listResult.keys) {
+  for (const key of rateLimitKeys) {
     try {
       const countStr = await env.EEN_OAUTH_SESSIONS.get(key.name)
       const count = countStr ? parseInt(countStr, 10) : 0
