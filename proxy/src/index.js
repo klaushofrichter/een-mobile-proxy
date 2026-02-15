@@ -753,7 +753,7 @@ async function handleAdminSessionsCount(request, env) {
     return jsonResponse({ error: adminCheck.error }, adminCheck.status)
   }
 
-  const { keys } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
+  const { keys, truncated } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
 
   // Filter out special keys (DEPLOY_* and RATE_LIMIT:*)
   const sessionKeys = keys.filter(
@@ -761,7 +761,8 @@ async function handleAdminSessionsCount(request, env) {
   )
 
   return jsonResponse({
-    sessionCount: sessionKeys.length
+    sessionCount: sessionKeys.length,
+    ...(truncated && { truncated })
   })
 }
 
@@ -777,7 +778,7 @@ async function handleAdminRemoveSessions(request, env) {
   }
 
   const currentSessionId = getSessionId(request, env)
-  const { keys } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
+  const { keys, truncated } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
 
   let deletedCount = 0
   for (const key of keys) {
@@ -797,7 +798,8 @@ async function handleAdminRemoveSessions(request, env) {
   return jsonResponse({
     message: 'Sessions removed successfully',
     deletedSessions: deletedCount,
-    remainingSessions: 1
+    remainingSessions: 1,
+    ...(truncated && { truncated })
   })
 }
 
@@ -813,7 +815,7 @@ async function handleAdminRevokeAll(request, env) {
   }
 
   const currentSessionId = getSessionId(request, env)
-  const { keys } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
+  const { keys, truncated } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
 
   let revokedCount = 0
   let errorCount = 0
@@ -856,7 +858,8 @@ async function handleAdminRevokeAll(request, env) {
   const response = jsonResponse({
     message: 'All tokens revoked',
     revokedSessions: revokedCount,
-    errors: errorCount
+    errors: errorCount,
+    ...(truncated && { truncated })
   })
 
   response.headers.append(
@@ -1051,7 +1054,7 @@ async function handleAdminRateLimitStats(request, env) {
   const config = getRateLimitConfig(env)
 
   // Get current rate limit entries from KV (paginated)
-  const { keys: rateLimitKeys } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, { prefix: 'RATE_LIMIT:' }, env)
+  const { keys: rateLimitKeys, truncated } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, { prefix: 'RATE_LIMIT:' }, env)
 
   // Parse and aggregate stats
   const stats = {
@@ -1109,6 +1112,8 @@ async function handleAdminRateLimitStats(request, env) {
   for (const category of Object.keys(clientsByCategory)) {
     stats.byCategory[category].uniqueClients = clientsByCategory[category].size
   }
+
+  if (truncated) stats.truncated = true
 
   return jsonResponse(stats)
 }
