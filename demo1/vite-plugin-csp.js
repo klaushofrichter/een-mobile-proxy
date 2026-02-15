@@ -9,12 +9,14 @@ import { loadEnv } from 'vite'
  * - localhost (for dev)
  * - VITE_PROXY_URL (configured proxy)
  * 
- * We always include localhost for dev compatibility, and add VITE_PROXY_URL
- * if it's different from localhost.
+ * In development, we include localhost for dev compatibility.
+ * In production, localhost is excluded. VITE_PROXY_URL is added if it's
+ * not already in the list and not a localhost variant.
  */
 export function cspPlugin() {
   let proxyUrl = 'http://localhost:8787'
   let configInitialized = false
+  let buildMode = 'development'
   
   return {
     name: 'csp-plugin',
@@ -32,6 +34,7 @@ export function cspPlugin() {
         // Load environment variables based on Vite's mode
         const env = loadEnv(mode, process.cwd(), 'VITE_')
         proxyUrl = env.VITE_PROXY_URL || 'http://localhost:8787'
+        buildMode = mode
         configInitialized = true
       } catch (error) {
         console.warn(`CSP plugin: Failed to load environment variables for mode "${mode}":`, error.message)
@@ -45,16 +48,19 @@ export function cspPlugin() {
         console.warn('CSP plugin: transformIndexHtml called before configResolved, using default proxy URL')
       }
       
-      // Build connect-src directive - always include localhost for dev compatibility
-      // Users can select between localhost and VITE_PROXY_URL at runtime,
-      // so we need both in the CSP
+      // Build connect-src directive
+      // In development, include localhost for dev compatibility
+      // In production, exclude localhost origins
       const connectSrcParts = [
         "'self'",
-        'http://localhost:8787',
-        'http://127.0.0.1:8787',
         'https://auth.eagleeyenetworks.com',
         'https://*.eagleeyenetworks.com'
       ]
+
+      // Only include localhost origins in non-production builds
+      if (buildMode !== 'production') {
+        connectSrcParts.splice(1, 0, 'http://localhost:8787', 'http://127.0.0.1:8787')
+      }
       
       // Add the proxy URL if it's not already in the list (and not localhost)
       // Use URL parsing for precise hostname matching to avoid false positives

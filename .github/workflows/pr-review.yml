@@ -31,9 +31,13 @@ jobs:
               echo "::error::claude-review.md exceeds ${MAX_SIZE} bytes (${FILE_SIZE} bytes). Please reduce file size to prevent instructions being cut off."
               exit 1
             fi
-            echo "extra_prompt<<EOF" >> $GITHUB_OUTPUT
+            DELIMITER="GHOUTPUT_$(openssl rand -hex 8)"
+            while grep -qF "$DELIMITER" "$PROMPT_FILE" 2>/dev/null; do
+              DELIMITER="GHOUTPUT_$(openssl rand -hex 8)"
+            done
+            echo "extra_prompt<<${DELIMITER}" >> $GITHUB_OUTPUT
             cat "$PROMPT_FILE" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            echo "${DELIMITER}" >> $GITHUB_OUTPUT
           else
             # No custom prompts file found - continue with default prompts only
             echo "extra_prompt=" >> $GITHUB_OUTPUT
@@ -60,11 +64,13 @@ jobs:
 
       - name: Extract and Post Review Comment
         uses: actions/github-script@v7
+        env:
+          EXEC_FILE: ${{ steps.claude-review.outputs.execution_file }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const execFile = '${{ steps.claude-review.outputs.execution_file }}';
+            const execFile = process.env.EXEC_FILE;
 
             // Extract the last assistant text from conversation turns
             // Uses reverse iteration with early break for better performance
