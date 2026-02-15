@@ -99,7 +99,8 @@
               <div class="flex justify-between items-center">
                 <span :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Active Sessions</span>
               </div>
-              <p :class="['text-2xl font-bold mt-1', isDarkMode ? 'text-white' : 'text-gray-900']">{{ sessionCount ?? 0 }}</p>
+              <p :class="['text-2xl font-bold mt-1', isDarkMode ? 'text-white' : 'text-gray-900']">{{ sessionCount ?? 0 }}<span v-if="sessionsTruncated" class="text-xs font-normal text-amber-500" title="Result was truncated — actual count may be higher">+</span></p>
+              <p v-if="sessionsTruncated" :class="['text-xs mt-1', isDarkMode ? 'text-amber-400' : 'text-amber-600']" title="KV key limit reached. Count is approximate. Remove/revoke may need multiple runs.">Truncated</p>
             </div>
             <div :class="['shadow rounded-lg p-4', isDarkMode ? 'bg-gray-800' : 'bg-white']">
               <span :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Versions</span>
@@ -186,7 +187,7 @@
 
               <!-- Footer with active entries -->
               <div :class="['mt-2 pt-2 border-t flex justify-between text-xs', isDarkMode ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500']">
-                <span>Active entries: {{ rateLimitStats.activeEntries }}</span>
+                <span>Active entries: {{ rateLimitStats.activeEntries }}<span v-if="rateLimitStats.truncated" :class="isDarkMode ? 'text-amber-400' : 'text-amber-600'"> (truncated)</span><span v-if="rateLimitStats.maxKvKeys"> | Max KV keys: {{ rateLimitStats.maxKvKeys.toLocaleString() }}</span></span>
               </div>
             </div>
           </div>
@@ -366,6 +367,7 @@ function stopResize() {
 
 // State
 const sessionCount = ref(null)
+const sessionsTruncated = ref(false)
 const loadingSessions = ref(false)
 const isRemovingSessions = ref(false)
 const refreshDisabledAfterRemove = ref(false)
@@ -507,8 +509,9 @@ async function fetchSessionCount(isManual = false) {
   try {
     const data = await getSessionsCount()
     sessionCount.value = data.sessionCount
+    sessionsTruncated.value = !!data.truncated
     if (isManual) {
-      addLogEntry(`Session count: ${data.sessionCount}`, 'success')
+      addLogEntry(`Session count: ${data.sessionCount}${data.truncated ? ' (truncated)' : ''}`, 'success')
     }
   } catch (e) {
     addLogEntry(`Failed to fetch sessions: ${e.message}`, 'error')
@@ -607,7 +610,7 @@ async function handleRemoveSessions() {
 
   try {
     const result = await removeSessions()
-    addLogEntry(`Removed ${result.deletedSessions} session(s)`, 'success')
+    addLogEntry(`Removed ${result.deletedSessions} session(s)${result.truncated ? ' (list was truncated — repeat to remove remaining)' : ''}`, 'success')
     // Use the returned count directly to avoid KV eventual consistency issues.
     // The API returns the accurate count after the operation completes.
     if (result.remainingSessions !== undefined) {

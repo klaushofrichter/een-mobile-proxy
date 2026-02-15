@@ -114,6 +114,7 @@ upload_secret "ADMIN_EMAILS" "ADMIN_EMAILS"
 upload_secret "ALLOWED_ORIGINS" "ALLOWED_ORIGINS"
 upload_secret "ALLOWED_API_DOMAINS" "ALLOWED_API_DOMAINS"
 upload_secret "REFRESH_TOKEN_TTL" "REFRESH_TOKEN_TTL"
+upload_secret "MAX_KV_KEYS" "MAX_KV_KEYS"
 
 echo ""
 echo "--- Notifications ---"
