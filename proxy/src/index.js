@@ -121,15 +121,17 @@ function getRefreshTokenTtl(env) {
  * List all KV keys, paginating through results if there are more than 1000.
  * Cloudflare KV .list() returns at most 1000 keys per call.
  * Stops after MAX_KEYS (10,000) to prevent runaway loops and excessive memory
- * usage. This cap is hardcoded for now; see GitHub issue for making it configurable.
+ * usage. This proxy is not designed for high-traffic deployments with very large
+ * key counts. The cap is hardcoded; see GitHub issue #102 for making it configurable.
  * @param {Object} kvNamespace - Cloudflare KV namespace binding
  * @param {Object} [options] - Options passed to KV .list() (e.g. { prefix: '...' })
- * @returns {Promise<Array<{name: string}>>} - All matching keys (up to MAX_KEYS)
+ * @param {Object} [env] - Environment bindings (for warning log on truncation)
+ * @returns {Promise<{keys: Array<{name: string}>, truncated: boolean}>}
  */
-async function listAllKVKeys(kvNamespace, options = {}) {
+async function listAllKVKeys(kvNamespace, options = {}, env = null) {
   const allKeys = []
   let cursor = undefined
-  const MAX_KEYS = 10000 // Safety cap to prevent runaway pagination
+  const MAX_KEYS = 10000 // Safety cap — see issue #102
 
   do {
     const listOpts = { ...options }
@@ -139,7 +141,12 @@ async function listAllKVKeys(kvNamespace, options = {}) {
     cursor = result.list_complete ? undefined : result.cursor
   } while (cursor && allKeys.length < MAX_KEYS)
 
-  return allKeys
+  const truncated = allKeys.length >= MAX_KEYS && !!cursor
+  if (truncated && env) {
+    debugError(env, `listAllKVKeys truncated at ${MAX_KEYS} keys (prefix: ${options.prefix || 'none'})`)
+  }
+
+  return { keys: allKeys, truncated }
 }
 
 /**
@@ -746,7 +753,7 @@ async function handleAdminSessionsCount(request, env) {
     return jsonResponse({ error: adminCheck.error }, adminCheck.status)
   }
 
-  const keys = await listAllKVKeys(env.EEN_OAUTH_SESSIONS)
+  const { keys } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
 
   // Filter out special keys (DEPLOY_* and RATE_LIMIT:*)
   const sessionKeys = keys.filter(
@@ -770,7 +777,7 @@ async function handleAdminRemoveSessions(request, env) {
   }
 
   const currentSessionId = getSessionId(request, env)
-  const keys = await listAllKVKeys(env.EEN_OAUTH_SESSIONS)
+  const { keys } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
 
   let deletedCount = 0
   for (const key of keys) {
@@ -806,7 +813,7 @@ async function handleAdminRevokeAll(request, env) {
   }
 
   const currentSessionId = getSessionId(request, env)
-  const keys = await listAllKVKeys(env.EEN_OAUTH_SESSIONS)
+  const { keys } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
 
   let revokedCount = 0
   let errorCount = 0
@@ -966,12 +973,12 @@ function getRateLimitKey(category, identifier, window) {
 
 /**
  * Check if request is rate limited. If not limited, synchronously increments
- * the counter before returning to prevent concurrent request bursts from
- * bypassing the limit.
- * Note: Counter increments are non-atomic due to KV's eventual consistency.
- * This means under high concurrency, some requests may slip through slightly
- * over the limit. This is acceptable for rate limiting purposes - the goal
- * is protection against abuse, not precise counting.
+ * the counter before returning to reduce (not eliminate) concurrent burst bypass.
+ * The read-modify-write cycle is still non-atomic — two concurrent requests can
+ * both read the same count and each write count+1 instead of count+2. This means
+ * rate limits are approximate under high concurrency: some requests may slip
+ * through slightly over the limit. This is acceptable for abuse prevention —
+ * the goal is deterrence, not precise counting.
  * @param {Request} request - Incoming request
  * @param {URL} url - Parsed URL
  * @param {Object} env - Environment bindings
@@ -1044,7 +1051,7 @@ async function handleAdminRateLimitStats(request, env) {
   const config = getRateLimitConfig(env)
 
   // Get current rate limit entries from KV (paginated)
-  const rateLimitKeys = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, { prefix: 'RATE_LIMIT:' })
+  const { keys: rateLimitKeys } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, { prefix: 'RATE_LIMIT:' }, env)
 
   // Parse and aggregate stats
   const stats = {
