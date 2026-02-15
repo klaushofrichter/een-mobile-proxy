@@ -111,9 +111,6 @@ describe('Rate Limiting', () => {
 
       expect(response.status).toBe(200)
 
-      // Give a moment for the async counter increment
-      await new Promise(resolve => setTimeout(resolve, 100))
-
       // Check that a rate limit key was created
       const listResult = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:health:' })
       expect(listResult.keys.length).toBeGreaterThan(0)
@@ -157,7 +154,6 @@ describe('Rate Limiting', () => {
       }
 
       // Verify counter is tracking
-      await new Promise(resolve => setTimeout(resolve, 100))
       const listResult = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:health:' })
       expect(listResult.keys.length).toBeGreaterThan(0)
     })
@@ -177,9 +173,6 @@ describe('Rate Limiting', () => {
         headers: { 'CF-Connecting-IP': clientIp }
       })
       expect(response1.status).toBe(200)
-
-      // Wait for counter to update
-      await new Promise(resolve => setTimeout(resolve, 100))
 
       // Now set counter to exactly the limit
       await env.EEN_OAUTH_SESSIONS.put(key, '60', { expirationTtl: 120 })
@@ -252,9 +245,6 @@ describe('Rate Limiting', () => {
 
       expect(response.status).toBe(200)
 
-      // Wait for counter update
-      await new Promise(resolve => setTimeout(resolve, 100))
-
       // Check that the key includes the IP
       const listResult = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:health:ip|' })
       const matchingKeys = listResult.keys.filter(k => k.name.includes(clientIp))
@@ -270,8 +260,6 @@ describe('Rate Limiting', () => {
       })
 
       expect(response.status).toBe(200)
-
-      await new Promise(resolve => setTimeout(resolve, 100))
 
       const listResult = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:health:ip|' })
       const matchingKeys = listResult.keys.filter(k => k.name.includes(clientIp))
@@ -334,8 +322,6 @@ describe('Rate Limiting', () => {
         method: 'GET'
       })
 
-      await new Promise(resolve => setTimeout(resolve, 100))
-
       // Check that entries exist
       const listResult = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:health:' })
       expect(listResult.keys.length).toBeGreaterThan(0)
@@ -397,9 +383,6 @@ describe('Rate Limiting', () => {
         }
       })
       expect(response.status).toBe(204)
-
-      // Wait for counter increment
-      await new Promise(resolve => setTimeout(resolve, 100))
 
       // Check that the counter was incremented
       const listResult = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:health:ip|10.0.0.201' })

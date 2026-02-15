@@ -176,18 +176,12 @@ describe('Rate Limiting - Low Limit Scenarios', () => {
       })
       expect(r1.status).toBe(200)
 
-      // Wait for counter increment
-      await new Promise(resolve => setTimeout(resolve, 100))
-
       // Second request should succeed
       const r2 = await fetchWithMetrics('http://localhost/health', {
         method: 'GET',
         headers
       })
       expect(r2.status).toBe(200)
-
-      // Wait for counter increment
-      await new Promise(resolve => setTimeout(resolve, 100))
 
       // Now manually set to limit
       await env.EEN_OAUTH_SESSIONS.put(key, '60', { expirationTtl: 120 })

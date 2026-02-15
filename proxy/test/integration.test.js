@@ -127,9 +127,10 @@ describe('Integration - EEN API Communication', () => {
         }
       })
 
-      // Proxy deletes invalid sessions to force re-authentication
+      // Session is NOT deleted on refresh failure — TTL handles expiration.
+      // This avoids a race condition with KV eventual consistency.
       const session = await env.EEN_OAUTH_SESSIONS.get(sessionId)
-      expect(session).toBeNull()
+      expect(session).not.toBeNull()
     })
   })
 
@@ -380,10 +381,13 @@ describe('Integration - Admin Operations', () => {
 
     expect(response.status).toBe(200)
 
-    // Check only admin session remains
+    // Check only admin session remains (filter out RATE_LIMIT: and DEPLOY_ keys)
     const keys = await env.EEN_OAUTH_SESSIONS.list()
-    expect(keys.keys.length).toBe(1)
-    expect(keys.keys[0].name).toBe(adminSessionId)
+    const sessionKeys = keys.keys.filter(
+      k => !k.name.startsWith('RATE_LIMIT:') && !k.name.startsWith('DEPLOY_')
+    )
+    expect(sessionKeys.length).toBe(1)
+    expect(sessionKeys[0].name).toBe(adminSessionId)
   })
 
   it('should revoke all sessions including current', async () => {
@@ -407,8 +411,11 @@ describe('Integration - Admin Operations', () => {
 
     expect(response.status).toBe(200)
 
-    // All sessions should be deleted
+    // All sessions should be deleted (filter out RATE_LIMIT: and DEPLOY_ keys)
     const keys = await env.EEN_OAUTH_SESSIONS.list()
-    expect(keys.keys.length).toBe(0)
+    const sessionKeys = keys.keys.filter(
+      k => !k.name.startsWith('RATE_LIMIT:') && !k.name.startsWith('DEPLOY_')
+    )
+    expect(sessionKeys.length).toBe(0)
   })
 })
