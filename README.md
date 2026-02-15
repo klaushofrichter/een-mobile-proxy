@@ -728,6 +728,7 @@ This project includes a Claude Code skill for automating the PR creation and rev
 | `RATE_LIMIT_OAUTH` | Max requests per window for `/proxy/*` | `30` (default) |
 | `RATE_LIMIT_ADMIN` | Max requests per window for `/admin/*` | `60` (default) |
 | `RATE_LIMIT_UNKNOWN` | Max requests per window for unidentified clients | `5` (default) |
+| `MAX_KV_KEYS` | Max KV keys to enumerate per request (range: 1000–100000) | `10000` (default) |
 
 **Session TTL and Refresh Token Expiration:**
 
@@ -785,6 +786,14 @@ These endpoints require:
 | GET | `/admin/rateLimitStats` | Get rate limiting statistics by client IP |
 | DELETE | `/admin/removeSessions` | Remove all sessions except current user's session |
 | POST | `/admin/revokeAll` | Emergency: revoke all tokens at EEN and delete all sessions |
+
+**KV Key Limit and Truncation:**
+
+Admin endpoints that enumerate KV keys (`sessionsCount`, `removeSessions`, `revokeAll`, `rateLimitStats`) are capped at `MAX_KV_KEYS` (default: 10,000) to prevent excessive memory usage. When the cap is reached, responses include `"truncated": true`. Implications:
+- **Session counts** may be approximate (actual count could be higher)
+- **`removeSessions` / `revokeAll`** may need to be invoked multiple times to process all entries
+- The admin dashboard shows a truncation warning when this occurs
+- Adjust `MAX_KV_KEYS` (range: 1,000–100,000) if you have a high-traffic deployment
 
 **Authentication Error Responses:**
 - `401 Unauthorized` - No session cookie or session expired/invalid
