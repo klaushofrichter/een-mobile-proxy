@@ -24,6 +24,9 @@
  *   - RATE_LIMIT_OAUTH: requests/minute for /proxy/* (default: 30)
  *   - RATE_LIMIT_ADMIN: requests/minute for /admin/* (default: 60)
  *   - RATE_LIMIT_WINDOW: time window in seconds (default: 60)
+ *
+ * KV Key Limit:
+ *   - MAX_KV_KEYS: max keys to enumerate from KV (default: 10000, range: 1000–100000)
  */
 
 // EEN OAuth endpoints
@@ -41,6 +44,11 @@ const DEFAULT_RATE_LIMIT_OAUTH = 60 // requests per window
 const DEFAULT_RATE_LIMIT_ADMIN = 60 // requests per window
 const DEFAULT_RATE_LIMIT_WINDOW = 60 // seconds
 const DEFAULT_RATE_LIMIT_UNKNOWN = 5 // very restrictive limit for unidentified clients
+
+// KV key enumeration limits
+const MIN_MAX_KV_KEYS = 1000
+const DEFAULT_MAX_KV_KEYS = 10000
+const MAX_MAX_KV_KEYS = 100000
 
 /**
  * Maximum allowed POST body size in bytes for token exchange requests.
@@ -118,20 +126,31 @@ function getRefreshTokenTtl(env) {
 }
 
 /**
+ * Get the maximum number of KV keys to enumerate, bounded to safe range.
+ * Configurable via MAX_KV_KEYS environment variable (default: 10000, range: 1000–100000).
+ * @param {Object} env - Environment bindings
+ * @returns {number} - Max KV keys (bounded between 1000 and 100000)
+ */
+function getMaxKvKeys(env) {
+  const parsed = parseInt(env.MAX_KV_KEYS, 10)
+  if (isNaN(parsed)) return DEFAULT_MAX_KV_KEYS
+  return Math.max(MIN_MAX_KV_KEYS, Math.min(parsed, MAX_MAX_KV_KEYS))
+}
+
+/**
  * List all KV keys, paginating through results if there are more than 1000.
  * Cloudflare KV .list() returns at most 1000 keys per call.
- * Stops after MAX_KEYS (10,000) to prevent runaway loops and excessive memory
- * usage. This proxy is not designed for high-traffic deployments with very large
- * key counts. The cap is hardcoded; see GitHub issue #102 for making it configurable.
+ * Stops after MAX_KEYS to prevent runaway loops and excessive memory usage.
+ * Configurable via MAX_KV_KEYS env var (default: 10000, range: 1000–100000).
  * @param {Object} kvNamespace - Cloudflare KV namespace binding
  * @param {Object} [options] - Options passed to KV .list() (e.g. { prefix: '...' })
- * @param {Object} [env] - Environment bindings (for warning log on truncation)
+ * @param {Object} [env] - Environment bindings (for warning log on truncation and config)
  * @returns {Promise<{keys: Array<{name: string}>, truncated: boolean}>}
  */
 async function listAllKVKeys(kvNamespace, options = {}, env = null) {
   const allKeys = []
   let cursor = undefined
-  const MAX_KEYS = 10000 // Safety cap — see issue #102
+  const MAX_KEYS = env ? getMaxKvKeys(env) : DEFAULT_MAX_KV_KEYS
 
   do {
     const listOpts = { ...options }
@@ -1114,6 +1133,7 @@ async function handleAdminRateLimitStats(request, env) {
   }
 
   if (truncated) stats.truncated = true
+  stats.maxKvKeys = env ? getMaxKvKeys(env) : DEFAULT_MAX_KV_KEYS
 
   return jsonResponse(stats)
 }

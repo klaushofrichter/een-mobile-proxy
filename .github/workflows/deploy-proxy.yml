@@ -148,6 +148,9 @@ jobs:
           echo "Setting REFRESH_TOKEN_TTL..."
           printf '%s' "${{ secrets.REFRESH_TOKEN_TTL }}" | npx wrangler secret put REFRESH_TOKEN_TTL
 
+          echo "Setting MAX_KV_KEYS..."
+          printf '%s' "${{ secrets.MAX_KV_KEYS }}" | npx wrangler secret put MAX_KV_KEYS
+
       - name: Store deploy version in KV
         if: steps.check.outputs.should_deploy == 'true'
         id: store_version
