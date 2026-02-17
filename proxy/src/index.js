@@ -519,7 +519,10 @@ async function handleGetAccessToken(url, request, env) {
   if (!tokenResponse.ok) {
     const errorText = await tokenResponse.text()
     debugError(env, 'EEN token error:', errorText)
-    return jsonResponse({ error: 'Token exchange failed' }, tokenResponse.status)
+    const errorResponse = jsonResponse({ error: 'Token exchange failed' }, tokenResponse.status)
+    errorResponse.headers.set('Cache-Control', 'no-store')
+    errorResponse.headers.set('Pragma', 'no-cache')
+    return errorResponse
   }
 
   const tokens = await tokenResponse.json()
@@ -607,13 +610,19 @@ async function handleGetAccessToken(url, request, env) {
 async function handleRefreshAccessToken(request, env) {
   const sessionId = getSessionId(request, env)
   if (!sessionId) {
-    return jsonResponse({ error: 'No session found' }, 401)
+    const errorResponse = jsonResponse({ error: 'No session found' }, 401)
+    errorResponse.headers.set('Cache-Control', 'no-store')
+    errorResponse.headers.set('Pragma', 'no-cache')
+    return errorResponse
   }
 
   // Get stored session data
   const sessionDataStr = await env.EEN_OAUTH_SESSIONS.get(sessionId)
   if (!sessionDataStr) {
-    return jsonResponse({ error: 'Session expired or invalid' }, 401)
+    const errorResponse = jsonResponse({ error: 'Session expired or invalid' }, 401)
+    errorResponse.headers.set('Cache-Control', 'no-store')
+    errorResponse.headers.set('Pragma', 'no-cache')
+    return errorResponse
   }
 
   const sessionData = JSON.parse(sessionDataStr)
@@ -637,7 +646,10 @@ async function handleRefreshAccessToken(request, env) {
     // Don't delete session on refresh failure — let TTL handle expiration.
     // Avoids race condition where concurrent successful refresh wrote a new
     // token but KV eventual consistency returns stale data on re-read.
-    return jsonResponse({ error: 'Token refresh failed' }, tokenResponse.status)
+    const errorResponse = jsonResponse({ error: 'Token refresh failed' }, tokenResponse.status)
+    errorResponse.headers.set('Cache-Control', 'no-store')
+    errorResponse.headers.set('Pragma', 'no-cache')
+    return errorResponse
   }
 
   const tokens = await tokenResponse.json()

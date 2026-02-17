@@ -73,8 +73,8 @@ else
     [ -z "$line" ] && continue
     SHA="${line%% *}"
     SUBJECT="${line#* }"
-    # Sanitize shell metacharacters and markdown-breaking characters
-    SAFE_SUBJECT="${SUBJECT//[\`\$\{\}\[\]\(\)]/}"
+    # Sanitize shell metacharacters, markdown-breaking chars, and pipe/angle brackets
+    SAFE_SUBJECT="${SUBJECT//[\`\$\{\}\[\]\(\)\;\|\<\>]/}"
     SAFE_SUBJECT="${SAFE_SUBJECT//$'\n'/ }"
     ENTRY="- ${SAFE_SUBJECT} ([${SHA}](${REPO_URL}/commit/${SHA}))"
 
