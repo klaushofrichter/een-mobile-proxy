@@ -78,8 +78,14 @@ jobs:
           set -e
           echo "🔍 Finding previous release tag..."
 
-          # List existing releases (sorted by date, most recent first)
-          PREV_TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || echo "")
+          # Find the nearest tag by git history (more reliable than date-sorted release list)
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+
+          # Fall back to gh release list if git describe fails (e.g., no tags exist yet)
+          if [ -z "$PREV_TAG" ]; then
+            echo "ℹ️ git describe found no tags, falling back to gh release list..."
+            PREV_TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || echo "")
+          fi
 
           if [ -n "$PREV_TAG" ]; then
             echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
@@ -98,22 +104,86 @@ jobs:
           set -e
           echo "📝 Generating changelog..."
 
+          REPO_URL="https://github.com/${{ github.repository }}"
+
+          # Exclude auto-generated version bump commits from changelog
+          GREP_EXCLUDE="--grep=^bump version --invert-grep"
+
           if [ "${{ steps.prev_tag.outputs.has_prev }}" == "true" ]; then
             PREV_TAG="${{ steps.prev_tag.outputs.prev_tag }}"
             echo "Generating changelog from $PREV_TAG to HEAD..."
-            COMMITS=$(git log --oneline --no-merges "${PREV_TAG}..HEAD" 2>/dev/null || echo "")
+            COMMITS=$(git log --format="%h %s" --no-merges --max-count=100 $GREP_EXCLUDE "${PREV_TAG}..HEAD" 2>/dev/null || echo "")
           else
             echo "Generating changelog from all commits..."
-            COMMITS=$(git log --oneline --no-merges 2>/dev/null || echo "")
+            COMMITS=$(git log --format="%h %s" --no-merges --max-count=100 $GREP_EXCLUDE 2>/dev/null || echo "")
           fi
 
           if [ -z "$COMMITS" ]; then
             echo "- No changes recorded" > changelog.md
             echo "ℹ️ No commits found for changelog"
           else
-            # Format each commit as a bullet point and write to file
-            echo "$COMMITS" | sed 's/^[a-f0-9]* /- /' > changelog.md
-            echo "✅ Generated changelog with $(echo "$COMMITS" | wc -l | tr -d ' ') commits"
+            # Group commits by conventional commit prefix
+            declare -A GROUPS
+            GROUPS=(
+              ["feat"]=""
+              ["fix"]=""
+              ["docs"]=""
+              ["chore"]=""
+              ["security"]=""
+              ["ci"]=""
+              ["other"]=""
+            )
+            declare -A GROUP_TITLES
+            GROUP_TITLES=(
+              ["feat"]="Features"
+              ["fix"]="Bug Fixes"
+              ["docs"]="Documentation"
+              ["chore"]="Chores"
+              ["security"]="Security"
+              ["ci"]="CI/CD"
+              ["other"]="Other Changes"
+            )
+
+            while IFS= read -r line; do
+              SHA=$(echo "$line" | awk '{print $1}')
+              SUBJECT=$(echo "$line" | cut -d' ' -f2-)
+              ENTRY="- ${SUBJECT} ([${SHA}](${REPO_URL}/commit/${SHA}))"
+
+              # Match conventional commit prefix (e.g., "feat:", "fix(scope):")
+              PREFIX=$(echo "$SUBJECT" | sed -n 's/^\([a-z]*\)\(([^)]*)\)\{0,1\}:.*/\1/p')
+
+              case "$PREFIX" in
+                feat|fix|docs|chore|security|ci)
+                  GROUPS[$PREFIX]+="${ENTRY}"$'\n'
+                  ;;
+                *)
+                  GROUPS["other"]+="${ENTRY}"$'\n'
+                  ;;
+              esac
+            done <<< "$COMMITS"
+
+            # Write grouped changelog
+            : > changelog.md
+            HAS_GROUPS=false
+
+            for key in feat fix security docs chore ci; do
+              if [ -n "${GROUPS[$key]}" ]; then
+                HAS_GROUPS=true
+                echo "#### ${GROUP_TITLES[$key]}" >> changelog.md
+                echo "${GROUPS[$key]}" >> changelog.md
+              fi
+            done
+
+            # Always write "other" last
+            if [ -n "${GROUPS["other"]}" ]; then
+              if [ "$HAS_GROUPS" == "true" ]; then
+                echo "#### ${GROUP_TITLES["other"]}" >> changelog.md
+              fi
+              echo "${GROUPS["other"]}" >> changelog.md
+            fi
+
+            COMMIT_COUNT=$(echo "$COMMITS" | wc -l | xargs)
+            echo "✅ Generated changelog with ${COMMIT_COUNT} commits"
           fi
 
           echo "📝 Changelog contents:"
