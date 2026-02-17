@@ -587,6 +587,10 @@ async function handleGetAccessToken(url, request, env) {
 
   const response = jsonResponse(responseData)
 
+  // RFC 6749 Section 5.1: token responses must not be cached
+  response.headers.set('Cache-Control', 'no-store')
+  response.headers.set('Pragma', 'no-cache')
+
   // Set session cookie
   response.headers.append(
     'Set-Cookie',
@@ -650,10 +654,16 @@ async function handleRefreshAccessToken(request, env) {
     expirationTtl: ttl
   })
 
-  return jsonResponse({
+  const response = jsonResponse({
     accessToken: tokens.access_token,
     expiresIn: tokens.expires_in
   })
+
+  // RFC 6749 Section 5.1: token responses must not be cached
+  response.headers.set('Cache-Control', 'no-store')
+  response.headers.set('Pragma', 'no-cache')
+
+  return response
 }
 
 /**
