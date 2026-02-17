@@ -73,13 +73,16 @@ else
     [ -z "$line" ] && continue
     SHA="${line%% *}"
     SUBJECT="${line#* }"
-    # Sanitize shell metacharacters, markdown-breaking chars, and pipe/angle brackets
-    SAFE_SUBJECT="${SUBJECT//[\`\$\{\}\[\]\(\)\;\|\<\>]/}"
+    # Sanitize shell metacharacters, markdown link injection, and pipe/angle brackets
+    # Preserve [] for readability (e.g., "Fix [admin] login") but neutralize link patterns
+    SAFE_SUBJECT="${SUBJECT//[\`\$\{\}\(\)\;\|\<\>]/}"
     SAFE_SUBJECT="${SAFE_SUBJECT//$'\n'/ }"
+    # Neutralize markdown link injection: [text](url) -> text(url)
+    SAFE_SUBJECT=$(echo "$SAFE_SUBJECT" | sed -E 's/\[([^]]*)\]\(([^)]*)\)/\1(\2)/g')
     ENTRY="- ${SAFE_SUBJECT} ([${SHA}](${REPO_URL}/commit/${SHA}))"
 
-    # Match only recognized conventional commit prefixes (e.g., "feat:", "fix(scope):")
-    PREFIX=$(echo "$SUBJECT" | sed -nE 's/^(feat|fix|docs|chore|security|ci)(\([^)]*\))?:.*/\1/p')
+    # Match only recognized conventional commit prefixes (e.g., "feat:", "fix(scope):", "feat :")
+    PREFIX=$(echo "$SUBJECT" | sed -nE 's/^(feat|fix|docs|chore|security|ci)(\([^)]*\))?[[:space:]]*:.*/\1/p')
 
     case "$PREFIX" in
       feat|fix|docs|chore|security|ci)
