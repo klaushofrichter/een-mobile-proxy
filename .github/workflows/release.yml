@@ -107,9 +107,9 @@ jobs:
           REPO_URL="https://github.com/${{ github.repository }}"
 
           # Exclude auto-generated version bump commits from changelog
-          GREP_EXCLUDE="--grep=^bump version --invert-grep"
+          GREP_EXCLUDE="--grep='^bump version' --invert-grep"
 
-          if [ "${{ steps.prev_tag.outputs.has_prev }}" == "true" ]; then
+          if [ "${{ steps.prev_tag.outputs.has_prev }}" = "true" ]; then
             PREV_TAG="${{ steps.prev_tag.outputs.prev_tag }}"
             echo "Generating changelog from $PREV_TAG to HEAD..."
             COMMITS=$(git log --format="%h %s" --no-merges --max-count=100 $GREP_EXCLUDE "${PREV_TAG}..HEAD" 2>/dev/null || echo "")
@@ -145,12 +145,15 @@ jobs:
             )
 
             while IFS= read -r line; do
-              SHA=$(echo "$line" | awk '{print $1}')
-              SUBJECT=$(echo "$line" | cut -d' ' -f2-)
-              ENTRY="- ${SUBJECT} ([${SHA}](${REPO_URL}/commit/${SHA}))"
+              SHA="${line%% *}"
+              SUBJECT="${line#* }"
+              # Sanitize backticks and $() to prevent shell interpretation in markdown
+              SAFE_SUBJECT="${SUBJECT//\`/}"
+              SAFE_SUBJECT="${SAFE_SUBJECT//\$(/}"
+              ENTRY="- ${SAFE_SUBJECT} ([${SHA}](${REPO_URL}/commit/${SHA}))"
 
               # Match conventional commit prefix (e.g., "feat:", "fix(scope):")
-              PREFIX=$(echo "$SUBJECT" | sed -n 's/^\([a-z]*\)\(([^)]*)\)\{0,1\}:.*/\1/p')
+              PREFIX=$(echo "$SUBJECT" | sed -nE 's/^([a-z]+)(\([^)]*\))?:.*/\1/p')
 
               case "$PREFIX" in
                 feat|fix|docs|chore|security|ci)
@@ -176,13 +179,17 @@ jobs:
 
             # Always write "other" last
             if [ -n "${GROUPS["other"]}" ]; then
-              if [ "$HAS_GROUPS" == "true" ]; then
+              if [ "$HAS_GROUPS" = "true" ]; then
                 echo "#### ${GROUP_TITLES["other"]}" >> changelog.md
               fi
               echo "${GROUPS["other"]}" >> changelog.md
             fi
 
-            COMMIT_COUNT=$(echo "$COMMITS" | wc -l | xargs)
+            if [ -n "$COMMITS" ]; then
+              COMMIT_COUNT=$(echo "$COMMITS" | wc -l | xargs)
+            else
+              COMMIT_COUNT=0
+            fi
             echo "✅ Generated changelog with ${COMMIT_COUNT} commits"
           fi
 
@@ -368,7 +375,7 @@ jobs:
 
       - name: Summary
         run: |
-          if [ "${{ steps.check_release.outputs.exists }}" == "true" ]; then
+          if [ "${{ steps.check_release.outputs.exists }}" = "true" ]; then
             echo "### ⏭️ Release Skipped" >> $GITHUB_STEP_SUMMARY
             echo "Release ${{ steps.versions.outputs.release_tag }} already exists." >> $GITHUB_STEP_SUMMARY
           else
