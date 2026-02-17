@@ -21,7 +21,7 @@
  *   Configurable via environment variables:
  *   - RATE_LIMIT_ENABLED: 'true' to enable (default: true)
  *   - RATE_LIMIT_HEALTH: requests/minute for /health (default: 60)
- *   - RATE_LIMIT_OAUTH: requests/minute for /proxy/* (default: 30)
+ *   - RATE_LIMIT_OAUTH: requests/minute for /proxy/* (default: 60)
  *   - RATE_LIMIT_ADMIN: requests/minute for /admin/* (default: 60)
  *   - RATE_LIMIT_WINDOW: time window in seconds (default: 60)
  *

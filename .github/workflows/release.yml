@@ -19,6 +19,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: production
+          fetch-depth: 0
 
       - name: Get version numbers
         id: versions
@@ -69,6 +70,43 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get previous release tag
+        id: prev_tag
+        if: steps.check_release.outputs.exists == 'false'
+        run: |
+          set -e
+          echo "🔍 Finding previous release tag..."
+
+          # Find the nearest tag by git history (more reliable than date-sorted release list)
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+
+          # Fall back to gh release list if git describe fails (e.g., no tags exist yet)
+          if [ -z "$PREV_TAG" ]; then
+            echo "ℹ️ git describe found no tags, falling back to gh release list..."
+            PREV_TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty' 2>/dev/null || echo "")
+          fi
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+            echo "has_prev=true" >> $GITHUB_OUTPUT
+            echo "✅ Previous release tag: $PREV_TAG"
+          else
+            echo "has_prev=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No previous release found, will include all commits"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate changelog
+        if: steps.check_release.outputs.exists == 'false'
+        run: |
+          REPO_URL="https://github.com/${{ github.repository }}"
+          if [ "${{ steps.prev_tag.outputs.has_prev }}" = "true" ]; then
+            ./scripts/generate-changelog.sh "$REPO_URL" "${{ steps.prev_tag.outputs.prev_tag }}"
+          else
+            ./scripts/generate-changelog.sh "$REPO_URL"
+          fi
 
       - name: Create release archive
         id: create_archive
@@ -126,21 +164,31 @@ jobs:
           echo "🚀 Creating GitHub release: $RELEASE_TAG"
           echo "📎 Attaching archives: ${ARCHIVE_NAME}.zip, ${ARCHIVE_NAME}.tar.gz"
           
+          # Build release notes file
+          {
+            echo "## EEN OAuth Proxy Release"
+            echo ""
+            echo "**Admin App Version:** ${{ steps.versions.outputs.admin_version }}"
+            echo "**Proxy Version:** ${{ steps.versions.outputs.proxy_version }}"
+            echo ""
+            echo "### What's Changed"
+            cat changelog.md
+            echo ""
+            echo "### Downloads"
+            echo "- \`${ARCHIVE_NAME}.zip\` - ZIP archive"
+            echo "- \`${ARCHIVE_NAME}.tar.gz\` - TAR.GZ archive"
+            echo ""
+            echo "### Deployed URLs"
+            echo "- **Admin App:** ${{ vars.VITE_REDIRECT_URI }}"
+            echo "- **Proxy:** ${{ vars.VITE_PROXY_URL }}"
+          } > release_notes.md
+
+          echo "📝 Release notes:"
+          cat release_notes.md
+
           if ! gh release create "$RELEASE_TAG" \
             --title "Proxy v${{ steps.versions.outputs.proxy_version }} / Admin v${{ steps.versions.outputs.admin_version }}" \
-            --notes "## EEN OAuth Proxy Release
-
-          **Admin App Version:** ${{ steps.versions.outputs.admin_version }}
-          **Proxy Version:** ${{ steps.versions.outputs.proxy_version }}
-
-          ### Downloads
-          - \`${ARCHIVE_NAME}.zip\` - ZIP archive
-          - \`${ARCHIVE_NAME}.tar.gz\` - TAR.GZ archive
-
-          ### Deployed URLs
-          - **Admin App:** ${{ vars.VITE_REDIRECT_URI }}
-          - **Proxy:** ${{ vars.VITE_PROXY_URL }}
-          " \
+            --notes-file release_notes.md \
             "${ARCHIVE_NAME}.zip" \
             "${ARCHIVE_NAME}.tar.gz"; then
             echo "❌ Error: Failed to create GitHub release"
@@ -239,7 +287,7 @@ jobs:
 
       - name: Summary
         run: |
-          if [ "${{ steps.check_release.outputs.exists }}" == "true" ]; then
+          if [ "${{ steps.check_release.outputs.exists }}" = "true" ]; then
             echo "### ⏭️ Release Skipped" >> $GITHUB_STEP_SUMMARY
             echo "Release ${{ steps.versions.outputs.release_tag }} already exists." >> $GITHUB_STEP_SUMMARY
           else
