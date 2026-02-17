@@ -20,6 +20,19 @@ set -e
 REPO_URL="${1:?Usage: generate-changelog.sh <repo_url> [prev_tag]}"
 PREV_TAG="${2:-}"
 
+# Validate REPO_URL is a GitHub repository URL
+REPO_URL="${REPO_URL%/}"
+if [[ ! "$REPO_URL" =~ ^https://github\.com/[^/]+/[^/]+$ ]]; then
+  echo "❌ Error: REPO_URL must be a GitHub repository URL (e.g., https://github.com/owner/repo)" >&2
+  exit 1
+fi
+
+# Validate PREV_TAG format if provided (git refs: alphanumeric, dots, dashes, slashes, underscores)
+if [ -n "$PREV_TAG" ] && [[ ! "$PREV_TAG" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
+  echo "❌ Error: Invalid PREV_TAG format: $PREV_TAG" >&2
+  exit 1
+fi
+
 echo "📝 Generating changelog..."
 
 # Exclude auto-generated version bump commits from changelog
@@ -57,10 +70,12 @@ else
   )
 
   while IFS= read -r line; do
+    [ -z "$line" ] && continue
     SHA="${line%% *}"
     SUBJECT="${line#* }"
-    # Sanitize shell metacharacters to prevent injection in markdown
-    SAFE_SUBJECT="${SUBJECT//[\`\$\{\}]/}"
+    # Sanitize shell metacharacters and markdown-breaking characters
+    SAFE_SUBJECT="${SUBJECT//[\`\$\{\}\[\]\(\)]/}"
+    SAFE_SUBJECT="${SAFE_SUBJECT//$'\n'/ }"
     ENTRY="- ${SAFE_SUBJECT} ([${SHA}](${REPO_URL}/commit/${SHA}))"
 
     # Match only recognized conventional commit prefixes (e.g., "feat:", "fix(scope):")
