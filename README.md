@@ -30,7 +30,7 @@ The proxy implements multiple layers of security:
 
 - **Rate Limiting** - Configurable per-endpoint rate limits to prevent abuse:
   - `/health`: 60 requests/minute (default)
-  - `/proxy/*`: 30 requests/minute (default)
+  - `/proxy/*`: 60 requests/minute (default)
   - `/admin/*`: 60 requests/minute (default)
   - Unknown clients (no IP identification): 5 requests/minute
   - Configurable via environment variables (`RATE_LIMIT_*`)
@@ -110,7 +110,7 @@ A Vue 3 demonstration application showing OAuth integration with EEN.
 - Token refresh and revocation
 - Auto-refresh before token expiration
 
-**Deployment:** Local development only (not deployed to production). The demo1 app is tested via `test-demo1-pr.yml` on PRs but has no deployment workflow. Note that demo1 and admin share port 3333 and cannot run simultaneously on the same machine.
+**Deployment:** GitHub Pages at `https://your-username.github.io/een-oauth-proxy/demo1/` (deployed alongside admin via `npm run deploy:pages`). The demo1 app is also tested via `test-demo1-pr.yml` on PRs. Note that demo1 and admin share port 3333 and cannot run simultaneously on the same machine.
 
 ## Getting Started
 
@@ -300,11 +300,18 @@ npm run test:watch # Run tests in watch mode
 
 | File | Description | Tests |
 |------|-------------|-------|
-| `test/cors.test.js` | CORS validation and origin checking | Origin allowlist, preflight requests, 404 handling |
-| `test/oauth.test.js` | OAuth endpoint testing | Token exchange, refresh, revocation |
 | `test/admin.test.js` | Admin endpoint testing | Authentication, authorization, session management |
-| `test/security.test.js` | Security vulnerability tests | Injection attacks, session manipulation, CORS bypass |
+| `test/auth-header.test.js` | Authorization header authentication | Bearer token auth, header-based session lookup |
+| `test/cors.test.js` | CORS validation and origin checking | Origin allowlist, preflight requests, 404 handling |
 | `test/integration.test.js` | Integration tests | EEN API communication, session persistence |
+| `test/oauth.test.js` | OAuth endpoint testing | Token exchange, refresh, revocation |
+| `test/performance.test.js` | Performance benchmarks | Response time measurements, throughput |
+| `test/rate-limiting.test.js` | Rate limiting behavior | Per-endpoint limits, window expiration |
+| `test/rate-limiting-low-limits.test.js` | Rate limiting with low thresholds | Edge cases with restrictive limits |
+| `test/security.test.js` | Security vulnerability tests | Injection attacks, session manipulation, CORS bypass |
+| `test/ssrf.test.js` | SSRF integration tests | Domain allowlist enforcement, malicious URL blocking |
+| `test/ssrf-unit.test.js` | SSRF unit tests | URL validation, domain parsing |
+| `test/workflow.test.js` | End-to-end workflow tests | Full OAuth flow, session lifecycle |
 
 **Security Tests Include:**
 - SQL/NoSQL injection attempts
@@ -446,7 +453,7 @@ npm run deploy:proxy
 
 The deploy script will:
 1. Deploy the worker to Cloudflare
-2. Set secrets (CLIENT_ID, CLIENT_SECRET, ADMIN_EMAILS, ALLOWED_ORIGINS)
+2. Set secrets (CLIENT_ID, CLIENT_SECRET, ADMIN_EMAILS, ALLOWED_ORIGINS, ALLOWED_API_DOMAINS, REFRESH_TOKEN_TTL, MAX_KV_KEYS)
 3. Store the version in KV
 
 ### Deploy Apps to GitHub Pages
@@ -602,6 +609,7 @@ Configure these secrets in your repository settings (Settings > Secrets and vari
 | `ALLOWED_ORIGINS` | Comma-separated CORS allowed origins | Proxy deployment |
 | `ALLOWED_API_DOMAINS` | Comma-separated allowed API domains for SSRF protection | Proxy deployment |
 | `REFRESH_TOKEN_TTL` | Session TTL in seconds (default: 86400) | Proxy deployment |
+| `MAX_KV_KEYS` | Max KV keys to enumerate per request (default: 10000) | Proxy deployment |
 | `ADMIN_TEST_USER` | Test admin user email (must be in ADMIN_EMAILS) | Playwright tests |
 | `ADMIN_TEST_PASSWORD` | Test admin user password | Playwright tests |
 | `TEST_USER` | Test user email (must not be in ADMIN_EMAILS) | Playwright tests |
@@ -657,8 +665,9 @@ Configure these variables in your repository settings (Settings > Secrets and va
 
 The project sends Slack notifications for:
 
-1. **Deployments** - When admin app is deployed to GitHub Pages
-2. **Releases** - When a new release is created
+1. **Admin Deployments** - When admin app is deployed to GitHub Pages
+2. **Proxy Deployments** - When proxy is deployed to Cloudflare Workers (success and failure/rollback)
+3. **Releases** - When a new release is created
 
 To configure Slack notifications:
 
@@ -725,7 +734,7 @@ This project includes a Claude Code skill for automating the PR creation and rev
 | `RATE_LIMIT_ENABLED` | Enable/disable rate limiting | `true` (default) |
 | `RATE_LIMIT_WINDOW` | Rate limit window in seconds | `60` (default) |
 | `RATE_LIMIT_HEALTH` | Max requests per window for `/health` | `60` (default) |
-| `RATE_LIMIT_OAUTH` | Max requests per window for `/proxy/*` | `30` (default) |
+| `RATE_LIMIT_OAUTH` | Max requests per window for `/proxy/*` | `60` (default) |
 | `RATE_LIMIT_ADMIN` | Max requests per window for `/admin/*` | `60` (default) |
 | `RATE_LIMIT_UNKNOWN` | Max requests per window for unidentified clients | `5` (default) |
 | `MAX_KV_KEYS` | Max KV keys to enumerate per request (range: 1000–100000) | `10000` (default) |
@@ -756,6 +765,7 @@ Values outside the min/max range are automatically clamped. Adjust this value ba
 | `VITE_EEN_AUTH_URL` | EEN OAuth authorize URL | `https://auth.eagleeyenetworks.com/oauth2/authorize` |
 | `VITE_REDIRECT_URI` | OAuth callback URL (must exactly match EEN config) | `http://127.0.0.1:3333` |
 | `VITE_GITHUB_REPO` | GitHub repository URL for version links in the app footer | `https://github.com/your-username/een-oauth-proxy` |
+| `VITE_GITHUB_BRANCH` | Git branch name for version links in the app UI | `main` |
 
 ## API Endpoints
 

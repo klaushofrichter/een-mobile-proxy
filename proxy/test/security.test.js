@@ -420,6 +420,38 @@ describe('Security - Response Headers', () => {
     expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
     expect(response.headers.get('X-Frame-Options')).toBe('DENY')
   })
+
+  it('should include Cache-Control: no-store on token exchange responses (RFC 6749)', async () => {
+    // Token exchange with valid params but invalid code triggers EEN error response
+    const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:5173',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: 'code=test-code&redirect_uri=http://localhost:5173'
+    })
+
+    // Response should include cache prevention headers per RFC 6749 Section 5.1
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(response.headers.get('Pragma')).toBe('no-cache')
+  })
+
+  it('should include Cache-Control: no-store on token refresh responses (RFC 6749)', async () => {
+    // Refresh with invalid session triggers 401 — verify no caching of auth errors
+    const response = await fetchWithMetrics('http://localhost/proxy/refreshAccessToken', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:5173',
+        Cookie: 'sessionId=invalid-session-id-test-12345'
+      }
+    })
+
+    expect(response.status).toBe(401)
+    // Even error responses from token endpoints should not be cached
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(response.headers.get('Pragma')).toBe('no-cache')
+  })
 })
 
 describe('Security - Input Length Validation', () => {

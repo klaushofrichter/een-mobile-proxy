@@ -21,7 +21,7 @@
  *   Configurable via environment variables:
  *   - RATE_LIMIT_ENABLED: 'true' to enable (default: true)
  *   - RATE_LIMIT_HEALTH: requests/minute for /health (default: 60)
- *   - RATE_LIMIT_OAUTH: requests/minute for /proxy/* (default: 30)
+ *   - RATE_LIMIT_OAUTH: requests/minute for /proxy/* (default: 60)
  *   - RATE_LIMIT_ADMIN: requests/minute for /admin/* (default: 60)
  *   - RATE_LIMIT_WINDOW: time window in seconds (default: 60)
  *
@@ -519,7 +519,10 @@ async function handleGetAccessToken(url, request, env) {
   if (!tokenResponse.ok) {
     const errorText = await tokenResponse.text()
     debugError(env, 'EEN token error:', errorText)
-    return jsonResponse({ error: 'Token exchange failed' }, tokenResponse.status)
+    const errorResponse = jsonResponse({ error: 'Token exchange failed' }, tokenResponse.status)
+    errorResponse.headers.set('Cache-Control', 'no-store')
+    errorResponse.headers.set('Pragma', 'no-cache')
+    return errorResponse
   }
 
   const tokens = await tokenResponse.json()
@@ -587,6 +590,10 @@ async function handleGetAccessToken(url, request, env) {
 
   const response = jsonResponse(responseData)
 
+  // RFC 6749 Section 5.1: token responses must not be cached
+  response.headers.set('Cache-Control', 'no-store')
+  response.headers.set('Pragma', 'no-cache')
+
   // Set session cookie
   response.headers.append(
     'Set-Cookie',
@@ -603,13 +610,19 @@ async function handleGetAccessToken(url, request, env) {
 async function handleRefreshAccessToken(request, env) {
   const sessionId = getSessionId(request, env)
   if (!sessionId) {
-    return jsonResponse({ error: 'No session found' }, 401)
+    const errorResponse = jsonResponse({ error: 'No session found' }, 401)
+    errorResponse.headers.set('Cache-Control', 'no-store')
+    errorResponse.headers.set('Pragma', 'no-cache')
+    return errorResponse
   }
 
   // Get stored session data
   const sessionDataStr = await env.EEN_OAUTH_SESSIONS.get(sessionId)
   if (!sessionDataStr) {
-    return jsonResponse({ error: 'Session expired or invalid' }, 401)
+    const errorResponse = jsonResponse({ error: 'Session expired or invalid' }, 401)
+    errorResponse.headers.set('Cache-Control', 'no-store')
+    errorResponse.headers.set('Pragma', 'no-cache')
+    return errorResponse
   }
 
   const sessionData = JSON.parse(sessionDataStr)
@@ -633,7 +646,10 @@ async function handleRefreshAccessToken(request, env) {
     // Don't delete session on refresh failure — let TTL handle expiration.
     // Avoids race condition where concurrent successful refresh wrote a new
     // token but KV eventual consistency returns stale data on re-read.
-    return jsonResponse({ error: 'Token refresh failed' }, tokenResponse.status)
+    const errorResponse = jsonResponse({ error: 'Token refresh failed' }, tokenResponse.status)
+    errorResponse.headers.set('Cache-Control', 'no-store')
+    errorResponse.headers.set('Pragma', 'no-cache')
+    return errorResponse
   }
 
   const tokens = await tokenResponse.json()
@@ -650,10 +666,16 @@ async function handleRefreshAccessToken(request, env) {
     expirationTtl: ttl
   })
 
-  return jsonResponse({
+  const response = jsonResponse({
     accessToken: tokens.access_token,
     expiresIn: tokens.expires_in
   })
+
+  // RFC 6749 Section 5.1: token responses must not be cached
+  response.headers.set('Cache-Control', 'no-store')
+  response.headers.set('Pragma', 'no-cache')
+
+  return response
 }
 
 /**
