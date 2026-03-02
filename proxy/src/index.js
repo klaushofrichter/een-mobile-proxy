@@ -77,6 +77,17 @@ const RATE_LIMIT_CATEGORY = {
   ADMIN: 'admin'
 }
 
+/**
+ * Parse a comma-separated env string into a trimmed, lowercased, non-empty array
+ */
+function parseEnvList(str) {
+  return (str || '').split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 0)
+}
+
+// Cache for parsed ALLOWED_SCHEMES (persists within worker instance)
+let cachedAllowedSchemesEnv = null
+let cachedAllowedSchemes = null
+
 // Cache for parsed ALLOWED_API_DOMAINS (persists within worker instance)
 let cachedAllowlistConfig = null
 let cachedAllowlist = null
@@ -425,10 +436,7 @@ async function routeRequest(url, request, env) {
     const spaRequest = new Request(new URL('/', request.url), request)
     const spaResponse = await env.ASSETS.fetch(spaRequest)
     if (spaResponse.status === 200) {
-      return new Response(spaResponse.body, {
-        headers: spaResponse.headers,
-        status: 200
-      })
+      return spaResponse
     }
   }
 
@@ -1152,19 +1160,20 @@ async function handleAdminRateLimitStats(request, env) {
  * ALLOWED_SCHEMES should be a comma-separated list of scheme names (without "://")
  */
 function getAllowedSchemes(env) {
-  const allowedSchemesStr = env.ALLOWED_SCHEMES || ''
-  const schemes = allowedSchemesStr
-    .split(',')
-    .map(s => s.trim().toLowerCase())
-    .filter(s => s.length > 0)
-
-  // In development, also allow http for local testing
-  if (env.ENVIRONMENT === 'development') {
-    if (!schemes.includes('http')) {
-      schemes.push('http')
-    }
+  const rawSchemes = env.ALLOWED_SCHEMES || ''
+  if (cachedAllowedSchemesEnv === rawSchemes && cachedAllowedSchemes) {
+    return cachedAllowedSchemes
   }
 
+  const schemes = parseEnvList(rawSchemes)
+
+  // In development, also allow http for local testing
+  if (env.ENVIRONMENT === 'development' && !schemes.includes('http')) {
+    schemes.push('http')
+  }
+
+  cachedAllowedSchemesEnv = rawSchemes
+  cachedAllowedSchemes = schemes
   return schemes
 }
 
@@ -1236,14 +1245,7 @@ function getSessionId(request, env) {
  */
 function isAdminUser(userEmail, env) {
   if (!userEmail) return false
-
-  const adminEmailsStr = env.ADMIN_EMAILS || ''
-  const adminEmails = adminEmailsStr
-    .split(',')
-    .map(e => e.trim().toLowerCase())
-    .filter(e => e.length > 0)
-
-  return adminEmails.includes(userEmail.toLowerCase())
+  return parseEnvList(env.ADMIN_EMAILS).includes(userEmail.toLowerCase())
 }
 
 /**

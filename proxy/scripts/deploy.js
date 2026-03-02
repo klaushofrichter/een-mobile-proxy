@@ -121,7 +121,7 @@ const VALID_SECRET_NAMES = new Set([
 // Critical secrets that must be set for the proxy to function
 const CRITICAL_SECRETS = ['CLIENT_ID', 'CLIENT_SECRET']
 
-const secrets = ['CLIENT_ID', 'CLIENT_SECRET', 'ADMIN_EMAILS', 'ALLOWED_ORIGINS', 'ALLOWED_API_DOMAINS', 'REFRESH_TOKEN_TTL', 'MAX_KV_KEYS']
+const secrets = ['CLIENT_ID', 'CLIENT_SECRET', 'ADMIN_EMAILS', 'ALLOWED_SCHEMES', 'ALLOWED_API_DOMAINS', 'REFRESH_TOKEN_TTL', 'MAX_KV_KEYS']
 
 // Pre-validate all critical secrets exist before any deployment actions
 console.log('')

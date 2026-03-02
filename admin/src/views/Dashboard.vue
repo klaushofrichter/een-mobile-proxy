@@ -411,7 +411,7 @@ const githubRepoUrl = computed(() => {
   const branch = import.meta.env.VITE_GITHUB_BRANCH || 'develop'
   return `${baseUrl}/tree/${branch}`
 })
-const proxyUrl = computed(() => window.location.origin)
+const proxyUrl = window.location.origin
 
 const lastHealthCheckText = computed(() => {
   if (!lastHealthCheck.value) return 'Never'
