@@ -1,4 +1,4 @@
-name = "een-oauth-proxy"
+name = "een-mobile-proxy"
 main = "src/index.js"
 compatibility_date = "2024-12-01"
 
@@ -10,12 +10,12 @@ ENVIRONMENT = "production"
 
 [[kv_namespaces]]
 binding = "EEN_OAUTH_SESSIONS"
-id = "b6ac1ea749dc43669fe0696903cb39f7"
+id = "c72e25b0bea145a4b2e2bfaf20ec5883"
 
 # Secrets (set via wrangler secret put):
 # - CLIENT_ID
 # - CLIENT_SECRET
 # - ADMIN_EMAILS
-# - ALLOWED_ORIGINS
+# - ALLOWED_SCHEMES        (comma-separated custom URL schemes, e.g., "myapp,myotherapp")
 # - ALLOWED_API_DOMAINS
 # - MAX_KV_KEYS

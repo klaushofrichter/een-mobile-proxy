@@ -271,19 +271,19 @@ describe('Rate Limiting - Low Limit Scenarios', () => {
       expect(data.retryAfter).toBeGreaterThan(0)
     })
 
-    it('should include security headers even on 429 response', async () => {
+    it('should not include browser security headers on 429 response (mobile proxy)', async () => {
       const bucket = Math.floor(Date.now() / (60 * 1000))
       const key = `RATE_LIMIT:health:unknown:${bucket}`
       await env.EEN_OAUTH_SESSIONS.put(key, '999', { expirationTtl: 120 })
 
       const response = await fetchWithMetrics('http://localhost/health', {
-        method: 'GET',
-        headers: { Origin: 'http://localhost:5173' }
+        method: 'GET'
       })
 
       expect(response.status).toBe(429)
-      expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
-      expect(response.headers.get('X-Frame-Options')).toBe('DENY')
+      // Mobile proxy does not include browser-specific security headers
+      expect(response.headers.get('X-Frame-Options')).toBeNull()
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull()
     })
   })
 })

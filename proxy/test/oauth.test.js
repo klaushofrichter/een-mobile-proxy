@@ -14,12 +14,9 @@ describe('OAuth endpoints', () => {
   describe('POST /proxy/getAccessToken', () => {
     it('should return 400 if code is missing', async () => {
       const response = await fetchWithMetrics(
-        'http://localhost/proxy/getAccessToken?redirect_uri=http://localhost:5173',
+        'http://localhost/proxy/getAccessToken?redirect_uri=myapp://callback',
         {
-          method: 'POST',
-          headers: {
-            Origin: 'http://localhost:5173'
-          }
+          method: 'POST'
         }
       )
 
@@ -30,10 +27,7 @@ describe('OAuth endpoints', () => {
 
     it('should return 400 if redirect_uri is missing', async () => {
       const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken?code=test-code', {
-        method: 'POST',
-        headers: {
-          Origin: 'http://localhost:5173'
-        }
+        method: 'POST'
       })
 
       expect(response.status).toBe(400)
@@ -47,10 +41,9 @@ describe('OAuth endpoints', () => {
       const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
         method: 'POST',
         headers: {
-          Origin: 'http://localhost:5173',
           'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: 'code=test-code&redirect_uri=http://localhost:5173'
+        body: 'code=test-code&redirect_uri=myapp://callback'
       })
 
       // Should not be 400 (missing params) - may fail at EEN for invalid code
@@ -61,10 +54,9 @@ describe('OAuth endpoints', () => {
       const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
         method: 'POST',
         headers: {
-          Origin: 'http://localhost:5173',
           'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: 'redirect_uri=http://localhost:5173'
+        body: 'redirect_uri=myapp://callback'
       })
 
       expect(response.status).toBe(400)
@@ -76,7 +68,6 @@ describe('OAuth endpoints', () => {
       const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
         method: 'POST',
         headers: {
-          Origin: 'http://localhost:5173',
           'Content-Type': 'application/x-www-form-urlencoded'
         },
         body: 'code=test-code'
@@ -88,20 +79,19 @@ describe('OAuth endpoints', () => {
     })
 
     it('should prioritize body params over query params', async () => {
-      // Body has valid redirect_uri, query has evil.com
+      // Body has valid redirect_uri (myapp scheme), query has evil.com (https scheme - not allowed)
       const response = await fetchWithMetrics(
         'http://localhost/proxy/getAccessToken?code=query-code&redirect_uri=https://evil.com/callback',
         {
           method: 'POST',
           headers: {
-            Origin: 'http://localhost:5173',
             'Content-Type': 'application/x-www-form-urlencoded'
           },
-          body: 'code=body-code&redirect_uri=http://localhost:5173'
+          body: 'code=body-code&redirect_uri=myapp://callback'
         }
       )
 
-      // Should NOT be 400 for domain validation - body's valid URI takes priority
+      // Should NOT be 400 for scheme validation - body's valid URI takes priority
       expect(response.status).not.toBe(400)
     })
 
@@ -109,10 +99,9 @@ describe('OAuth endpoints', () => {
       const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
         method: 'POST',
         headers: {
-          Origin: 'http://localhost:5173',
           'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8'
         },
-        body: 'code=test-code&redirect_uri=http://localhost:5173'
+        body: 'code=test-code&redirect_uri=myapp://callback'
       })
 
       // Should not be 400 (missing params) - charset is valid Content-Type parameter
@@ -121,12 +110,9 @@ describe('OAuth endpoints', () => {
 
     it('should fall back to query string when no Content-Type header set', async () => {
       const response = await fetchWithMetrics(
-        'http://localhost/proxy/getAccessToken?code=test-code&redirect_uri=http://localhost:5173',
+        'http://localhost/proxy/getAccessToken?code=test-code&redirect_uri=myapp://callback',
         {
-          method: 'POST',
-          headers: {
-            Origin: 'http://localhost:5173'
-          }
+          method: 'POST'
         }
       )
 
@@ -136,12 +122,9 @@ describe('OAuth endpoints', () => {
   })
 
   describe('POST /proxy/refreshAccessToken', () => {
-    it('should return 401 if no session cookie', async () => {
+    it('should return 401 if no Bearer token', async () => {
       const response = await fetchWithMetrics('http://localhost/proxy/refreshAccessToken', {
-        method: 'POST',
-        headers: {
-          Origin: 'http://localhost:5173'
-        }
+        method: 'POST'
       })
 
       expect(response.status).toBe(401)
@@ -153,8 +136,7 @@ describe('OAuth endpoints', () => {
       const response = await fetchWithMetrics('http://localhost/proxy/refreshAccessToken', {
         method: 'POST',
         headers: {
-          Origin: 'http://localhost:5173',
-          Cookie: 'sessionId=invalid-session-id-test-12345'
+          Authorization: 'Bearer invalid-session-id-test-12345'
         }
       })
 
@@ -165,12 +147,9 @@ describe('OAuth endpoints', () => {
   })
 
   describe('POST /proxy/revoke', () => {
-    it('should return 401 if no session cookie', async () => {
+    it('should return 401 if no Bearer token', async () => {
       const response = await fetchWithMetrics('http://localhost/proxy/revoke', {
-        method: 'POST',
-        headers: {
-          Origin: 'http://localhost:5173'
-        }
+        method: 'POST'
       })
 
       expect(response.status).toBe(401)
@@ -178,12 +157,11 @@ describe('OAuth endpoints', () => {
       expect(data.error).toContain('No session')
     })
 
-    it('should succeed and clear cookie even if session not found', async () => {
+    it('should succeed even if session not found (no cookie clearing)', async () => {
       const response = await fetchWithMetrics('http://localhost/proxy/revoke', {
         method: 'POST',
         headers: {
-          Origin: 'http://localhost:5173',
-          Cookie: 'sessionId=non-existent-session-12345'
+          Authorization: 'Bearer non-existent-session-12345'
         }
       })
 
@@ -192,9 +170,9 @@ describe('OAuth endpoints', () => {
       const data = await response.json()
       expect(data.message).toContain('revoked')
 
-      // Check cookie is cleared
+      // Mobile proxy should not set cookies
       const setCookie = response.headers.get('Set-Cookie')
-      expect(setCookie).toContain('Max-Age=0')
+      expect(setCookie).toBeNull()
     })
   })
 })

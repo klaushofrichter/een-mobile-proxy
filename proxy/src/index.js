@@ -1,8 +1,16 @@
 /**
- * EEN OAuth Proxy - Cloudflare Worker
+ * EEN Mobile OAuth Proxy - Cloudflare Worker
  *
- * This worker handles OAuth authentication with Eagle Eye Networks (EEN) services.
- * It keeps CLIENT_ID and CLIENT_SECRET secure on the server side.
+ * This worker handles OAuth authentication with Eagle Eye Networks (EEN) services
+ * for mobile (iOS/Android) applications. It keeps CLIENT_ID and CLIENT_SECRET
+ * secure on the server side.
+ *
+ * Key differences from the web proxy (een-oauth-proxy):
+ *   - No CORS headers (native mobile clients don't need CORS)
+ *   - No cookies -- sessions are identified via Authorization: Bearer <sessionId>
+ *   - No Origin header requirement (mobile HTTP clients don't send Origin)
+ *   - Redirect URIs validated by scheme (e.g., myapp://) instead of origin domain
+ *   - No browser-specific security headers (X-Frame-Options, CSP, HSTS)
  *
  * Endpoints:
  *   POST /proxy/getAccessToken     - Exchange authorization code for tokens
@@ -337,22 +345,8 @@ function parseHttpsBaseUrl(httpsBaseUrl, env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
-    const origin = request.headers.get('Origin')
 
-    // Validate origin
-    const corsResult = validateOrigin(origin, env)
-    if (!corsResult.valid) {
-      return new Response('Forbidden: Invalid origin', { status: 403 })
-    }
-
-    // CSRF protection: Require Origin header for state-changing requests
-    // Requests without Origin (e.g., curl) are blocked for POST/DELETE to prevent CSRF
-    if ((request.method === 'POST' || request.method === 'DELETE') && !origin) {
-      return new Response('Forbidden: Origin header required', { status: 403 })
-    }
-
-    // Rate limiting check - applies to all requests including OPTIONS preflight
-    // This prevents attackers from using OPTIONS floods to probe the server
+    // Rate limiting check
     const rateLimitResult = await checkRateLimit(request, url, env)
     if (rateLimitResult.limited) {
       const response = jsonResponse(
@@ -364,27 +358,19 @@ export default {
         429
       )
       response.headers.set('Retry-After', String(rateLimitResult.retryAfter))
-      return addCorsHeaders(response, corsResult.origin, env)
-    }
-
-    // Handle CORS preflight (after rate limit check)
-    if (request.method === 'OPTIONS') {
-      return handleCorsPreflightRequest(corsResult.origin, env)
+      return response
     }
 
     try {
       // Route requests
-      const response = await routeRequest(url, request, env)
-
-      return addCorsHeaders(response, corsResult.origin, env)
+      return await routeRequest(url, request, env)
     } catch (error) {
       debugError(env, 'Request error:', error)
       // Never expose internal error details to clients - use generic message
-      const errorResponse = new Response(
+      return new Response(
         JSON.stringify({ error: 'Internal server error' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       )
-      return addCorsHeaders(errorResponse, corsResult.origin, env)
     }
   }
 }
@@ -594,12 +580,6 @@ async function handleGetAccessToken(url, request, env) {
   response.headers.set('Cache-Control', 'no-store')
   response.headers.set('Pragma', 'no-cache')
 
-  // Set session cookie
-  response.headers.append(
-    'Set-Cookie',
-    `sessionId=${sessionId}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${ttl}`
-  )
-
   return response
 }
 
@@ -713,14 +693,7 @@ async function handleRevoke(request, env) {
     await env.EEN_OAUTH_SESSIONS.delete(sessionId)
   }
 
-  // Clear session cookie
-  const response = jsonResponse({ message: 'Token revoked successfully' })
-  response.headers.append(
-    'Set-Cookie',
-    'sessionId=; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=0'
-  )
-
-  return response
+  return jsonResponse({ message: 'Token revoked successfully' })
 }
 
 // ============================================================================
@@ -895,20 +868,12 @@ async function handleAdminRevokeAll(request, env) {
     }
   }
 
-  // Clear current session cookie
-  const response = jsonResponse({
+  return jsonResponse({
     message: 'All tokens revoked',
     revokedSessions: revokedCount,
     errors: errorCount,
     ...(truncated && { truncated })
   })
-
-  response.headers.append(
-    'Set-Cookie',
-    'sessionId=; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=0'
-  )
-
-  return response
 }
 
 // ============================================================================
@@ -1165,144 +1130,57 @@ async function handleAdminRateLimitStats(request, env) {
 // ============================================================================
 
 /**
- * Get list of allowed origins from environment
+ * Get list of allowed URI schemes from environment
+ * For mobile apps, redirect URIs use custom schemes (e.g., myapp://callback)
+ * ALLOWED_SCHEMES should be a comma-separated list of scheme names (without "://")
  */
-function getAllowedOrigins(env) {
-  const allowedOriginsStr = env.ALLOWED_ORIGINS || ''
-  const allowedOrigins = allowedOriginsStr
+function getAllowedSchemes(env) {
+  const allowedSchemesStr = env.ALLOWED_SCHEMES || ''
+  const schemes = allowedSchemesStr
     .split(',')
-    .map(o => o.trim())
-    .filter(o => o.length > 0)
+    .map(s => s.trim().toLowerCase())
+    .filter(s => s.length > 0)
 
-  // In development, also allow 127.0.0.1:3333 (EEN redirect URI)
-  // Note: We intentionally do NOT allow localhost:3333 because EEN OAuth
-  // requires exact redirect URI match. Since EEN is configured for
-  // http://127.0.0.1:3333, using localhost would fail OAuth callbacks
-  // even though localhost and 127.0.0.1 resolve to the same address.
+  // In development, also allow http for local testing
   if (env.ENVIRONMENT === 'development') {
-    allowedOrigins.push('http://127.0.0.1:3333')
+    if (!schemes.includes('http')) {
+      schemes.push('http')
+    }
   }
 
-  return allowedOrigins
+  return schemes
 }
 
 /**
- * Validate redirect_uri against allowed origins (prevent open redirect attacks)
- * The redirect_uri's origin must match one of the allowed origins
+ * Validate redirect_uri against allowed schemes (prevent open redirect attacks)
+ * For mobile apps, the redirect_uri's scheme must match one of the allowed schemes
  * @returns {Object} { valid: boolean, error?: string }
  */
 function validateRedirectUri(redirectUri, env) {
-  let url
-  try {
-    url = new URL(redirectUri)
-  } catch (e) {
-    // Invalid URL format
-    return { valid: false, error: 'Invalid redirect_uri: malformed URL' }
+  if (!redirectUri || typeof redirectUri !== 'string') {
+    return { valid: false, error: 'Invalid redirect_uri: missing or empty' }
   }
 
-  const redirectOrigin = url.origin
-  const allowedOrigins = getAllowedOrigins(env)
+  // Extract scheme from redirect URI (everything before "://")
+  const schemeMatch = redirectUri.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//)
+  if (!schemeMatch) {
+    return { valid: false, error: 'Invalid redirect_uri: malformed URL (no scheme)' }
+  }
 
-  if (!allowedOrigins.includes(redirectOrigin)) {
-    // Check if this is a localhost vs 127.0.0.1 mismatch - provide helpful error
-    if (redirectOrigin.includes('localhost') &&
-        allowedOrigins.some(o => o.includes('127.0.0.1'))) {
-      return {
-        valid: false,
-        error: 'Invalid redirect_uri: use 127.0.0.1 instead of localhost (EEN requires exact match)'
-      }
-    }
-    return { valid: false, error: 'Invalid redirect_uri: domain not allowed' }
+  const scheme = schemeMatch[1].toLowerCase()
+  const allowedSchemes = getAllowedSchemes(env)
+
+  if (allowedSchemes.length === 0) {
+    return { valid: false, error: 'No allowed schemes configured (set ALLOWED_SCHEMES)' }
+  }
+
+  if (!allowedSchemes.includes(scheme)) {
+    return { valid: false, error: `Invalid redirect_uri: scheme '${scheme}' not allowed` }
   }
 
   return { valid: true }
 }
 
-/**
- * Validate request origin against allowed origins
- */
-function validateOrigin(origin, env) {
-  if (!origin) {
-    // Allow requests without origin (e.g., from tools like curl)
-    return { valid: true, origin: '*' }
-  }
-
-  const allowedOrigins = getAllowedOrigins(env)
-
-  if (allowedOrigins.includes(origin)) {
-    // In production, enforce HTTPS (except for local testing if allowed)
-    if (env.ENVIRONMENT === 'production' && !origin.startsWith('https://')) {
-      // Allow localhost/127.0.0.1 even in production as it is a secure context
-      const isLocalhost = origin.includes('://localhost') || origin.includes('://127.0.0.1') || origin.includes('://[::1]')
-      if (!isLocalhost) {
-        return { valid: false, origin: null }
-      }
-    }
-    return { valid: true, origin }
-  }
-
-  return { valid: false, origin: null }
-}
-
-/**
- * Handle CORS preflight requests
- */
-function handleCorsPreflightRequest(origin, env) {
-  return new Response(null, {
-    status: 204,
-    headers: getCorsHeaders(origin, env)
-  })
-}
-
-/**
- * Add CORS headers to response
- */
-function addCorsHeaders(response, origin, env) {
-  const newHeaders = new Headers(response.headers)
-  const corsHeaders = getCorsHeaders(origin, env)
-
-  for (const [key, value] of Object.entries(corsHeaders)) {
-    newHeaders.set(key, value)
-  }
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: newHeaders
-  })
-}
-
-/**
- * Get CORS and security headers
- * @param {string} origin - The request origin
- * @param {Object} env - Environment bindings (optional, for conditional headers)
- */
-function getCorsHeaders(origin, env = null) {
-  const headers = {
-    // CORS headers
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
-    'Access-Control-Max-Age': '86400',
-    // Security headers
-    'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'DENY',
-    'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
-    'Referrer-Policy': 'strict-origin-when-cross-origin'
-  }
-
-  // Credentials can only be true if Origin is NOT '*'
-  if (origin !== '*') {
-    headers['Access-Control-Allow-Credentials'] = 'true'
-  }
-
-  // Only add HSTS in production (can cause issues with localhost in development)
-  if (!env || env.ENVIRONMENT !== 'development') {
-    headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-  }
-
-  return headers
-}
 
 /**
  * Extract session ID from cookie header
@@ -1313,43 +1191,27 @@ function getCorsHeaders(origin, env = null) {
 const SESSION_ID_REGEX = /^[a-zA-Z0-9_-]{20,50}$/
 
 function getSessionId(request, env) {
-  // Check Authorization header first (Bearer token)
+  // Mobile apps use Authorization: Bearer <sessionId> exclusively (no cookies)
   const authHeader = request.headers.get('Authorization')
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7).trim()
-    
-    // Validate format
-    // Explicit length check prevents ReDoS on the regex
-    if (token && token.length <= 50) {
-      if (SESSION_ID_REGEX.test(token)) {
-        return token
-      } else {
-        debugLog(env, 'Invalid session ID format in Authorization header')
-      }
-    } else {
-      debugLog(env, 'Session ID in Authorization header too long or empty')
-    }
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null
   }
 
-  const cookieHeader = request.headers.get('Cookie')
-  if (!cookieHeader) return null
+  const token = authHeader.substring(7).trim()
 
-  const cookies = cookieHeader.split(';').map(c => c.trim())
-  for (const cookie of cookies) {
-    const [name, ...valueParts] = cookie.split('=')
-    const value = valueParts.join('=')
-    if (name === 'sessionId') {
-      // Validate session ID format (alphanumeric + hyphens/underscores only)
-      if (!value || !SESSION_ID_REGEX.test(value)) {
-        // Use conditional logging to prevent info leakage in production
-        debugLog(env, 'Invalid session ID format')
-        return null
-      }
-      return value
-    }
+  // Validate format
+  // Explicit length check prevents ReDoS on the regex
+  if (!token || token.length > 50) {
+    debugLog(env, 'Session ID in Authorization header too long or empty')
+    return null
   }
 
-  return null
+  if (!SESSION_ID_REGEX.test(token)) {
+    debugLog(env, 'Invalid session ID format in Authorization header')
+    return null
+  }
+
+  return token
 }
 
 /**

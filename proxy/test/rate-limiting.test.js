@@ -333,8 +333,8 @@ describe('Rate Limiting', () => {
     })
   })
 
-  describe('CORS and Rate Limiting', () => {
-    it('should include CORS headers in rate limit responses', async () => {
+  describe('Rate Limiting Responses', () => {
+    it('should not include CORS headers in rate limit responses (mobile proxy)', async () => {
       const bucket = Math.floor(Date.now() / (60 * 1000))
       const key = `RATE_LIMIT:health:ip|10.0.0.100:${bucket}`
       await env.EEN_OAUTH_SESSIONS.put(key, '100', { expirationTtl: 120 })
@@ -342,51 +342,13 @@ describe('Rate Limiting', () => {
       const response = await fetchWithMetrics('http://localhost/health', {
         method: 'GET',
         headers: {
-          Origin: 'http://localhost:5173',
           'CF-Connecting-IP': '10.0.0.100'
         }
       })
 
       expect(response.status).toBe(429)
-      expect(response.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173')
-    })
-
-    it('should rate limit CORS preflight requests', async () => {
-      // OPTIONS requests should be rate limited to prevent OPTIONS flood attacks
-      const bucket = Math.floor(Date.now() / (60 * 1000))
-      const key = `RATE_LIMIT:health:ip|10.0.0.200:${bucket}`
-      await env.EEN_OAUTH_SESSIONS.put(key, '100', { expirationTtl: 120 })
-
-      const response = await fetchWithMetrics('http://localhost/health', {
-        method: 'OPTIONS',
-        headers: {
-          Origin: 'http://localhost:5173',
-          'CF-Connecting-IP': '10.0.0.200'
-        }
-      })
-      expect(response.status).toBe(429)
-    })
-
-    it('should count OPTIONS requests toward rate limit', async () => {
-      // Clear any existing counters
-      const existingKeys = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:health:ip|10.0.0.201' })
-      for (const key of existingKeys.keys) {
-        await env.EEN_OAUTH_SESSIONS.delete(key.name)
-      }
-
-      // Make an OPTIONS request
-      const response = await fetchWithMetrics('http://localhost/health', {
-        method: 'OPTIONS',
-        headers: {
-          Origin: 'http://localhost:5173',
-          'CF-Connecting-IP': '10.0.0.201'
-        }
-      })
-      expect(response.status).toBe(204)
-
-      // Check that the counter was incremented
-      const listResult = await env.EEN_OAUTH_SESSIONS.list({ prefix: 'RATE_LIMIT:health:ip|10.0.0.201' })
-      expect(listResult.keys.length).toBeGreaterThan(0)
+      // Mobile proxy does not include CORS headers
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull()
     })
   })
 })

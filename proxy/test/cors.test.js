@@ -1,48 +1,39 @@
 import { describe, it, expect } from 'vitest'
 import { fetchWithMetrics } from './test-utils.js'
 
-describe('CORS validation', () => {
-  it('should reject requests from disallowed origins', async () => {
-    const response = await fetchWithMetrics('http://localhost/health', {
-      headers: {
-        Origin: 'https://malicious-site.com'
-      }
-    })
-
-    expect(response.status).toBe(403)
-    const text = await response.text()
-    expect(text).toContain('Forbidden')
-  })
-
-  it('should allow requests from allowed origins', async () => {
-    const response = await fetchWithMetrics('http://localhost/health', {
-      headers: {
-        Origin: 'http://localhost:5173'
-      }
-    })
+describe('Mobile proxy - no CORS', () => {
+  it('should not return CORS headers', async () => {
+    const response = await fetchWithMetrics('http://localhost/health')
 
     expect(response.status).toBe(200)
-    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173')
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull()
+    expect(response.headers.get('Access-Control-Allow-Credentials')).toBeNull()
   })
 
-  it('should handle CORS preflight requests', async () => {
+  it('should return 404 for OPTIONS preflight requests (not supported)', async () => {
     const response = await fetchWithMetrics('http://localhost/proxy/getAccessToken', {
       method: 'OPTIONS',
       headers: {
-        Origin: 'http://localhost:5173',
         'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'Content-Type'
       }
     })
 
-    expect(response.status).toBe(204)
-    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173')
-    expect(response.headers.get('Access-Control-Allow-Methods')).toContain('POST')
-    expect(response.headers.get('Access-Control-Allow-Credentials')).toBe('true')
+    expect(response.status).toBe(404)
   })
 
-  it('should allow requests without origin header', async () => {
+  it('should allow requests without Origin header', async () => {
     const response = await fetchWithMetrics('http://localhost/health')
+
+    expect(response.status).toBe(200)
+  })
+
+  it('should allow requests with any Origin header (no CORS enforcement)', async () => {
+    const response = await fetchWithMetrics('http://localhost/health', {
+      headers: {
+        Origin: 'https://any-origin.com'
+      }
+    })
 
     expect(response.status).toBe(200)
   })
@@ -50,11 +41,7 @@ describe('CORS validation', () => {
 
 describe('Health endpoint', () => {
   it('should return ok status', async () => {
-    const response = await fetchWithMetrics('http://localhost/health', {
-      headers: {
-        Origin: 'http://localhost:5173'
-      }
-    })
+    const response = await fetchWithMetrics('http://localhost/health')
 
     expect(response.status).toBe(200)
     const data = await response.json()
@@ -64,11 +51,7 @@ describe('Health endpoint', () => {
 
 describe('404 handling', () => {
   it('should return 404 for unknown routes', async () => {
-    const response = await fetchWithMetrics('http://localhost/unknown-route', {
-      headers: {
-        Origin: 'http://localhost:5173'
-      }
-    })
+    const response = await fetchWithMetrics('http://localhost/unknown-route')
 
     expect(response.status).toBe(404)
   })

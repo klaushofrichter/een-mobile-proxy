@@ -39,11 +39,7 @@ describe('Admin endpoints', () => {
 
   describe('GET /admin/version', () => {
     it('should return 401 if not authenticated', async () => {
-      const response = await fetchWithMetrics('http://localhost/admin/version', {
-        headers: {
-          Origin: 'http://localhost:5173'
-        }
-      })
+      const response = await fetchWithMetrics('http://localhost/admin/version')
 
       expect(response.status).toBe(401)
     })
@@ -51,8 +47,7 @@ describe('Admin endpoints', () => {
     it('should return 403 if not admin', async () => {
       const response = await fetchWithMetrics('http://localhost/admin/version', {
         headers: {
-          Origin: 'http://localhost:5173',
-          Cookie: `sessionId=${regularSessionId}`
+          Authorization: `Bearer ${regularSessionId}`
         }
       })
 
@@ -64,8 +59,7 @@ describe('Admin endpoints', () => {
     it('should return version for admin users', async () => {
       const response = await fetchWithMetrics('http://localhost/admin/version', {
         headers: {
-          Origin: 'http://localhost:5173',
-          Cookie: `sessionId=${adminSessionId}`
+          Authorization: `Bearer ${adminSessionId}`
         }
       })
 
@@ -77,11 +71,7 @@ describe('Admin endpoints', () => {
 
   describe('GET /admin/sessionsCount', () => {
     it('should return 401 if not authenticated', async () => {
-      const response = await fetchWithMetrics('http://localhost/admin/sessionsCount', {
-        headers: {
-          Origin: 'http://localhost:5173'
-        }
-      })
+      const response = await fetchWithMetrics('http://localhost/admin/sessionsCount')
 
       expect(response.status).toBe(401)
     })
@@ -89,8 +79,7 @@ describe('Admin endpoints', () => {
     it('should return session count for admin users', async () => {
       const response = await fetchWithMetrics('http://localhost/admin/sessionsCount', {
         headers: {
-          Origin: 'http://localhost:5173',
-          Cookie: `sessionId=${adminSessionId}`
+          Authorization: `Bearer ${adminSessionId}`
         }
       })
 
@@ -106,8 +95,7 @@ describe('Admin endpoints', () => {
       const response = await fetchWithMetrics('http://localhost/admin/removeSessions', {
         method: 'DELETE',
         headers: {
-          Origin: 'http://localhost:5173',
-          Cookie: `sessionId=${regularSessionId}`
+          Authorization: `Bearer ${regularSessionId}`
         }
       })
 
@@ -118,8 +106,7 @@ describe('Admin endpoints', () => {
       const response = await fetchWithMetrics('http://localhost/admin/removeSessions', {
         method: 'DELETE',
         headers: {
-          Origin: 'http://localhost:5173',
-          Cookie: `sessionId=${adminSessionId}`
+          Authorization: `Bearer ${adminSessionId}`
         }
       })
 
@@ -147,8 +134,7 @@ describe('Admin endpoints', () => {
       const response = await fetchWithMetrics('http://localhost/admin/revokeAll', {
         method: 'POST',
         headers: {
-          Origin: 'http://localhost:5173',
-          Cookie: `sessionId=${regularSessionId}`
+          Authorization: `Bearer ${regularSessionId}`
         }
       })
 
@@ -159,18 +145,13 @@ describe('Admin endpoints', () => {
       const response = await fetchWithMetrics('http://localhost/admin/revokeAll', {
         method: 'POST',
         headers: {
-          Origin: 'http://localhost:5173',
-          Cookie: `sessionId=${adminSessionId}`
+          Authorization: `Bearer ${adminSessionId}`
         }
       })
 
       expect(response.status).toBe(200)
       const data = await response.json()
       expect(data.revokedSessions).toBe(2)
-
-      // Verify cookie is cleared
-      const setCookie = response.headers.get('Set-Cookie')
-      expect(setCookie).toContain('Max-Age=0')
 
       // Verify all sessions are deleted
       const adminSession = await env.EEN_OAUTH_SESSIONS.get(adminSessionId)

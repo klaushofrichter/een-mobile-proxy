@@ -1,5 +1,5 @@
 /**
- * Performance Benchmark Tests
+ * Performance Benchmark Tests (Mobile Proxy)
  *
  * Systematically tests all API endpoints and generates a comprehensive
  * performance report at the end.
@@ -198,7 +198,7 @@ describe('Performance Benchmarks', () => {
     it('should measure /health response time (10 iterations)', async () => {
       for (let i = 0; i < 10; i++) {
         const { response, duration } = await measure('GET /health', 'http://localhost/health', {
-          headers: { Origin: 'http://localhost:5173', 'CF-Connecting-IP': '10.99.99.1' }
+          headers: { 'CF-Connecting-IP': '10.99.99.1' }
         })
         expect(response.status).toBe(200)
       }
@@ -212,8 +212,7 @@ describe('Performance Benchmarks', () => {
           'POST /proxy/getAccessToken (400)',
           'http://localhost/proxy/getAccessToken',
           {
-            method: 'POST',
-            headers: { Origin: 'http://localhost:5173' }
+            method: 'POST'
           }
         )
         expect(response.status).toBe(400)
@@ -226,8 +225,7 @@ describe('Performance Benchmarks', () => {
           'POST /proxy/refreshAccessToken (401)',
           'http://localhost/proxy/refreshAccessToken',
           {
-            method: 'POST',
-            headers: { Origin: 'http://localhost:5173' }
+            method: 'POST'
           }
         )
         expect(response.status).toBe(401)
@@ -242,8 +240,7 @@ describe('Performance Benchmarks', () => {
           {
             method: 'POST',
             headers: {
-              Origin: 'http://localhost:5173',
-              Cookie: 'sessionId=invalid-session-test-id-12345'
+              Authorization: 'Bearer invalid-session-test-id-12345'
             }
           }
         )
@@ -257,8 +254,7 @@ describe('Performance Benchmarks', () => {
           'POST /proxy/revoke (401)',
           'http://localhost/proxy/revoke',
           {
-            method: 'POST',
-            headers: { Origin: 'http://localhost:5173' }
+            method: 'POST'
           }
         )
         expect(response.status).toBe(401)
@@ -267,7 +263,7 @@ describe('Performance Benchmarks', () => {
 
     it('should measure POST /proxy/revoke (valid session)', async () => {
       // Create a temporary session for this test
-      const tempSessionId = `temp-session-${Date.now()}`
+      const tempSessionId = `temp-session-perf-test-${Date.now()}`
       await env.EEN_OAUTH_SESSIONS.put(
         tempSessionId,
         JSON.stringify({
@@ -283,8 +279,7 @@ describe('Performance Benchmarks', () => {
         {
           method: 'POST',
           headers: {
-            Origin: 'http://localhost:5173',
-            Cookie: `sessionId=${tempSessionId}`
+            Authorization: `Bearer ${tempSessionId}`
           }
         }
       )
@@ -300,8 +295,7 @@ describe('Performance Benchmarks', () => {
           'http://localhost/admin/sessionsCount',
           {
             headers: {
-              Origin: 'http://localhost:5173',
-              Cookie: `sessionId=${adminSessionId}`
+              Authorization: `Bearer ${adminSessionId}`
             }
           }
         )
@@ -314,9 +308,7 @@ describe('Performance Benchmarks', () => {
         const { response } = await measure(
           'GET /admin/sessionsCount (401)',
           'http://localhost/admin/sessionsCount',
-          {
-            headers: { Origin: 'http://localhost:5173' }
-          }
+          {}
         )
         expect(response.status).toBe(401)
       }
@@ -329,8 +321,7 @@ describe('Performance Benchmarks', () => {
           'http://localhost/admin/sessionsCount',
           {
             headers: {
-              Origin: 'http://localhost:5173',
-              Cookie: `sessionId=${userSessionId}`
+              Authorization: `Bearer ${userSessionId}`
             }
           }
         )
@@ -345,8 +336,7 @@ describe('Performance Benchmarks', () => {
           'http://localhost/admin/version',
           {
             headers: {
-              Origin: 'http://localhost:5173',
-              Cookie: `sessionId=${adminSessionId}`
+              Authorization: `Bearer ${adminSessionId}`
             }
           }
         )
@@ -373,44 +363,11 @@ describe('Performance Benchmarks', () => {
         {
           method: 'DELETE',
           headers: {
-            Origin: 'http://localhost:5173',
-            Cookie: `sessionId=${adminSessionId}`
+            Authorization: `Bearer ${adminSessionId}`
           }
         }
       )
       expect(response.status).toBe(200)
-    })
-  })
-
-  describe('CORS Handling', () => {
-    it('should measure OPTIONS preflight request', async () => {
-      for (let i = 0; i < 5; i++) {
-        const { response } = await measure(
-          'OPTIONS /proxy/getAccessToken (204)',
-          'http://localhost/proxy/getAccessToken',
-          {
-            method: 'OPTIONS',
-            headers: {
-              Origin: 'http://localhost:5173',
-              'Access-Control-Request-Method': 'POST'
-            }
-          }
-        )
-        expect(response.status).toBe(204)
-      }
-    })
-
-    it('should measure rejected CORS request', async () => {
-      for (let i = 0; i < 5; i++) {
-        const { response } = await measure(
-          'GET /health (CORS rejected)',
-          'http://localhost/health',
-          {
-            headers: { Origin: 'https://malicious-site.com' }
-          }
-        )
-        expect(response.status).toBe(403)
-      }
     })
   })
 
@@ -420,9 +377,7 @@ describe('Performance Benchmarks', () => {
         const { response } = await measure(
           'GET /unknown-route (404)',
           'http://localhost/unknown-route',
-          {
-            headers: { Origin: 'http://localhost:5173' }
-          }
+          {}
         )
         expect(response.status).toBe(404)
       }
