@@ -1,167 +1,127 @@
 /**
- * Unit tests for admin service URL validation functions
+ * Unit tests for admin service (same-origin, relative URLs)
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { isValidProxyUrl, setProxyUrl, getProxyUrl, getProxyUrlOrThrow, getProxyOptions, getRateLimitStats } from './admin.js'
-
-describe('Admin Service - URL Validation', () => {
-  beforeEach(() => {
-    // Clear localStorage before each test
-    localStorage.clear()
-  })
-
-  describe('isValidProxyUrl', () => {
-    it('should accept localhost URLs', () => {
-      expect(isValidProxyUrl('http://localhost:8787')).toBe(true)
-      expect(isValidProxyUrl('http://localhost')).toBe(true)
-      expect(isValidProxyUrl('https://localhost:8787')).toBe(true)
-    })
-
-    it('should accept 127.0.0.1 URLs', () => {
-      expect(isValidProxyUrl('http://127.0.0.1:8787')).toBe(true)
-      expect(isValidProxyUrl('http://127.0.0.1')).toBe(true)
-      expect(isValidProxyUrl('https://127.0.0.1:3000')).toBe(true)
-    })
-
-    it('should accept IPv6 localhost (::1) URLs', () => {
-      expect(isValidProxyUrl('http://[::1]:8787')).toBe(true)
-      expect(isValidProxyUrl('http://[::1]')).toBe(true)
-      expect(isValidProxyUrl('https://[::1]:3000')).toBe(true)
-    })
-
-    it('should reject malformed URLs', () => {
-      expect(isValidProxyUrl('not-a-url')).toBe(false)
-      expect(isValidProxyUrl('')).toBe(false)
-      expect(isValidProxyUrl('http://')).toBe(false)
-    })
-
-    it('should reject URLs with unknown hostnames', () => {
-      expect(isValidProxyUrl('http://evil.com')).toBe(false)
-      expect(isValidProxyUrl('https://attacker.example.com')).toBe(false)
-      expect(isValidProxyUrl('http://192.168.1.1')).toBe(false)
-    })
-
-    it('should handle URLs with paths and query strings', () => {
-      expect(isValidProxyUrl('http://localhost:8787/api')).toBe(true)
-      expect(isValidProxyUrl('http://localhost:8787?foo=bar')).toBe(true)
-      expect(isValidProxyUrl('http://evil.com/api')).toBe(false)
-    })
-
-    it('should handle case sensitivity in hostnames', () => {
-      expect(isValidProxyUrl('http://LOCALHOST:8787')).toBe(true)
-      expect(isValidProxyUrl('http://LocalHost:8787')).toBe(true)
-    })
-  })
-
-  describe('setProxyUrl', () => {
-    it('should store valid localhost URLs and return true', () => {
-      const result = setProxyUrl('http://localhost:8787')
-      expect(result).toBe(true)
-      expect(localStorage.getItem('een_proxy_url')).toBe('http://localhost:8787')
-    })
-
-    it('should store valid 127.0.0.1 URLs and return true', () => {
-      const result = setProxyUrl('http://127.0.0.1:8787')
-      expect(result).toBe(true)
-      expect(localStorage.getItem('een_proxy_url')).toBe('http://127.0.0.1:8787')
-    })
-
-    it('should reject invalid URLs and return false', () => {
-      const result = setProxyUrl('http://evil.com')
-      expect(result).toBe(false)
-      expect(localStorage.getItem('een_proxy_url')).toBeNull()
-    })
-
-    it('should reject malformed URLs and return false', () => {
-      const result = setProxyUrl('not-a-url')
-      expect(result).toBe(false)
-      expect(localStorage.getItem('een_proxy_url')).toBeNull()
-    })
-
-    it('should not overwrite valid URL with invalid URL', () => {
-      setProxyUrl('http://localhost:8787')
-      const result = setProxyUrl('http://evil.com')
-      expect(result).toBe(false)
-      expect(localStorage.getItem('een_proxy_url')).toBe('http://localhost:8787')
-    })
-  })
-
-  describe('getProxyUrl', () => {
-    it('should return stored URL when valid', () => {
-      localStorage.setItem('een_proxy_url', 'http://localhost:8787')
-      expect(getProxyUrl()).toBe('http://localhost:8787')
-    })
-
-    it('should return default when no URL stored', () => {
-      const url = getProxyUrl()
-      // In dev environment, should return localhost default
-      expect(url).toBe('http://localhost:8787')
-    })
-
-    it('should return stored 127.0.0.1 URL', () => {
-      localStorage.setItem('een_proxy_url', 'http://127.0.0.1:8787')
-      expect(getProxyUrl()).toBe('http://127.0.0.1:8787')
-    })
-
-    it('should return stored IPv6 localhost URL', () => {
-      localStorage.setItem('een_proxy_url', 'http://[::1]:9000')
-      expect(getProxyUrl()).toBe('http://[::1]:9000')
-    })
-  })
-
-  describe('getProxyOptions', () => {
-    it('should return array of options', () => {
-      const options = getProxyOptions()
-      expect(Array.isArray(options)).toBe(true)
-    })
-
-    it('should include local option in development', () => {
-      const options = getProxyOptions()
-      const localOption = options.find(opt => opt.value === 'http://localhost:8787')
-      expect(localOption).toBeTruthy()
-    })
-  })
-
-  describe('getProxyUrlOrThrow', () => {
-    it('should return URL when configured via setProxyUrl', () => {
-      setProxyUrl('http://localhost:8787')
-      expect(getProxyUrlOrThrow()).toBe('http://localhost:8787')
-    })
-
-    it('should return default localhost URL in dev when nothing stored', () => {
-      // In dev environment (import.meta.env.PROD = false), should return default localhost
-      const url = getProxyUrlOrThrow()
-      expect(url).toBe('http://localhost:8787')
-    })
-
-    it('should return stored IPv6 localhost URL', () => {
-      setProxyUrl('http://[::1]:8787')
-      expect(getProxyUrlOrThrow()).toBe('http://[::1]:8787')
-    })
-
-    it('should return same value as getProxyUrl in dev mode', () => {
-      // Verify getProxyUrlOrThrow returns exactly what getProxyUrl returns
-      // This ensures the pass-through behavior is correct
-      const proxyUrl = getProxyUrl()
-      const proxyUrlOrThrow = getProxyUrlOrThrow()
-      expect(proxyUrlOrThrow).toBe(proxyUrl)
-    })
-
-    // Note: The throw behavior when getProxyUrl() returns null occurs only in production
-    // when VITE_PROXY_URL is not set. This is tested via Playwright integration tests
-    // that verify proper error handling when the proxy is misconfigured.
-  })
-})
+import { getRateLimitStats, verifyAdminAccess, getHealth, getVersion, getSessionsCount, removeSessions, revokeAll } from './admin.js'
 
 // Mock the auth-headers module to avoid Pinia dependency
 vi.mock('../utils/auth-headers', () => ({
   getAuthHeaders: vi.fn().mockResolvedValue({ 'Authorization': 'Bearer test-session-id' })
 }))
 
+describe('Admin Service - Same-Origin API Calls', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  describe('verifyAdminAccess', () => {
+    it('should return true for admin users', async () => {
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+      expect(await verifyAdminAccess()).toBe(true)
+      expect(global.fetch).toHaveBeenCalledWith('/admin/version', expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer test-session-id' })
+      }))
+    })
+
+    it('should return false for non-admin users (403)', async () => {
+      global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 403 })
+      expect(await verifyAdminAccess()).toBe(false)
+    })
+
+    it('should throw on 401', async () => {
+      global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 401 })
+      await expect(verifyAdminAccess()).rejects.toThrow('Authentication required')
+    })
+
+    it('should use relative URL (no host prefix)', async () => {
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+      await verifyAdminAccess()
+      expect(global.fetch).toHaveBeenCalledWith('/admin/version', expect.any(Object))
+    })
+
+    it('should not include credentials: include (same-origin)', async () => {
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+      await verifyAdminAccess()
+      const callArgs = global.fetch.mock.calls[0][1]
+      expect(callArgs.credentials).toBeUndefined()
+    })
+  })
+
+  describe('getHealth', () => {
+    it('should fetch health with relative URL', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ status: 'ok' })
+      })
+      const result = await getHealth()
+      expect(result.status).toBe('ok')
+      expect(global.fetch).toHaveBeenCalledWith('/health', expect.any(Object))
+    })
+
+    it('should throw on timeout', async () => {
+      global.fetch = vi.fn().mockImplementation(() => new Promise(() => {}))
+      // The function uses AbortController with 10s timeout - we test the error path
+      global.fetch = vi.fn().mockRejectedValue(Object.assign(new Error('Aborted'), { name: 'AbortError' }))
+      await expect(getHealth()).rejects.toThrow('Health check timed out')
+    })
+  })
+
+  describe('getVersion', () => {
+    it('should fetch version with auth headers', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ version: '1.0.0' })
+      })
+      const result = await getVersion()
+      expect(result.version).toBe('1.0.0')
+      expect(global.fetch).toHaveBeenCalledWith('/admin/version', expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer test-session-id' })
+      }))
+    })
+  })
+
+  describe('getSessionsCount', () => {
+    it('should fetch session count', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ sessionCount: 5, truncated: false })
+      })
+      const result = await getSessionsCount()
+      expect(result.sessionCount).toBe(5)
+      expect(global.fetch).toHaveBeenCalledWith('/admin/sessionsCount', expect.any(Object))
+    })
+  })
+
+  describe('removeSessions', () => {
+    it('should send DELETE to relative URL', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ deletedSessions: 3, remainingSessions: 1 })
+      })
+      const result = await removeSessions()
+      expect(result.deletedSessions).toBe(3)
+      expect(global.fetch).toHaveBeenCalledWith('/admin/removeSessions', expect.objectContaining({
+        method: 'DELETE'
+      }))
+    })
+  })
+
+  describe('revokeAll', () => {
+    it('should send POST to relative URL', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ message: 'All tokens revoked' })
+      })
+      await revokeAll()
+      expect(global.fetch).toHaveBeenCalledWith('/admin/revokeAll', expect.objectContaining({
+        method: 'POST'
+      }))
+    })
+  })
+})
+
 describe('Admin Service - getRateLimitStats', () => {
   beforeEach(() => {
-    localStorage.clear()
-    // Don't restore mocks - we need the auth-headers mock to persist
     vi.clearAllMocks()
   })
 
@@ -210,7 +170,7 @@ describe('Admin Service - getRateLimitStats', () => {
     await expect(getRateLimitStats()).rejects.toThrow('Failed to get rate limit stats')
   })
 
-  it('should include credentials in request', async () => {
+  it('should use relative URL and auth headers', async () => {
     const mockStats = { enabled: true, window: 60, limits: {}, byCategory: {}, activeEntries: 0 }
 
     global.fetch = vi.fn().mockResolvedValue({
@@ -221,11 +181,14 @@ describe('Admin Service - getRateLimitStats', () => {
     await getRateLimitStats()
 
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/admin/rateLimitStats'),
+      '/admin/rateLimitStats',
       expect.objectContaining({
-        credentials: 'include'
+        headers: expect.objectContaining({ Authorization: 'Bearer test-session-id' })
       })
     )
+    // Should NOT have credentials: 'include' (same-origin)
+    const callArgs = global.fetch.mock.calls[0][1]
+    expect(callArgs.credentials).toBeUndefined()
   })
 
   it('should handle rate limiting disabled state', async () => {

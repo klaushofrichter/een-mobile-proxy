@@ -9,6 +9,7 @@
     "test:proxy": "cd proxy && npm test",
     "test:perf": "cd proxy && npm run test:perf",
     "test:admin": "cd admin && npm test",
+    "build:admin": "cd admin && npm run build",
     "deploy:proxy": "cd proxy && npm run deploy"
   },
   "devDependencies": {

@@ -315,7 +315,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { getHealth, getProxyUrl, getSessionsCount, getRateLimitStats, removeSessions, revokeAll } from '../services/admin'
+import { getHealth, getSessionsCount, getRateLimitStats, removeSessions, revokeAll } from '../services/admin'
 import packageJson from '../../package.json'
 
 const router = useRouter()
@@ -407,11 +407,11 @@ const logContainer = ref(null)
 const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
 const githubRepoUrl = computed(() => {
-  const baseUrl = import.meta.env.VITE_GITHUB_REPO || 'https://github.com/your-username/een-oauth-proxy'
+  const baseUrl = import.meta.env.VITE_GITHUB_REPO || 'https://github.com/your-username/een-mobile-proxy'
   const branch = import.meta.env.VITE_GITHUB_BRANCH || 'develop'
   return `${baseUrl}/tree/${branch}`
 })
-const proxyUrl = computed(() => getProxyUrl())
+const proxyUrl = computed(() => window.location.origin)
 
 const lastHealthCheckText = computed(() => {
   if (!lastHealthCheck.value) return 'Never'

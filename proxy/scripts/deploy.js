@@ -5,9 +5,10 @@
  *
  * This script:
  * 1. Reads version from package.json
- * 2. Deploys the worker to Cloudflare
- * 3. Sets secrets from .env file
- * 4. Stores DEPLOY_VERSION in KV
+ * 2. Builds the admin SPA (static assets served by the worker)
+ * 3. Deploys the worker to Cloudflare
+ * 4. Sets secrets from .env file
+ * 5. Stores DEPLOY_VERSION in KV
  */
 
 import { execSync } from 'child_process'
@@ -38,9 +39,22 @@ const deployTime = new Date().toISOString().replace('T', ' ').substring(0, 19) +
 const versionString = `${name} - ${version} - ${deployTime}`
 
 console.log('========================================')
-console.log('EEN OAuth Proxy Deployment')
+console.log('EEN Mobile Proxy Deployment')
 console.log('========================================')
 console.log(`Version: ${versionString}`)
+console.log('')
+
+// Build admin SPA before deploying (assets are served by the worker)
+const adminDir = join(projectRoot, '..', 'admin')
+console.log('Building admin SPA...')
+try {
+  execSync('npm install --prefer-offline', { cwd: adminDir, stdio: 'inherit' })
+  execSync('npm run build', { cwd: adminDir, stdio: 'inherit' })
+  console.log('Admin SPA built successfully')
+} catch (error) {
+  console.error('Failed to build admin SPA')
+  process.exit(1)
+}
 console.log('')
 
 function run(command, options = {}) {
@@ -98,7 +112,7 @@ const VALID_SECRET_NAMES = new Set([
   'CLIENT_ID',
   'CLIENT_SECRET',
   'ADMIN_EMAILS',
-  'ALLOWED_ORIGINS',
+  'ALLOWED_SCHEMES',
   'ALLOWED_API_DOMAINS',
   'REFRESH_TOKEN_TTL',
   'MAX_KV_KEYS'

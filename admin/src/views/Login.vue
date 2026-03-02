@@ -3,7 +3,7 @@
     <div class="max-w-md w-full space-y-8">
       <div class="text-center">
         <h1 class="text-3xl font-bold text-gray-900">{{ appTitle }}</h1>
-        <p class="mt-2 text-gray-600">Sign in to manage the OAuth proxy</p>
+        <p class="mt-2 text-gray-600">Sign in to manage the Mobile OAuth proxy</p>
       </div>
 
       <div v-if="isProcessingCallback" class="text-center py-8">
@@ -34,22 +34,6 @@
           </p>
         </div>
 
-        <div v-if="proxyOptions.length > 1">
-          <label for="proxy-select" class="block text-sm font-medium text-gray-700 mb-1">
-            Proxy Server
-          </label>
-          <select
-            id="proxy-select"
-            :value="selectedProxy"
-            @change="handleProxyChange"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          >
-            <option v-for="option in proxyOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-        </div>
-
         <button
           class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           @click="handleLogin"
@@ -77,7 +61,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getAuthUrl, handleAuthCallback } from '../services/auth'
-import { verifyAdminAccess, getProxyOptions, getProxyUrl, setProxyUrl } from '../services/admin'
+import { verifyAdminAccess } from '../services/admin'
 import packageJson from '../../package.json'
 
 const route = useRoute()
@@ -87,27 +71,14 @@ const authStore = useAuthStore()
 const isProcessingCallback = ref(false)
 const error = ref(null)
 
-const proxyOptions = getProxyOptions()
-const selectedProxy = ref(getProxyUrl())
 
 const appTitle = computed(() => packageJson.displayName || packageJson.name)
 const appVersion = computed(() => packageJson.version)
 const githubRepoUrl = computed(() => {
-  const baseUrl = import.meta.env.VITE_GITHUB_REPO || 'https://github.com/your-username/een-oauth-proxy'
+  const baseUrl = import.meta.env.VITE_GITHUB_REPO || 'https://github.com/your-username/een-mobile-proxy'
   const branch = import.meta.env.VITE_GITHUB_BRANCH || 'develop'
   return `${baseUrl}/tree/${branch}`
 })
-
-function handleProxyChange(event) {
-  const url = event.target.value
-  const success = setProxyUrl(url)
-  if (success) {
-    selectedProxy.value = url
-  } else {
-    // Validation failed, reset to current valid proxy URL
-    selectedProxy.value = getProxyUrl()
-  }
-}
 
 function handleLogin() {
   window.location.href = getAuthUrl()

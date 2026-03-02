@@ -2,6 +2,10 @@ name = "een-mobile-proxy"
 main = "src/index.js"
 compatibility_date = "2024-12-01"
 
+[dev]
+port = 3333
+ip = "127.0.0.1"
+
 [observability.logs]
 enabled = true
 
@@ -11,6 +15,10 @@ ENVIRONMENT = "production"
 [[kv_namespaces]]
 binding = "EEN_OAUTH_SESSIONS"
 id = "c72e25b0bea145a4b2e2bfaf20ec5883"
+
+[assets]
+directory = "../admin/dist"
+binding = "ASSETS"
 
 # Secrets (set via wrangler secret put):
 # - CLIENT_ID

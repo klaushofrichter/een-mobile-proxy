@@ -3,11 +3,10 @@
 # Run All Tests Script
 #
 # This script orchestrates running all tests:
-# 1. Starts the proxy locally
-# 2. Runs proxy API tests
-# 3. Starts demo1 app and runs its Playwright tests
-# 4. Starts admin app and runs its Playwright tests
-# 5. Cleans up all processes
+# 1. Starts the proxy locally on port 3333
+# 2. Runs unit tests (vitest)
+# 3. Runs integration tests against the live proxy
+# 4. Cleans up all processes
 #
 
 set -e  # Exit on first error
@@ -24,20 +23,14 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Track if we started processes (for cleanup)
 PROXY_STARTED=false
-APP_STARTED=false
 
 # Cleanup function
 cleanup() {
     echo -e "\n${YELLOW}Cleaning up...${NC}"
 
-    # Stop any app on port 3333
-    if [ "$APP_STARTED" = true ]; then
-        lsof -ti :3333 | xargs kill -9 2>/dev/null || true
-    fi
-
-    # Stop proxy on port 8787
+    # Stop proxy on port 3333
     if [ "$PROXY_STARTED" = true ]; then
-        lsof -ti :8787 | xargs kill -9 2>/dev/null || true
+        lsof -ti :3333 | xargs kill -9 2>/dev/null || true
     fi
 
     echo -e "${GREEN}Cleanup complete${NC}"
@@ -77,131 +70,71 @@ section() {
 }
 
 # Track test results
-PROXY_TESTS_PASSED=false
-DEMO_TESTS_PASSED=false
-ADMIN_TESTS_PASSED=false
+UNIT_TESTS_PASSED=false
+INTEGRATION_TESTS_PASSED=false
 
 #
-# Step 1: Start the proxy
+# Step 1: Run unit tests
 #
-section "Step 1: Starting Proxy"
+section "Step 1: Running Unit Tests (vitest)"
+
+cd "$ROOT_DIR/proxy"
+
+if npm test; then
+    echo -e "${GREEN}Unit tests passed!${NC}"
+    UNIT_TESTS_PASSED=true
+else
+    echo -e "${RED}Unit tests failed!${NC}"
+    exit 1
+fi
+
+#
+# Step 2: Start the proxy
+#
+section "Step 2: Starting Proxy"
 
 cd "$ROOT_DIR/proxy"
 
 # Stop any existing proxy to ensure fresh state
-if curl -s "http://localhost:8787/health" > /dev/null 2>&1; then
-    echo -e "${YELLOW}Stopping existing proxy on port 8787...${NC}"
-    lsof -ti :8787 | xargs kill -9 2>/dev/null || true
+if curl -s "http://127.0.0.1:3333/health" > /dev/null 2>&1; then
+    echo -e "${YELLOW}Stopping existing proxy on port 3333...${NC}"
+    lsof -ti :3333 | xargs kill -9 2>/dev/null || true
     sleep 1
 fi
-
-# Set version in local KV for development
-PROXY_VERSION=$(node -p "require('./package.json').version")
-DEPLOY_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
-VERSION_STRING="een-oauth-proxy - ${PROXY_VERSION} - ${DEPLOY_TIME}"
-echo "Setting local DEPLOY_VERSION: ${VERSION_STRING}"
-npx wrangler kv key put DEPLOY_VERSION "${VERSION_STRING}" --binding=EEN_OAUTH_SESSIONS --local > /dev/null 2>&1 || true
 
 echo "Starting proxy..."
 npm run dev > /dev/null 2>&1 &
 PROXY_STARTED=true
 
-if ! wait_for_service "http://localhost:8787/health" "Proxy"; then
+if ! wait_for_service "http://127.0.0.1:3333/health" "Proxy"; then
     echo -e "${RED}Failed to start proxy${NC}"
     exit 1
 fi
 
 #
-# Step 2: Run proxy API tests
+# Step 3: Run integration tests
 #
-section "Step 2: Running Proxy API Tests"
+section "Step 3: Running Integration Tests"
 
-cd "$ROOT_DIR/proxy"
+cd "$ROOT_DIR"
 
-if npm test; then
-    echo -e "${GREEN}Proxy tests passed!${NC}"
-    PROXY_TESTS_PASSED=true
+if PROXY_URL="http://127.0.0.1:3333" ./scripts/test-production-proxy.sh; then
+    echo -e "${GREEN}Integration tests passed!${NC}"
+    INTEGRATION_TESTS_PASSED=true
 else
-    echo -e "${RED}Proxy tests failed!${NC}"
-    exit 1
+    echo -e "${RED}Integration tests failed!${NC}"
 fi
-
-#
-# Step 3: Start demo1 app and run tests
-#
-section "Step 3: Running Demo App Tests"
-
-cd "$ROOT_DIR/demo1"
-
-# Ensure port 3333 is free
-npm run stop > /dev/null 2>&1 || true
-
-echo "Starting demo1 app..."
-npm run dev > /dev/null 2>&1 &
-APP_STARTED=true
-
-if ! wait_for_service "http://127.0.0.1:3333" "Demo App"; then
-    echo -e "${RED}Failed to start demo app${NC}"
-    exit 1
-fi
-
-echo "Running demo1 Playwright tests..."
-if npm test; then
-    echo -e "${GREEN}Demo app tests passed!${NC}"
-    DEMO_TESTS_PASSED=true
-else
-    echo -e "${RED}Demo app tests failed!${NC}"
-    # Continue to admin tests even if demo tests fail
-fi
-
-# Stop demo app
-echo "Stopping demo1 app..."
-npm run stop > /dev/null 2>&1 || true
-APP_STARTED=false
-
-#
-# Step 4: Start admin app and run tests
-#
-section "Step 4: Running Admin App Tests"
-
-cd "$ROOT_DIR/admin"
-
-# Ensure port 3333 is free
-npm run stop > /dev/null 2>&1 || true
-
-echo "Starting admin app..."
-npm run dev > /dev/null 2>&1 &
-APP_STARTED=true
-
-if ! wait_for_service "http://127.0.0.1:3333" "Admin App"; then
-    echo -e "${RED}Failed to start admin app${NC}"
-    exit 1
-fi
-
-echo "Running admin Playwright tests..."
-if npm test; then
-    echo -e "${GREEN}Admin app tests passed!${NC}"
-    ADMIN_TESTS_PASSED=true
-else
-    echo -e "${RED}Admin app tests failed!${NC}"
-fi
-
-# Stop admin app
-echo "Stopping admin app..."
-npm run stop > /dev/null 2>&1 || true
-APP_STARTED=false
 
 #
 # Summary
 #
 section "Test Summary"
 
-echo -e "Proxy API Tests:  $([ "$PROXY_TESTS_PASSED" = true ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
-echo -e "Demo App Tests:   $([ "$DEMO_TESTS_PASSED" = true ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
-echo -e "Admin App Tests:  $([ "$ADMIN_TESTS_PASSED" = true ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
+echo -e "Unit Tests:        $([ "$UNIT_TESTS_PASSED" = true ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
+echo -e "Integration Tests: $([ "$INTEGRATION_TESTS_PASSED" = true ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
 
 # Exit with error if any tests failed
-if [ "$PROXY_TESTS_PASSED" = true ] && [ "$DEMO_TESTS_PASSED" = true ] && [ "$ADMIN_TESTS_PASSED" = true ]; then
+if [ "$UNIT_TESTS_PASSED" = true ] && [ "$INTEGRATION_TESTS_PASSED" = true ]; then
     echo -e "\n${GREEN}All tests passed!${NC}"
     exit 0
 else

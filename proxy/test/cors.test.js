@@ -49,10 +49,11 @@ describe('Health endpoint', () => {
   })
 })
 
-describe('404 handling', () => {
-  it('should return 404 for unknown routes', async () => {
+describe('SPA fallback for unknown routes', () => {
+  it('should serve admin SPA (200) for unknown routes via static assets', async () => {
     const response = await fetchWithMetrics('http://localhost/unknown-route')
 
-    expect(response.status).toBe(404)
+    // Unknown routes serve the admin SPA index.html (via Workers Static Assets)
+    expect(response.status).toBe(200)
   })
 })

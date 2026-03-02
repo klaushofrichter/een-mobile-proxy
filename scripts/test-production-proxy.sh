@@ -1,15 +1,15 @@
 #!/bin/bash
 #
-# Production Proxy API Tests
+# Mobile Proxy Integration Tests
 #
-# Runs API tests against the deployed Cloudflare proxy to verify
-# it's functioning correctly in production.
+# Runs integration tests against the mobile proxy to verify it's functioning
+# correctly. Tests Bearer-only auth, no CORS, no browser security headers,
+# and static asset serving.
 #
 # Usage:
-#   ./scripts/test-production-proxy.sh [proxy-url]
-#   BRIEF=1 ./scripts/test-production-proxy.sh [proxy-url]  # Compact output
-#
-# If no URL is provided, uses the default production URL.
+#   ./scripts/test-production-proxy.sh
+#   PROXY_URL=https://een-mobile-proxy.klaushofrichter.workers.dev ./scripts/test-production-proxy.sh
+#   BRIEF=1 ./scripts/test-production-proxy.sh  # Compact output
 #
 
 set -e
@@ -32,19 +32,15 @@ NC='\033[0m' # No Color
 # Brief mode - compact output for CI/deployment
 BRIEF="${BRIEF:-0}"
 
-# Default production proxy URL (can be overridden via first argument or PROXY_URL env var)
-DEFAULT_PROXY_URL="https://een-oauth-proxy.klaushofrichter.workers.dev"
-PROXY_URL="${1:-${PROXY_URL:-$DEFAULT_PROXY_URL}}"
-
-# Allowed origin for CORS tests (must match proxy's ALLOWED_ORIGINS)
-# Can be overridden via ALLOWED_ORIGIN environment variable for forks/other deployments
-ALLOWED_ORIGIN="${ALLOWED_ORIGIN:-https://klaushofrichter.github.io}"
+# Default to local wrangler dev
+DEFAULT_PROXY_URL="http://127.0.0.1:3333"
+PROXY_URL="${PROXY_URL:-$DEFAULT_PROXY_URL}"
 
 # Track results
 PASSED=0
 FAILED=0
 
-# Test function
+# Test function - exact match
 run_test() {
   local test_name="$1"
   local expected="$2"
@@ -59,6 +55,7 @@ run_test() {
   fi
 }
 
+# Test function - string contains
 run_test_contains() {
   local test_name="$1"
   local needle="$2"
@@ -73,101 +70,103 @@ run_test_contains() {
   fi
 }
 
+# Test function - string NOT contains
+run_test_not_contains() {
+  local test_name="$1"
+  local needle="$2"
+  local haystack="$3"
+
+  if echo "$haystack" | grep -qi "$needle"; then
+    [ "$BRIEF" = "1" ] && echo -e "${RED}✗${NC} $test_name" || echo -e "   ${RED}❌ FAILED${NC} - $test_name (should not contain: $needle)"
+    ((FAILED++)) || true
+  else
+    [ "$BRIEF" = "1" ] && echo -e "${GREEN}✓${NC} $test_name" || echo -e "   ${GREEN}✅ PASSED${NC} - $test_name"
+    ((PASSED++)) || true
+  fi
+}
+
 if [ "$BRIEF" = "1" ]; then
-  echo -e "${BLUE}Production Proxy Tests${NC} - $PROXY_URL"
+  echo -e "${BLUE}Mobile Proxy Integration Tests${NC} - $PROXY_URL"
 else
   echo -e "${BLUE}============================================${NC}"
-  echo -e "${BLUE}Production Proxy API Tests${NC}"
+  echo -e "${BLUE}Mobile Proxy Integration Tests${NC}"
   echo -e "${BLUE}============================================${NC}"
   echo -e "URL: ${YELLOW}$PROXY_URL${NC}"
-  echo -e "Origin: ${YELLOW}$ALLOWED_ORIGIN${NC}"
   echo ""
 fi
 
-# 1. Health Check
+# 1. Health check
 [ "$BRIEF" != "1" ] && echo -e "${BLUE}1. Health Check${NC}"
-HEALTH=$(curl -s --max-time 10 "$PROXY_URL/health" 2>/dev/null || echo '{"status":"error"}')
-HEALTH_STATUS=$(echo "$HEALTH" | jq -r '.status' 2>/dev/null || echo "error")
-HEALTH_VERSION=$(echo "$HEALTH" | jq -r '.version' 2>/dev/null || echo "unknown")
-if [ "$HEALTH_STATUS" = "ok" ]; then
-  [ "$BRIEF" = "1" ] && echo -e "${GREEN}✓${NC} Health: ok ($HEALTH_VERSION)" || echo -e "   ${GREEN}✅ PASSED${NC} - Status: ok\n   Version: ${YELLOW}$HEALTH_VERSION${NC}"
-  ((PASSED++)) || true
-else
-  [ "$BRIEF" = "1" ] && echo -e "${RED}✗${NC} Health: $HEALTH_STATUS" || echo -e "   ${RED}❌ FAILED${NC} - Status: $HEALTH_STATUS"
-  ((FAILED++)) || true
-fi
+HEALTH_RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 10 "$PROXY_URL/health" 2>/dev/null || echo -e "\n000")
+HEALTH_BODY=$(echo "$HEALTH_RESPONSE" | sed '$d')
+HEALTH_CODE=$(echo "$HEALTH_RESPONSE" | tail -1)
+HEALTH_STATUS=$(echo "$HEALTH_BODY" | jq -r '.status' 2>/dev/null || echo "error")
+run_test "GET /health returns 200" "200" "$HEALTH_CODE"
+run_test "Health status is ok" "ok" "$HEALTH_STATUS"
 
-# 2. CORS Preflight (OPTIONS)
-[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}2. CORS Preflight (OPTIONS)${NC}"
-CORS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X OPTIONS "$PROXY_URL/proxy/getAccessToken" \
-  -H "Origin: $ALLOWED_ORIGIN" \
-  -H "Access-Control-Request-Method: POST" 2>/dev/null || echo "000")
-run_test "OPTIONS returns 204" "204" "$CORS_STATUS"
-
-# 3. CORS Headers Present
-[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}3. CORS Headers Present${NC}"
-CORS_HEADERS=$(curl -s -I --max-time 10 -X OPTIONS "$PROXY_URL/proxy/getAccessToken" \
-  -H "Origin: $ALLOWED_ORIGIN" \
-  -H "Access-Control-Request-Method: POST" 2>/dev/null || echo "")
-run_test_contains "Access-Control-Allow-Origin header" "access-control-allow-origin" "$CORS_HEADERS"
-run_test_contains "Access-Control-Allow-Methods header" "access-control-allow-methods" "$CORS_HEADERS"
-run_test_contains "Access-Control-Allow-Credentials header" "access-control-allow-credentials" "$CORS_HEADERS"
-
-# 4. Security Headers Present
-[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}4. Security Headers${NC}"
-SECURITY_HEADERS=$(curl -s -I --max-time 10 "$PROXY_URL/health" -H "Origin: $ALLOWED_ORIGIN" 2>/dev/null || echo "")
-run_test_contains "X-Content-Type-Options header" "x-content-type-options" "$SECURITY_HEADERS"
-run_test_contains "X-Frame-Options header" "x-frame-options" "$SECURITY_HEADERS"
-run_test_contains "Content-Security-Policy header" "content-security-policy" "$SECURITY_HEADERS"
-run_test_contains "Referrer-Policy header" "referrer-policy" "$SECURITY_HEADERS"
-
-# 5. Reject Invalid Origin
-[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}5. Reject Invalid Origin${NC}"
-INVALID_ORIGIN=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$PROXY_URL/health" \
-  -H "Origin: https://malicious-site.com" 2>/dev/null || echo "000")
-run_test "Invalid origin rejected" "403" "$INVALID_ORIGIN"
-
-# 6. Missing Session Returns 401
-[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}6. Authentication - Missing Session${NC}"
-NOSESSION=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST "$PROXY_URL/proxy/refreshAccessToken" \
-  -H "Origin: $ALLOWED_ORIGIN" \
-  -H "Content-Type: application/json" 2>/dev/null || echo "000")
-run_test "No session returns 401" "401" "$NOSESSION"
-
-# 7. Invalid Session ID Rejected
-[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}7. Authentication - Invalid Session${NC}"
-INVALID_SESSION=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST "$PROXY_URL/proxy/refreshAccessToken" \
-  -H "Origin: $ALLOWED_ORIGIN" \
-  -H "Cookie: sessionId=invalid-session-12345" 2>/dev/null || echo "000")
-run_test "Invalid session rejected" "401" "$INVALID_SESSION"
-
-# 8. Admin Endpoint Without Auth
-[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}8. Admin - Requires Authentication${NC}"
-ADMIN_NOAUTH=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$PROXY_URL/admin/version" \
-  -H "Origin: $ALLOWED_ORIGIN" 2>/dev/null || echo "000")
-run_test "Admin requires auth" "401" "$ADMIN_NOAUTH"
-
-ADMIN_SESSIONS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$PROXY_URL/admin/sessionsCount" \
-  -H "Origin: $ALLOWED_ORIGIN" 2>/dev/null || echo "000")
-run_test "Sessions count requires auth" "401" "$ADMIN_SESSIONS"
-
-# 9. HEAD Request
-[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}9. HEAD Request Support${NC}"
-HEAD_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -I "$PROXY_URL/health" \
-  -H "Origin: $ALLOWED_ORIGIN" 2>/dev/null || echo "000")
+# 2. HEAD health
+[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}2. HEAD Health${NC}"
+HEAD_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -I "$PROXY_URL/health" 2>/dev/null || echo "000")
 run_test "HEAD /health returns 200" "200" "$HEAD_STATUS"
 
-# 10. OAuth Endpoints Exist
-[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}10. OAuth Endpoints${NC}"
-# getAccessToken without required params should return 400
-OAUTH_GET=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST "$PROXY_URL/proxy/getAccessToken" \
-  -H "Origin: $ALLOWED_ORIGIN" 2>/dev/null || echo "000")
-run_test "getAccessToken endpoint exists (400 without params)" "400" "$OAUTH_GET"
+# 3. Static assets (SPA)
+[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}3. Static Assets (SPA)${NC}"
+ROOT_RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 10 "$PROXY_URL/" 2>/dev/null || echo -e "\n000")
+ROOT_BODY=$(echo "$ROOT_RESPONSE" | sed '$d')
+ROOT_CODE=$(echo "$ROOT_RESPONSE" | tail -1)
+run_test "GET / returns 200" "200" "$ROOT_CODE"
+run_test_contains "GET / returns HTML" "<html" "$ROOT_BODY"
 
-# revoke without session should return 401
-OAUTH_REVOKE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST "$PROXY_URL/proxy/revoke" \
-  -H "Origin: $ALLOWED_ORIGIN" 2>/dev/null || echo "000")
-run_test "revoke endpoint exists (401 without session)" "401" "$OAUTH_REVOKE"
+# 4. SPA fallback
+[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}4. SPA Fallback${NC}"
+SPA_RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 10 "$PROXY_URL/dashboard" 2>/dev/null || echo -e "\n000")
+SPA_BODY=$(echo "$SPA_RESPONSE" | sed '$d')
+SPA_CODE=$(echo "$SPA_RESPONSE" | tail -1)
+run_test "GET /dashboard returns 200 (SPA fallback)" "200" "$SPA_CODE"
+run_test_contains "SPA fallback returns HTML" "<html" "$SPA_BODY"
+
+# 5. No CORS headers
+[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}5. No CORS Headers${NC}"
+CORS_HEADERS=$(curl -s -I --max-time 10 "$PROXY_URL/health" \
+  -H "Origin: https://example.com" 2>/dev/null || echo "")
+run_test_not_contains "No Access-Control-Allow-Origin header" "access-control-allow-origin" "$CORS_HEADERS"
+
+# 6. No browser security headers
+[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}6. No Browser Security Headers${NC}"
+SEC_HEADERS=$(curl -s -I --max-time 10 "$PROXY_URL/health" 2>/dev/null || echo "")
+run_test_not_contains "No X-Frame-Options header" "x-frame-options" "$SEC_HEADERS"
+run_test_not_contains "No Content-Security-Policy header" "content-security-policy" "$SEC_HEADERS"
+
+# 7. getAccessToken exists
+[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}7. getAccessToken Endpoint Exists${NC}"
+GAT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST "$PROXY_URL/proxy/getAccessToken" 2>/dev/null || echo "000")
+run_test "POST /proxy/getAccessToken returns 400 (missing params, not 404)" "400" "$GAT_STATUS"
+
+# 8. refreshAccessToken requires auth
+[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}8. refreshAccessToken Requires Auth${NC}"
+RAT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST "$PROXY_URL/proxy/refreshAccessToken" 2>/dev/null || echo "000")
+run_test "POST /proxy/refreshAccessToken returns 401 (no auth)" "401" "$RAT_STATUS"
+
+# 9. revoke requires auth
+[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}9. Revoke Requires Auth${NC}"
+REVOKE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST "$PROXY_URL/proxy/revoke" 2>/dev/null || echo "000")
+run_test "POST /proxy/revoke returns 401 (no auth)" "401" "$REVOKE_STATUS"
+
+# 10. Invalid Bearer rejected
+[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}10. Invalid Bearer Rejected${NC}"
+INVALID_BEARER=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST "$PROXY_URL/proxy/refreshAccessToken" \
+  -H "Authorization: Bearer invalid-session" 2>/dev/null || echo "000")
+run_test "Invalid Bearer token rejected with 401" "401" "$INVALID_BEARER"
+
+# 11. Admin version requires auth
+[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}11. Admin Version Requires Auth${NC}"
+ADMIN_VERSION=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$PROXY_URL/admin/version" 2>/dev/null || echo "000")
+run_test "GET /admin/version returns 401 (no auth)" "401" "$ADMIN_VERSION"
+
+# 12. Admin sessionsCount requires auth
+[ "$BRIEF" != "1" ] && echo -e "\n${BLUE}12. Admin Sessions Count Requires Auth${NC}"
+ADMIN_SESSIONS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$PROXY_URL/admin/sessionsCount" 2>/dev/null || echo "000")
+run_test "GET /admin/sessionsCount returns 401 (no auth)" "401" "$ADMIN_SESSIONS"
 
 # Summary
 if [ "$BRIEF" = "1" ]; then

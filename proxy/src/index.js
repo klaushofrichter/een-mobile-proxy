@@ -415,6 +415,23 @@ async function routeRequest(url, request, env) {
     return handleHealth(env)
   }
 
+  // Serve static assets (admin SPA)
+  if (env.ASSETS) {
+    const assetResponse = await env.ASSETS.fetch(request)
+    if (assetResponse.status !== 404) {
+      return assetResponse
+    }
+    // SPA fallback: serve index.html for unmatched routes
+    const spaRequest = new Request(new URL('/', request.url), request)
+    const spaResponse = await env.ASSETS.fetch(spaRequest)
+    if (spaResponse.status === 200) {
+      return new Response(spaResponse.body, {
+        headers: spaResponse.headers,
+        status: 200
+      })
+    }
+  }
+
   return new Response('Not Found', { status: 404 })
 }
 

@@ -371,15 +371,16 @@ describe('Performance Benchmarks', () => {
     })
   })
 
-  describe('Error Handling', () => {
-    it('should measure 404 response', async () => {
+  describe('Static Asset Fallback', () => {
+    it('should measure SPA fallback for unknown routes', async () => {
       for (let i = 0; i < 5; i++) {
         const { response } = await measure(
-          'GET /unknown-route (404)',
+          'GET /unknown-route (SPA)',
           'http://localhost/unknown-route',
           {}
         )
-        expect(response.status).toBe(404)
+        // Unknown routes serve admin SPA via static assets
+        expect(response.status).toBe(200)
       }
     })
   })

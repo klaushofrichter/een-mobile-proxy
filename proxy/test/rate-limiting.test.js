@@ -121,13 +121,13 @@ describe('Rate Limiting', () => {
       expect(parseInt(countStr, 10)).toBeGreaterThanOrEqual(1)
     })
 
-    it('should not rate limit 404 responses', async () => {
-      // Make requests to non-existent endpoint
+    it('should not rate limit static asset / SPA fallback responses', async () => {
+      // Unknown routes serve the admin SPA via static assets (200, not 404)
       for (let i = 0; i < 5; i++) {
         const response = await fetchWithMetrics('http://localhost/nonexistent', {
           method: 'GET'
         })
-        expect(response.status).toBe(404)
+        expect(response.status).toBe(200)
       }
 
       // No rate limit keys should be created for this path
