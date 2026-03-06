@@ -150,15 +150,12 @@ ALLOWED_API_DOMAINS=eagleeyenetworks.com
 ENVIRONMENT=development
 ```
 
-**Admin** — copy and edit `admin/.env`:
+**Admin** — generate `admin/.env` from the proxy config:
 ```bash
-cp admin/.env.example admin/.env
+./scripts/generate-admin-env.sh
 ```
 
-Required values in `admin/.env`:
-```env
-VITE_EEN_CLIENT_ID=your-een-client-id
-```
+This creates `admin/.env` with the correct values mapped from `proxy/.dev.vars`. Do not edit `admin/.env` directly — update `proxy/.dev.vars` and regenerate.
 
 ### Step 3: Create Cloudflare KV Namespace
 
@@ -183,46 +180,56 @@ The proxy starts at **http://127.0.0.1:3333** (configured to match the EEN OAuth
 ### Step 5: Run Tests
 
 ```bash
-# All tests
+npm test              # Run all tests (proxy unit, admin unit, integration, admin E2E)
+```
+
+## Build and Test Order
+
+The admin SPA is **embedded in the proxy** — `wrangler.toml` points to `admin/dist/` as static assets. The proxy serves both the API endpoints and the admin UI on the same origin (port 3333). This means:
+
+1. **Build admin first** — `cd admin && npm run build` produces `admin/dist/`
+2. **Start proxy** — `cd proxy && npm run dev` serves `admin/dist/` + API on port 3333
+3. **Run tests** — all tests run against the proxy on port 3333
+
+The `npm test` script at the root runs `scripts/run-all-tests.sh`, which executes all steps in order:
+
+| Step | What | Needs proxy? |
+|------|------|-------------|
+| 1. Proxy unit tests | `cd proxy && npm test` (vitest + Miniflare) | No |
+| 2. Admin unit tests | `cd admin && npm run test:unit` (vitest) | No |
+| 3. Generate + build | `./scripts/generate-admin-env.sh` + `cd admin && npm run build` | No |
+| 4. Start proxy | Proxy on port 3333 serving `admin/dist/` + API | — |
+| 5. Integration tests | `scripts/test-production-proxy.sh` against proxy | Yes |
+| 6. Admin E2E tests | Playwright browser tests against proxy | Yes |
+
+### Running Tests Individually
+
+```bash
+# All tests in correct order
 npm test
 
-# Proxy tests only
+# Proxy unit tests only (no server needed)
 cd proxy && npm test
+cd proxy && npm run test:watch    # Watch mode
+cd proxy && npm run test:perf     # Performance tests only
 
-# Admin E2E tests (requires proxy running)
+# Admin unit tests only (no server needed)
+cd admin && npm run test:unit
+
+# Admin E2E tests (builds admin, starts proxy, runs Playwright)
 cd admin && npm test
 ```
 
-## Testing
+### Test Details
 
-### Proxy Tests (Vitest + Cloudflare Workers)
-
-Uses Vitest with `@cloudflare/vitest-pool-workers` (Miniflare) for local testing.
-
-```bash
-cd proxy
-npm test              # Run all tests
-npm run test:watch    # Watch mode
-npm run test:perf     # Performance tests only
-```
-
-Test suites cover: OAuth flows, admin endpoints, auth headers, rate limiting, SSRF protection, security vulnerabilities, workflow integration, and performance.
-
-### Admin Tests (Playwright)
-
-```bash
-cd admin
-npm test              # E2E tests
-npm run test:unit     # Unit tests
-```
-
-Requires test credentials in `admin/.env`. Destructive tests (remove sessions, revoke all) only run against localhost.
+- **Proxy unit tests** use Vitest with `@cloudflare/vitest-pool-workers` (Miniflare). Covers OAuth flows, admin endpoints, auth headers, rate limiting, SSRF protection, security vulnerabilities, workflow integration, and performance.
+- **Admin E2E tests** use Playwright. The admin SPA is served by the proxy on port 3333 (not a separate Vite dev server). Requires test credentials in `admin/.env` — generate with `./scripts/generate-admin-env.sh`. Destructive tests (remove sessions, revoke all) only run against localhost.
 
 ## Deployment
 
 ### Deploy Proxy to Cloudflare
 
-Create `proxy/.env` with production secrets (same variables as `.dev.vars` plus `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`):
+Ensure `proxy/.dev.vars` contains all required secrets (including `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`):
 
 ```bash
 cd proxy && npm run deploy
@@ -240,7 +247,7 @@ GitHub Actions workflows handle:
 
 ## Environment Variables Reference
 
-### Proxy (`proxy/.dev.vars` / `proxy/.env`)
+### Proxy (`proxy/.dev.vars`)
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -259,15 +266,19 @@ GitHub Actions workflows handle:
 | `RATE_LIMIT_ADMIN` | Max `/admin/*` requests per window | `60` |
 | `RATE_LIMIT_UNKNOWN` | Max requests for unidentified clients | `5` |
 
-### Admin (`admin/.env`)
+### Admin (`admin/.env` — auto-generated from `proxy/.dev.vars`)
 
-| Variable | Description |
-|----------|-------------|
-| `VITE_EEN_CLIENT_ID` | EEN OAuth Client ID |
-| `VITE_GITHUB_REPO` | GitHub repo URL (for version links) |
-| `VITE_GITHUB_BRANCH` | Git branch (for version links) |
-| `ADMIN_TEST_USER` | Test admin email (Playwright) |
-| `ADMIN_TEST_PASSWORD` | Test admin password (Playwright) |
+Generate with: `./scripts/generate-admin-env.sh`
+
+| Variable | Source in `.dev.vars` | Description |
+|----------|----------------------|-------------|
+| `VITE_EEN_CLIENT_ID` | `CLIENT_ID` | EEN OAuth Client ID |
+| `VITE_GITHUB_REPO` | `GITHUB_REPO` | GitHub repo URL (for version links) |
+| `VITE_GITHUB_BRANCH` | `GITHUB_BRANCH` | Git branch (for version links) |
+| `ADMIN_TEST_USER` | `TEST_USER` | Test admin email (Playwright) |
+| `ADMIN_TEST_PASSWORD` | `TEST_PASSWORD` | Test admin password (Playwright) |
+| `TEST_NON_ADMIN_USER` | `TEST_NON_ADMIN_USER` | Non-admin email for rejection tests |
+| `TEST_NON_ADMIN_PASSWORD` | `TEST_NON_ADMIN_PASSWORD` | Non-admin password for rejection tests |
 
 ## Security
 

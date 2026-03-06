@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Upload secrets from proxy/.env to GitHub repository secrets
+# Upload secrets from proxy/.dev.vars to GitHub repository secrets
 #
 # Usage: ./scripts/upload-github-secrets.sh
 #
@@ -11,7 +11,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-ENV_FILE="$PROJECT_ROOT/proxy/.env"
+ENV_FILE="$PROJECT_ROOT/proxy/.dev.vars"
 
 # Colors
 RED='\033[0;31m'
@@ -34,7 +34,7 @@ if ! gh auth status &> /dev/null; then
     exit 1
 fi
 
-# Check .env file exists
+# Check .dev.vars file exists
 if [ ! -f "$ENV_FILE" ]; then
     echo -e "${RED}Error: $ENV_FILE not found${NC}"
     exit 1
@@ -53,7 +53,7 @@ upload_secret() {
     local line=$(grep "^${env_var_name}=" "$ENV_FILE" 2>/dev/null | head -1)
 
     if [ -z "$line" ]; then
-        echo -e "${YELLOW}⚠ Skipping $gh_secret_name - $env_var_name not found in .env${NC}"
+        echo -e "${YELLOW}⚠ Skipping $gh_secret_name - $env_var_name not found in .dev.vars${NC}"
         return
     fi
 

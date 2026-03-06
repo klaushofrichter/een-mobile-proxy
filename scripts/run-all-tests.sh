@@ -2,11 +2,15 @@
 #
 # Run All Tests Script
 #
-# This script orchestrates running all tests:
-# 1. Starts the proxy locally on port 3333
-# 2. Runs unit tests (vitest)
-# 3. Runs integration tests against the live proxy
-# 4. Cleans up all processes
+# This script orchestrates running all tests in the correct order:
+# 1. Proxy unit tests (vitest, no server needed)
+# 2. Admin unit tests (vitest, no server needed)
+# 3. Generate admin/.env from proxy/.dev.vars
+# 4. Build admin SPA (output in admin/dist)
+# 5. Start proxy on port 3333 (serves admin SPA + API)
+# 6. Integration tests against the live proxy
+# 7. Admin E2E tests (Playwright against proxy on 3333)
+# 8. Cleanup
 #
 
 set -e  # Exit on first error
@@ -70,28 +74,61 @@ section() {
 }
 
 # Track test results
-UNIT_TESTS_PASSED=false
-INTEGRATION_TESTS_PASSED=false
+PROXY_UNIT_PASSED=false
+ADMIN_UNIT_PASSED=false
+INTEGRATION_PASSED=false
+ADMIN_E2E_PASSED=false
 
 #
-# Step 1: Run unit tests
+# Step 1: Proxy unit tests (no server needed)
 #
-section "Step 1: Running Unit Tests (vitest)"
+section "Step 1: Proxy Unit Tests (vitest)"
 
 cd "$ROOT_DIR/proxy"
 
 if npm test; then
-    echo -e "${GREEN}Unit tests passed!${NC}"
-    UNIT_TESTS_PASSED=true
+    echo -e "${GREEN}Proxy unit tests passed!${NC}"
+    PROXY_UNIT_PASSED=true
 else
-    echo -e "${RED}Unit tests failed!${NC}"
+    echo -e "${RED}Proxy unit tests failed!${NC}"
     exit 1
 fi
 
 #
-# Step 2: Start the proxy
+# Step 2: Admin unit tests (no server needed)
 #
-section "Step 2: Starting Proxy"
+section "Step 2: Admin Unit Tests (vitest)"
+
+cd "$ROOT_DIR/admin"
+
+if npm run test:unit; then
+    echo -e "${GREEN}Admin unit tests passed!${NC}"
+    ADMIN_UNIT_PASSED=true
+else
+    echo -e "${RED}Admin unit tests failed!${NC}"
+    exit 1
+fi
+
+#
+# Step 3: Generate admin/.env and build admin SPA
+#
+section "Step 3: Generate admin/.env and Build Admin SPA"
+
+"$ROOT_DIR/scripts/generate-admin-env.sh"
+
+cd "$ROOT_DIR/admin"
+echo "Building admin SPA..."
+if npm run build; then
+    echo -e "${GREEN}Admin SPA built successfully!${NC}"
+else
+    echo -e "${RED}Admin SPA build failed!${NC}"
+    exit 1
+fi
+
+#
+# Step 4: Start the proxy (serves admin SPA + API on port 3333)
+#
+section "Step 4: Starting Proxy"
 
 cd "$ROOT_DIR/proxy"
 
@@ -112,17 +149,31 @@ if ! wait_for_service "http://127.0.0.1:3333/health" "Proxy"; then
 fi
 
 #
-# Step 3: Run integration tests
+# Step 5: Integration tests
 #
-section "Step 3: Running Integration Tests"
+section "Step 5: Integration Tests"
 
 cd "$ROOT_DIR"
 
 if PROXY_URL="http://127.0.0.1:3333" ./scripts/test-production-proxy.sh; then
     echo -e "${GREEN}Integration tests passed!${NC}"
-    INTEGRATION_TESTS_PASSED=true
+    INTEGRATION_PASSED=true
 else
     echo -e "${RED}Integration tests failed!${NC}"
+fi
+
+#
+# Step 6: Admin E2E tests (Playwright against proxy on 3333)
+#
+section "Step 6: Admin E2E Tests (Playwright)"
+
+cd "$ROOT_DIR/admin"
+
+if npx playwright test; then
+    echo -e "${GREEN}Admin E2E tests passed!${NC}"
+    ADMIN_E2E_PASSED=true
+else
+    echo -e "${RED}Admin E2E tests failed!${NC}"
 fi
 
 #
@@ -130,11 +181,14 @@ fi
 #
 section "Test Summary"
 
-echo -e "Unit Tests:        $([ "$UNIT_TESTS_PASSED" = true ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
-echo -e "Integration Tests: $([ "$INTEGRATION_TESTS_PASSED" = true ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
+echo -e "Proxy Unit Tests:   $([ "$PROXY_UNIT_PASSED" = true ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
+echo -e "Admin Unit Tests:   $([ "$ADMIN_UNIT_PASSED" = true ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
+echo -e "Integration Tests:  $([ "$INTEGRATION_PASSED" = true ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
+echo -e "Admin E2E Tests:    $([ "$ADMIN_E2E_PASSED" = true ] && echo -e "${GREEN}PASSED${NC}" || echo -e "${RED}FAILED${NC}")"
 
 # Exit with error if any tests failed
-if [ "$UNIT_TESTS_PASSED" = true ] && [ "$INTEGRATION_TESTS_PASSED" = true ]; then
+if [ "$PROXY_UNIT_PASSED" = true ] && [ "$ADMIN_UNIT_PASSED" = true ] && \
+   [ "$INTEGRATION_PASSED" = true ] && [ "$ADMIN_E2E_PASSED" = true ]; then
     echo -e "\n${GREEN}All tests passed!${NC}"
     exit 0
 else

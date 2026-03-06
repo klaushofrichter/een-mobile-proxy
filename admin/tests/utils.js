@@ -14,7 +14,7 @@ dotenv.config()
  * Get the configured proxy URL from environment
  */
 export function getProxyUrl() {
-  return process.env.VITE_PROXY_URL || 'http://localhost:8787'
+  return process.env.VITE_PROXY_URL || 'http://127.0.0.1:3333'
 }
 
 /**
@@ -51,8 +51,8 @@ export function getTestCredentials() {
  * @returns {{ username: string, password: string } | null} Returns null if not configured
  */
 export function getNonAdminCredentials() {
-  const username = process.env.TEST_USER
-  const password = process.env.TEST_PASSWORD
+  const username = process.env.TEST_NON_ADMIN_USER
+  const password = process.env.TEST_NON_ADMIN_PASSWORD
   if (!username || !password) {
     return null
   }

@@ -35,8 +35,8 @@ test.describe('Admin Login and Health', () => {
     await page.goto('/')
 
     // Verify login page elements
-    await expect(page.getByRole('heading', { name: 'EEN OAuth Proxy Admin' })).toBeVisible()
-    await expect(page.getByText('Sign in to manage the OAuth proxy')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'EEN Mobile Proxy Admin' })).toBeVisible()
+    await expect(page.getByText('Sign in to manage the Mobile OAuth proxy')).toBeVisible()
     await expect(page.getByText('Admin access is restricted')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Sign in with Eagle Eye Networks' })).toBeVisible()
 
@@ -90,7 +90,7 @@ test.describe('Admin Login and Health', () => {
 
     // Verify a proxy URL is displayed (either localhost or Cloudflare)
     // The actual URL depends on environment configuration
-    const proxyUrlElement = page.locator('.font-mono').filter({ hasText: /localhost:8787|\.workers\.dev/ })
+    const proxyUrlElement = page.locator('.font-mono').filter({ hasText: /localhost:\d+|127\.0\.0\.1:\d+|\.workers\.dev/ })
     await expect(proxyUrlElement.first()).toBeVisible()
     const displayedUrl = await proxyUrlElement.first().textContent()
     console.log(`✅ Proxy URL displayed: ${displayedUrl}`)

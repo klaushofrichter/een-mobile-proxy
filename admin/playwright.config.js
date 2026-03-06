@@ -28,16 +28,12 @@ export default defineConfig({
     },
   ],
 
-  // Run local dev server before tests
+  // The admin SPA is served by the proxy on port 3333.
+  // Build the admin app, then start the proxy which serves admin/dist as static assets.
   webServer: {
-    command: 'npm run dev',
-    url: 'http://127.0.0.1:3333',
+    command: 'npm run build && cd ../proxy && npm run dev',
+    url: 'http://127.0.0.1:3333/health',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
-    env: {
-      ...process.env,
-      // Ensure VITE_PROXY_URL is passed to the dev server
-      VITE_PROXY_URL: process.env.VITE_PROXY_URL || 'http://localhost:8787',
-    },
   },
 })

@@ -7,7 +7,7 @@
  * 1. Reads version from package.json
  * 2. Builds the admin SPA (static assets served by the worker)
  * 3. Deploys the worker to Cloudflare
- * 4. Sets secrets from .env file
+ * 4. Sets secrets from .dev.vars file
  * 5. Stores DEPLOY_VERSION in KV
  */
 
@@ -23,8 +23,8 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const projectRoot = join(__dirname, '..')
 
-// Load .env file
-const envPath = join(projectRoot, '.env')
+// Load .dev.vars file (single source of truth for secrets)
+const envPath = join(projectRoot, '.dev.vars')
 if (existsSync(envPath)) {
   config({ path: envPath })
 }

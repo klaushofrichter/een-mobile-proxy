@@ -46,10 +46,9 @@ cd proxy && npm run deploy       # Deploy to Cloudflare
 
 ### Admin (Vue 3)
 ```bash
-cd admin && npm run dev          # Dev server on 127.0.0.1:3333
-cd admin && npm run dev:prod     # Dev server with production config
-cd admin && npm run build        # Production build
-cd admin && npm test             # Playwright E2E tests
+cd admin && npm run dev          # Vite dev server on 127.0.0.1:5173 (standalone, for UI development only)
+cd admin && npm run build        # Production build (output in admin/dist, served by proxy)
+cd admin && npm test             # Playwright E2E tests (builds admin, starts proxy on 3333)
 cd admin && npm run test:unit    # Vitest unit tests
 ```
 
@@ -71,7 +70,7 @@ Admin and demo1 share port 3333 — they cannot run simultaneously (this is inte
 ## Testing
 
 - **Proxy tests** use Vitest with `@cloudflare/vitest-pool-workers` (Miniflare). Test config is in `proxy/vitest.config.js` with mock bindings for KV, secrets, etc.
-- **Frontend tests** use Playwright. They require the proxy running on port 8787 and the app on port 3333.
+- **Frontend tests** use Playwright. The admin SPA is served by the proxy on port 3333 (not a separate Vite dev server). Playwright builds the admin app and starts the proxy automatically.
 - Proxy has 12 test files covering integration, security, CORS, OAuth, admin, auth-header, rate limiting (including low-limits variant), SSRF (integration + unit), workflow, and performance.
 
 ## Key Conventions
@@ -79,12 +78,12 @@ Admin and demo1 share port 3333 — they cannot run simultaneously (this is inte
 - **Single-file worker**: All proxy logic lives in `proxy/src/index.js` (~1435 lines). No module splitting.
 - **Version bumping**: Husky pre-commit hook auto-increments patch version in package.json for changed directories. It also checks proxy deployment status (skip with `SKIP_DEPLOYMENT_CHECK=1`).
 - **Version numbers differ** across proxy, admin, and demo1 — this is intentional.
-- **Environment files**: Proxy uses `.dev.vars` (local secrets) and `.env` (deploy secrets). Frontend apps use `.env` and `.env.prod` with `VITE_` prefix.
+- **Environment files**: Proxy uses `.dev.vars` (secrets for both local dev and deployment). Frontend apps use `.env` and `.env.prod` with `VITE_` prefix.
 - **Node 20+** required (Wrangler v4, Vite 7).
 
 ## Deployment
 
-- Proxy deploys to Cloudflare Workers via `proxy/scripts/deploy.js` (reads secrets from `proxy/.env`)
+- Proxy deploys to Cloudflare Workers via `proxy/scripts/deploy.js` (reads secrets from `proxy/.dev.vars`)
 - Admin/demo1 deploy to GitHub Pages under `/een-oauth-proxy/` and `/een-oauth-proxy/demo1/`
 - CI/CD via GitHub Actions: PR gets AI review + tests; merge to production triggers deploy with automatic rollback on failure
 
