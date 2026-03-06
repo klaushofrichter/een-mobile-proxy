@@ -271,7 +271,7 @@ console.log('')
 const testScript = join(__dirname, '..', '..', 'scripts', 'test-production-proxy.sh')
 const testResult = (() => {
   try {
-    execSync(`BRIEF=1 bash "${testScript}"`, {
+    execSync(`BRIEF=1 PROXY_URL=https://${name}.klaushofrichter.workers.dev bash "${testScript}"`, {
       cwd: projectRoot,
       stdio: 'inherit'
     })
