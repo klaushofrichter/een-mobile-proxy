@@ -192,6 +192,51 @@
             </div>
           </div>
 
+          <!-- Debug Mode -->
+          <div :class="['shadow rounded-lg p-4', isDarkMode ? 'bg-gray-800' : 'bg-white']">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span :class="['text-sm font-medium', isDarkMode ? 'text-white' : 'text-gray-900']">Debug Mode</span>
+                <span
+                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium"
+                  :class="debugModeEnabled ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'"
+                >
+                  {{ debugModeEnabled ? 'On' : 'Off' }}
+                </span>
+              </div>
+              <div class="flex items-center space-x-2">
+                <button
+                  :disabled="!debugModeEnabled || fetchingDebugStatus"
+                  @click="requestDebugStatus"
+                  :class="['px-2 py-1 text-xs rounded transition-colors disabled:opacity-50', debugModeEnabled ? 'bg-green-600 text-white hover:bg-green-700' : isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-700']"
+                >
+                  {{ fetchingDebugStatus ? '...' : 'Status' }}
+                </button>
+                <button
+                  :disabled="togglingDebugMode"
+                  @click="toggleDebugMode"
+                  :class="[
+                    'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out disabled:opacity-50',
+                    debugModeEnabled ? 'bg-blue-600' : isDarkMode ? 'bg-gray-600' : 'bg-gray-300'
+                  ]"
+                >
+                  <span
+                    :class="[
+                      'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                      debugModeEnabled ? 'translate-x-4' : 'translate-x-0'
+                    ]"
+                  ></span>
+                </button>
+              </div>
+            </div>
+            <div class="flex items-center justify-between mt-1">
+              <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Log incoming requests to the proxy console</p>
+              <span v-if="debugModeEnabled && debugModeCountdown > 0" :class="['text-xs font-mono', debugModeCountdown <= 60 ? 'text-amber-500' : isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                {{ formatCountdown(debugModeCountdown) }}
+              </span>
+            </div>
+          </div>
+
           <!-- Actions -->
           <div :class="['shadow rounded-lg p-4 space-y-3', isDarkMode ? 'bg-gray-800' : 'bg-white']">
             <div :class="['flex items-center justify-between p-3 rounded border', isDarkMode ? 'bg-amber-900/30 border-amber-600' : 'bg-amber-50 border-amber-300']">
@@ -315,7 +360,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { getHealth, getSessionsCount, getRateLimitStats, removeSessions, revokeAll } from '../services/admin'
+import { getHealth, getSessionsCount, getRateLimitStats, removeSessions, revokeAll, getDebugMode, setDebugMode, debugStatus } from '../services/admin'
 import packageJson from '../../package.json'
 
 const router = useRouter()
@@ -389,6 +434,14 @@ const healthAutoRefresh = ref(true)
 const rateLimitStats = ref(null)
 const loadingRateLimitStats = ref(false)
 
+// Debug mode state
+const debugModeEnabled = ref(false)
+const debugModeExpiresAt = ref(null)
+const debugModeCountdown = ref(0)
+const togglingDebugMode = ref(false)
+const fetchingDebugStatus = ref(false)
+let debugModeCountdownInterval = null
+
 // Auto-refresh interval
 let healthInterval = null
 let countdownInterval = null
@@ -438,6 +491,92 @@ function addLogEntry(message, type = 'info') {
 function clearLog() {
   activityLog.value = []
   addLogEntry('Log cleared', 'info')
+}
+
+// Format seconds as M:SS
+function formatCountdown(seconds) {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+// Start or restart the debug mode countdown timer
+function startDebugModeCountdown() {
+  stopDebugModeCountdown()
+  debugModeCountdownInterval = setInterval(() => {
+    if (!debugModeExpiresAt.value) {
+      stopDebugModeCountdown()
+      return
+    }
+    const remaining = Math.max(0, Math.round((debugModeExpiresAt.value - Date.now()) / 1000))
+    debugModeCountdown.value = remaining
+    if (remaining <= 0) {
+      debugModeEnabled.value = false
+      debugModeExpiresAt.value = null
+      stopDebugModeCountdown()
+      addLogEntry('Debug mode auto-disabled (timeout)', 'info')
+    }
+  }, 1000)
+}
+
+function stopDebugModeCountdown() {
+  if (debugModeCountdownInterval) {
+    clearInterval(debugModeCountdownInterval)
+    debugModeCountdownInterval = null
+  }
+  debugModeCountdown.value = 0
+}
+
+// Fetch debug mode state
+async function fetchDebugMode() {
+  try {
+    const data = await getDebugMode()
+    debugModeEnabled.value = data.enabled
+    debugModeExpiresAt.value = data.expiresAt || null
+    if (data.enabled && data.expiresAt) {
+      debugModeCountdown.value = Math.max(0, Math.round((data.expiresAt - Date.now()) / 1000))
+      startDebugModeCountdown()
+    } else {
+      stopDebugModeCountdown()
+    }
+  } catch {
+    // Silently ignore - debug mode defaults to off
+  }
+}
+
+// Toggle debug mode
+async function toggleDebugMode() {
+  togglingDebugMode.value = true
+  const newState = !debugModeEnabled.value
+  try {
+    const data = await setDebugMode(newState)
+    debugModeEnabled.value = data.enabled
+    debugModeExpiresAt.value = data.expiresAt || null
+    if (data.enabled && data.expiresAt) {
+      debugModeCountdown.value = Math.max(0, Math.round((data.expiresAt - Date.now()) / 1000))
+      startDebugModeCountdown()
+    } else {
+      stopDebugModeCountdown()
+    }
+    addLogEntry(`Debug mode ${newState ? 'enabled (10 min)' : 'disabled'}`, 'success')
+  } catch (e) {
+    addLogEntry(`Failed to toggle debug mode: ${e.message}`, 'error')
+  } finally {
+    togglingDebugMode.value = false
+  }
+}
+
+// Request debug status dump to proxy console
+async function requestDebugStatus() {
+  fetchingDebugStatus.value = true
+  try {
+    const data = await debugStatus()
+    addLogEntry(`Status dumped to console: ${data.sessions} sessions, ${data.rateLimitEntries} rate limit entries, ${data.specialKeys} special keys`, 'success')
+  } catch (e) {
+    addLogEntry(`Failed to get debug status: ${e.message}`, 'error')
+  } finally {
+    fetchingDebugStatus.value = false
+  }
 }
 
 // Check proxy health
@@ -729,7 +868,8 @@ onMounted(async () => {
     checkHealth(false),
     fetchSessionCount(false),
     fetchRateLimitStats(false),
-    fetchUserProfile()
+    fetchUserProfile(),
+    fetchDebugMode()
   ])
 
   addLogEntry(`Health: ${healthStatus.value}, Sessions: ${sessionCount.value ?? 0}`, 'success')
@@ -738,6 +878,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopHealthAutoRefresh()
+  stopDebugModeCountdown()
 })
 </script>
 

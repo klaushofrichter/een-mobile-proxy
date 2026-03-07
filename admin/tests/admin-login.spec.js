@@ -336,6 +336,82 @@ test.describe('Admin Login and Health', () => {
     console.log('\n✅ Resizable panels test completed!\n')
   })
 
+  test('should toggle debug mode on and off', async ({ page }) => {
+    console.log('\n▶️ Running Test: Debug mode toggle\n')
+    test.setTimeout(MAX_TEST_TIMEOUT)
+
+    // Login to admin
+    await loginToAdmin(page)
+    await verifyOnDashboard(page)
+
+    // Verify Debug Mode card is visible
+    await expect(page.locator('text=Debug Mode')).toBeVisible()
+    console.log('✅ Debug Mode card visible')
+
+    // Verify description text
+    await expect(page.locator('text=Log incoming requests to the proxy console')).toBeVisible()
+    console.log('✅ Debug Mode description visible')
+
+    // Scope all locators to the Debug Mode card
+    const debugCard = page.locator('div.shadow').filter({ hasText: 'Log incoming requests to the proxy console' })
+
+    // Get the toggle button (the switch element)
+    const toggleButton = debugCard.locator('button.rounded-full')
+    const offBadge = debugCard.locator('span').filter({ hasText: /^Off$/ })
+    const onBadge = debugCard.locator('span').filter({ hasText: /^On$/ })
+
+    // Verify toggle exists
+    await expect(toggleButton).toBeVisible()
+    console.log('✅ Debug Mode toggle button visible')
+
+    // Ensure debug mode starts Off (may be On from a previous test run)
+    const isAlreadyOn = await onBadge.isVisible().catch(() => false)
+    if (isAlreadyOn) {
+      console.log('⚠️ Debug mode was On from previous run, disabling first')
+      await toggleButton.click()
+      await page.waitForTimeout(1000)
+    }
+    await expect(offBadge).toBeVisible()
+    console.log('✅ Debug mode is Off')
+
+    // Clear log so we can check for new entries
+    await clearActivityLog(page)
+
+    // Enable debug mode
+    await toggleButton.click()
+    await page.waitForTimeout(1000)
+
+    // Verify it shows "On" badge now
+    await expect(onBadge).toBeVisible()
+    console.log('✅ Debug mode enabled (On)')
+
+    // Check activity log for success entry
+    const logEntries = await getActivityLogEntries(page)
+    const hasEnabledEntry = logEntries.some(entry =>
+      entry.text && entry.text.includes('Debug mode enabled')
+    )
+    expect(hasEnabledEntry).toBe(true)
+    console.log('✅ Activity log shows "Debug mode enabled"')
+
+    // Disable debug mode
+    await toggleButton.click()
+    await page.waitForTimeout(1000)
+
+    // Verify it shows "Off" badge again
+    await expect(offBadge).toBeVisible()
+    console.log('✅ Debug mode disabled (Off)')
+
+    // Check activity log for disabled entry
+    const logEntries2 = await getActivityLogEntries(page)
+    const hasDisabledEntry = logEntries2.some(entry =>
+      entry.text && entry.text.includes('Debug mode disabled')
+    )
+    expect(hasDisabledEntry).toBe(true)
+    console.log('✅ Activity log shows "Debug mode disabled"')
+
+    console.log('\n✅ Debug mode toggle test completed!\n')
+  })
+
   test('should display rate limiting stats card', async ({ page }) => {
     console.log('\n▶️ Running Test: Rate Limiting stats display\n')
     test.setTimeout(MAX_TEST_TIMEOUT)

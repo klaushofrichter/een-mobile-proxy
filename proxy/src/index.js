@@ -24,6 +24,9 @@
  *   GET    /admin/rateLimitStats   - Get rate limit statistics
  *   DELETE /admin/removeSessions   - Remove all sessions except current
  *   POST   /admin/revokeAll        - Revoke all tokens (emergency)
+ *   GET    /admin/debugMode        - Get current debug mode state
+ *   POST   /admin/debugMode        - Enable or disable debug mode
+ *   POST   /admin/debugStatus      - Dump KV status to console (requires debug mode)
  *
  * Rate Limiting:
  *   Configurable via environment variables:
@@ -70,6 +73,12 @@ const MAX_POST_BODY_SIZE = 10000
 const MAX_ALLOWED_DOMAINS_CONFIG_LENGTH = 1024 // Max length of ALLOWED_API_DOMAINS config string
 const MAX_DEBUG_LOG_VALUE_LENGTH = 100 // Max length for user-controlled values in debug logs
 
+// Sensitive field names for debug log masking (show only last 4 chars)
+const SENSITIVE_FIELDS = new Set([
+  'password', 'token', 'access_token', 'refresh_token', 'refreshtoken',
+  'client_secret', 'secret', 'code', 'authorization', 'cookie'
+])
+
 // Rate limit categories
 const RATE_LIMIT_CATEGORY = {
   HEALTH: 'health',
@@ -83,6 +92,15 @@ const RATE_LIMIT_CATEGORY = {
 function parseEnvList(str) {
   return (str || '').split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 0)
 }
+
+// Debug mode auto-disable timeout
+const DEBUG_MODE_TTL_SECONDS = 600 // 10 minutes
+
+// Cache for debug mode state (avoids KV read on every request)
+let cachedDebugMode = false
+let cachedDebugModeExpiresAt = 0
+let cachedDebugModeTimestamp = 0
+const DEBUG_MODE_CACHE_TTL = 5000 // 5 seconds
 
 // Cache for parsed ALLOWED_SCHEMES (persists within worker instance)
 let cachedAllowedSchemesEnv = null
@@ -131,6 +149,109 @@ function truncateForLog(value, maxLength = MAX_DEBUG_LOG_VALUE_LENGTH) {
     return value
   }
   return value.substring(0, maxLength) + '...[truncated]'
+}
+
+/**
+ * Mask a sensitive value, showing only the last 4 characters
+ * @param {string} value - The sensitive value to mask
+ * @returns {string} - Masked value like "****abcd"
+ */
+function maskSensitiveValue(value) {
+  if (typeof value !== 'string' || value.length === 0) return '****'
+  if (value.length <= 4) return '****'
+  return '****' + value.slice(-4)
+}
+
+/**
+ * Sanitize an object for debug logging, masking sensitive fields
+ * @param {Object} obj - Object to sanitize
+ * @returns {Object} - Sanitized copy
+ */
+function sanitizeForLog(obj) {
+  if (!obj || typeof obj !== 'object') return obj
+  const sanitized = {}
+  for (const [key, value] of Object.entries(obj)) {
+    if (SENSITIVE_FIELDS.has(key.toLowerCase())) {
+      sanitized[key] = maskSensitiveValue(String(value))
+    } else if (typeof value === 'string') {
+      sanitized[key] = truncateForLog(value)
+    } else {
+      sanitized[key] = value
+    }
+  }
+  return sanitized
+}
+
+/**
+ * Log incoming request details to console when debug mode is enabled.
+ * Checks the DEBUG_MODE KV key. Sensitive fields are masked.
+ * @param {Request} request - Incoming request
+ * @param {URL} url - Parsed URL
+ * @param {Object} env - Environment bindings
+ */
+async function debugLogRequest(request, url, env) {
+  try {
+    // Use cached value if fresh enough to avoid KV read on every request
+    const now = Date.now()
+    if (now - cachedDebugModeTimestamp > DEBUG_MODE_CACHE_TTL) {
+      const expiresAt = await env.EEN_OAUTH_SESSIONS.get('DEBUG_MODE')
+      cachedDebugModeExpiresAt = expiresAt ? parseInt(expiresAt, 10) : 0
+      cachedDebugMode = cachedDebugModeExpiresAt > now
+      cachedDebugModeTimestamp = now
+    }
+    if (!cachedDebugMode || cachedDebugModeExpiresAt <= now) return
+
+    const method = request.method
+    const path = url.pathname
+
+    // Skip internal Cloudflare/wrangler dev server requests
+    if (path.startsWith('/cdn-cgi/')) return
+
+    // Skip admin SPA and static asset requests
+    if (path === '/' || path.startsWith('/assets/') || path === '/favicon.ico') return
+    const timestamp = new Date().toISOString()
+
+    // Collect sanitized headers of interest
+    const headerInfo = {}
+    const authHeader = request.headers.get('Authorization')
+    if (authHeader) headerInfo.authorization = maskSensitiveValue(authHeader)
+    const contentType = request.headers.get('Content-Type')
+    if (contentType) headerInfo['content-type'] = contentType
+
+    const logEntry = { timestamp, method, path, headers: headerInfo }
+
+    // Parse body for POST requests
+    if (method === 'POST') {
+      try {
+        const cloned = request.clone()
+        const body = await cloned.text()
+        if (body) {
+          // Try URL-encoded form data first, then JSON
+          if (contentType && contentType.includes('application/x-www-form-urlencoded')) {
+            const params = Object.fromEntries(new URLSearchParams(body))
+            logEntry.body = sanitizeForLog(params)
+          } else if (contentType && contentType.includes('application/json')) {
+            const json = JSON.parse(body)
+            logEntry.body = sanitizeForLog(json)
+          } else {
+            logEntry.body = truncateForLog(body, 200)
+          }
+        }
+      } catch {
+        logEntry.body = '[unreadable]'
+      }
+    }
+
+    // Add query params if present (sanitized)
+    if (url.search) {
+      const params = Object.fromEntries(url.searchParams)
+      logEntry.query = sanitizeForLog(params)
+    }
+
+    console.log('[DEBUG]', JSON.stringify(logEntry))
+  } catch {
+    // Debug logging should never break request handling
+  }
 }
 
 /**
@@ -373,6 +494,9 @@ export default {
     }
 
     try {
+      // Log request details if debug mode is enabled
+      await debugLogRequest(request, url, env)
+
       // Route requests
       return await routeRequest(url, request, env)
     } catch (error) {
@@ -418,6 +542,15 @@ async function routeRequest(url, request, env) {
   }
   if (path === '/admin/revokeAll' && request.method === 'POST') {
     return handleAdminRevokeAll(request, env)
+  }
+  if (path === '/admin/debugMode' && request.method === 'GET') {
+    return handleAdminGetDebugMode(request, env)
+  }
+  if (path === '/admin/debugMode' && request.method === 'POST') {
+    return handleAdminSetDebugMode(request, env)
+  }
+  if (path === '/admin/debugStatus' && request.method === 'POST') {
+    return handleAdminDebugStatus(request, env)
   }
 
   // Health check (public endpoint, no auth required)
@@ -732,11 +865,16 @@ async function handleRevoke(request, env) {
 async function handleHealth(env) {
   // Get version from KV if available, otherwise return package version
   let version = 'unknown'
+  let debugMode = false
   try {
-    const deployVersion = await env.EEN_OAUTH_SESSIONS.get('DEPLOY_VERSION')
+    const [deployVersion, debugModeExpiresAt] = await Promise.all([
+      env.EEN_OAUTH_SESSIONS.get('DEPLOY_VERSION'),
+      env.EEN_OAUTH_SESSIONS.get('DEBUG_MODE')
+    ])
     if (deployVersion) {
       version = deployVersion
     }
+    debugMode = debugModeExpiresAt ? parseInt(debugModeExpiresAt, 10) > Date.now() : false
   } catch (e) {
     // KV might not be available in some contexts
     debugError(env, 'Failed to get version from KV:', e)
@@ -745,7 +883,8 @@ async function handleHealth(env) {
   return jsonResponse({
     status: 'ok',
     version: version,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    debugMode
   })
 }
 
@@ -794,9 +933,9 @@ async function handleAdminSessionsCount(request, env) {
 
   const { keys, truncated } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
 
-  // Filter out special keys (DEPLOY_* and RATE_LIMIT:*)
+  // Filter out special keys (DEPLOY_*, RATE_LIMIT:*, DEBUG_MODE)
   const sessionKeys = keys.filter(
-    key => !key.name.startsWith('DEPLOY_') && !key.name.startsWith('RATE_LIMIT:')
+    key => !key.name.startsWith('DEPLOY_') && !key.name.startsWith('RATE_LIMIT:') && key.name !== 'DEBUG_MODE'
   )
 
   return jsonResponse({
@@ -821,11 +960,12 @@ async function handleAdminRemoveSessions(request, env) {
 
   let deletedCount = 0
   for (const key of keys) {
-    // Skip current session and special keys (DEPLOY_* and RATE_LIMIT:*)
+    // Skip current session and special keys (DEPLOY_*, RATE_LIMIT:*, DEBUG_MODE)
     if (
       key.name === currentSessionId ||
       key.name.startsWith('DEPLOY_') ||
-      key.name.startsWith('RATE_LIMIT:')
+      key.name.startsWith('RATE_LIMIT:') ||
+      key.name === 'DEBUG_MODE'
     ) {
       continue
     }
@@ -860,8 +1000,8 @@ async function handleAdminRevokeAll(request, env) {
   let errorCount = 0
 
   for (const key of keys) {
-    // Skip special keys (DEPLOY_* and RATE_LIMIT:*)
-    if (key.name.startsWith('DEPLOY_') || key.name.startsWith('RATE_LIMIT:')) {
+    // Skip special keys (DEPLOY_*, RATE_LIMIT:*, DEBUG_MODE)
+    if (key.name.startsWith('DEPLOY_') || key.name.startsWith('RATE_LIMIT:') || key.name === 'DEBUG_MODE') {
       continue
     }
 
@@ -898,6 +1038,184 @@ async function handleAdminRevokeAll(request, env) {
     revokedSessions: revokedCount,
     errors: errorCount,
     ...(truncated && { truncated })
+  })
+}
+
+/**
+ * Get current debug mode state
+ * GET /admin/debugMode
+ */
+async function handleAdminGetDebugMode(request, env) {
+  const adminCheck = await checkAdminAccess(request, env)
+  if (adminCheck.error) {
+    return jsonResponse({ error: adminCheck.error }, adminCheck.status)
+  }
+
+  const expiresAt = await env.EEN_OAUTH_SESSIONS.get('DEBUG_MODE')
+  const now = Date.now()
+  const enabled = expiresAt ? parseInt(expiresAt, 10) > now : false
+  const response = { enabled }
+  if (enabled) {
+    response.expiresAt = parseInt(expiresAt, 10)
+  }
+  return jsonResponse(response)
+}
+
+/**
+ * Enable or disable debug mode
+ * POST /admin/debugMode
+ * Body: { "enabled": true|false }
+ */
+async function handleAdminSetDebugMode(request, env) {
+  const adminCheck = await checkAdminAccess(request, env)
+  if (adminCheck.error) {
+    return jsonResponse({ error: adminCheck.error }, adminCheck.status)
+  }
+
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400)
+  }
+
+  if (typeof body.enabled !== 'boolean') {
+    return jsonResponse({ error: 'Field "enabled" must be a boolean' }, 400)
+  }
+
+  const now = Date.now()
+  let expiresAt = null
+
+  if (body.enabled) {
+    expiresAt = now + DEBUG_MODE_TTL_SECONDS * 1000
+    await env.EEN_OAUTH_SESSIONS.put('DEBUG_MODE', String(expiresAt), {
+      expirationTtl: DEBUG_MODE_TTL_SECONDS + 60 // KV TTL as safety net (extra 60s buffer)
+    })
+  } else {
+    await env.EEN_OAUTH_SESSIONS.delete('DEBUG_MODE')
+  }
+
+  // Invalidate cache immediately so the change takes effect
+  cachedDebugMode = body.enabled
+  cachedDebugModeExpiresAt = expiresAt || 0
+  cachedDebugModeTimestamp = now
+
+  console.log(`[DEBUG] Debug mode ${body.enabled ? 'enabled (expires in 10min)' : 'disabled'} by ${adminCheck.sessionData.userEmail}`)
+
+  const response = { enabled: body.enabled }
+  if (expiresAt) {
+    response.expiresAt = expiresAt
+  }
+  return jsonResponse(response)
+}
+
+/**
+ * Dump KV status information to the console (requires debug mode)
+ * POST /admin/debugStatus
+ */
+async function handleAdminDebugStatus(request, env) {
+  const adminCheck = await checkAdminAccess(request, env)
+  if (adminCheck.error) {
+    return jsonResponse({ error: adminCheck.error }, adminCheck.status)
+  }
+
+  // Require debug mode to be active
+  const expiresAt = await env.EEN_OAUTH_SESSIONS.get('DEBUG_MODE')
+  const debugActive = expiresAt ? parseInt(expiresAt, 10) > Date.now() : false
+  if (!debugActive) {
+    return jsonResponse({ error: 'Debug mode is not enabled' }, 400)
+  }
+
+  const { keys, truncated } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
+
+  // Categorize keys
+  const sessions = []
+  const rateLimitKeys = []
+  const specialKeys = []
+
+  for (const key of keys) {
+    if (key.name.startsWith('RATE_LIMIT:')) {
+      rateLimitKeys.push(key.name)
+    } else if (key.name.startsWith('DEPLOY_') || key.name === 'DEBUG_MODE') {
+      specialKeys.push(key.name)
+    } else {
+      sessions.push(key.name)
+    }
+  }
+
+  // Build console output
+  const lines = []
+  lines.push('=== KV Status Dump ===')
+  lines.push(`Total KV keys: ${keys.length}${truncated ? ' (truncated)' : ''}`)
+  lines.push(`  Sessions: ${sessions.length}`)
+  lines.push(`  Rate limit entries: ${rateLimitKeys.length}`)
+  lines.push(`  Special keys: ${specialKeys.length}`)
+  lines.push('')
+
+  // Show up to 10 session details
+  const sessionLimit = Math.min(sessions.length, 10)
+  if (sessionLimit > 0) {
+    lines.push(`Sessions (showing ${sessionLimit} of ${sessions.length}):`)
+    for (let i = 0; i < sessionLimit; i++) {
+      const sessionId = sessions[i]
+      try {
+        const dataStr = await env.EEN_OAUTH_SESSIONS.get(sessionId)
+        if (dataStr) {
+          const data = JSON.parse(dataStr)
+          const age = data.createdAt ? Math.round((Date.now() - data.createdAt) / 60000) : '?'
+          lines.push(`  ${maskSensitiveValue(sessionId)} | ${data.userEmail || 'unknown'} | age: ${age}min`)
+        } else {
+          lines.push(`  ${maskSensitiveValue(sessionId)} | [empty]`)
+        }
+      } catch {
+        lines.push(`  ${maskSensitiveValue(sessionId)} | [error reading]`)
+      }
+    }
+    if (sessions.length > 10) {
+      lines.push(`  ... and ${sessions.length - 10} more`)
+    }
+  }
+
+  // Show special keys
+  if (specialKeys.length > 0) {
+    lines.push('')
+    lines.push('Special keys:')
+    for (const key of specialKeys) {
+      const value = await env.EEN_OAUTH_SESSIONS.get(key)
+      if (key === 'DEBUG_MODE') {
+        const exp = parseInt(value, 10)
+        const remaining = Math.round((exp - Date.now()) / 1000)
+        lines.push(`  ${key} = expires in ${remaining}s`)
+      } else {
+        lines.push(`  ${key} = ${truncateForLog(value || '[null]', 50)}`)
+      }
+    }
+  }
+
+  // Show rate limit summary
+  if (rateLimitKeys.length > 0) {
+    lines.push('')
+    lines.push(`Rate limit entries: ${rateLimitKeys.length}`)
+    const limit = Math.min(rateLimitKeys.length, 10)
+    for (let i = 0; i < limit; i++) {
+      const value = await env.EEN_OAUTH_SESSIONS.get(rateLimitKeys[i])
+      lines.push(`  ${rateLimitKeys[i]} = ${value}`)
+    }
+    if (rateLimitKeys.length > 10) {
+      lines.push(`  ... and ${rateLimitKeys.length - 10} more`)
+    }
+  }
+
+  lines.push('=== End KV Status ===')
+
+  console.log('[DEBUG-STATUS]\n' + lines.join('\n'))
+
+  return jsonResponse({
+    totalKeys: keys.length,
+    sessions: sessions.length,
+    rateLimitEntries: rateLimitKeys.length,
+    specialKeys: specialKeys.length,
+    truncated
   })
 }
 

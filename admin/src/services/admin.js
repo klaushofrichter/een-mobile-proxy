@@ -123,6 +123,59 @@ export async function removeSessions() {
 }
 
 /**
+ * Get current debug mode state
+ */
+export async function getDebugMode() {
+  const headers = await getAuthHeaders()
+  const response = await fetch('/admin/debugMode', { headers })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to get debug mode' }))
+    throw new Error(error.error || 'Failed to get debug mode')
+  }
+
+  return response.json()
+}
+
+/**
+ * Set debug mode (enable/disable)
+ */
+export async function setDebugMode(enabled) {
+  const headers = await getAuthHeaders()
+  headers['Content-Type'] = 'application/json'
+  const response = await fetch('/admin/debugMode', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ enabled })
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to set debug mode' }))
+    throw new Error(error.error || 'Failed to set debug mode')
+  }
+
+  return response.json()
+}
+
+/**
+ * Dump KV status to proxy console (requires debug mode)
+ */
+export async function debugStatus() {
+  const headers = await getAuthHeaders()
+  const response = await fetch('/admin/debugStatus', {
+    method: 'POST',
+    headers
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to get debug status' }))
+    throw new Error(error.error || 'Failed to get debug status')
+  }
+
+  return response.json()
+}
+
+/**
  * Revoke all tokens (emergency)
  */
 export async function revokeAll() {
