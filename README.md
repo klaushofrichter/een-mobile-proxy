@@ -42,7 +42,8 @@ Cloudflare Worker (proxy/src/index.js)
 - **Token Revocation** — Clean logout with EEN token revocation and session cleanup
 - **Session Management** — Server-side sessions with configurable TTL and automatic expiration
 - **Custom URL Scheme Support** — Validates mobile redirect URIs like `myapp://callback` via `ALLOWED_SCHEMES`
-- **Health Monitoring** — Public health endpoint (supports HEAD for uptime monitoring)
+- **Health Monitoring** — Public health endpoint (supports HEAD for uptime monitoring), includes debug mode status
+- **Debug Mode** — Toggle request logging from the admin UI; auto-disables after 10 minutes with countdown timer; sensitive fields are masked
 - **Rate Limiting** — Configurable per-endpoint rate limits
 - **SSRF Protection** — Domain allowlist for API endpoints (`ALLOWED_API_DOMAINS`)
 - **Admin Access Control** — Email-based allowlist for administrative endpoints
@@ -53,6 +54,8 @@ Cloudflare Worker (proxy/src/index.js)
 - **Session Monitoring** — View count of active user sessions
 - **Rate Limit Statistics** — Monitor rate limiting activity across endpoints
 - **Session Management** — Remove other users' sessions while preserving your own
+- **Debug Mode Toggle** — Enable/disable proxy request logging to console with auto-disable after 10 minutes and countdown timer; sensitive fields are masked in output
+- **KV Status Dump** — Dump current KV state (sessions, rate limits, special keys) to the proxy console when debug mode is enabled
 - **Emergency Revocation** — Revoke all tokens system-wide
 - **Activity Log** — Real-time log of admin actions with timestamps
 - **Dark Mode** — Persisted theme toggle
@@ -64,7 +67,7 @@ Cloudflare Worker (proxy/src/index.js)
 een-mobile-proxy/
 ├── proxy/           # Cloudflare Worker OAuth proxy
 │   ├── src/
-│   │   └── index.js # All proxy logic (~1350 lines)
+│   │   └── index.js # All proxy logic (~1680 lines)
 │   ├── test/        # Vitest test suites
 │   ├── scripts/     # Deploy and version scripts
 │   └── wrangler.toml
@@ -83,7 +86,7 @@ een-mobile-proxy/
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET, HEAD | `/health` | Health check — status, version, timestamp |
+| GET, HEAD | `/health` | Health check — status, version, timestamp, debugMode |
 
 ### OAuth
 
@@ -101,6 +104,9 @@ een-mobile-proxy/
 | GET | `/admin/sessionsCount` | Count active sessions |
 | GET | `/admin/rateLimitStats` | Rate limiting statistics |
 | DELETE | `/admin/removeSessions` | Remove all sessions except current |
+| GET | `/admin/debugMode` | Get current debug mode state and countdown |
+| POST | `/admin/debugMode` | Enable/disable debug mode (auto-expires in 10 min) |
+| POST | `/admin/debugStatus` | Dump KV state to proxy console (requires debug mode) |
 | POST | `/admin/revokeAll` | Emergency: revoke all tokens |
 
 ### Mobile OAuth Flow

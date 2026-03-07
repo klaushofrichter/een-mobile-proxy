@@ -72,16 +72,16 @@ jobs:
       - name: Start local proxy
         run: |
           echo "=== Starting wrangler dev ==="
-          npx wrangler dev --port 8787 --local > /tmp/proxy.log 2>&1 &
+          npx wrangler dev --port 3333 --local > /tmp/proxy.log 2>&1 &
           PROXY_PID=$!
           echo $PROXY_PID > /tmp/proxy.pid
           echo "Proxy PID: $PROXY_PID"
 
           echo "=== Waiting for proxy to be ready ==="
           for i in {1..30}; do
-            if curl -s http://localhost:8787/health > /dev/null 2>&1; then
+            if curl -s http://localhost:3333/health > /dev/null 2>&1; then
               echo "✅ Proxy is ready after $i attempts"
-              curl -s http://localhost:8787/health | jq . || curl -s http://localhost:8787/health
+              curl -s http://localhost:3333/health | jq . || curl -s http://localhost:3333/health
               break
             fi
             echo "⏳ Waiting for proxy... ($i/30)"
@@ -89,7 +89,7 @@ jobs:
           done
 
           # Final check
-          if ! curl -s http://localhost:8787/health > /dev/null 2>&1; then
+          if ! curl -s http://localhost:3333/health > /dev/null 2>&1; then
             echo "❌ Proxy failed to start"
             echo "=== Proxy logs ==="
             cat /tmp/proxy.log || true
@@ -100,13 +100,13 @@ jobs:
       - name: Debug - Verify proxy is running
         run: |
           echo "=== Proxy Health Check ==="
-          curl -v http://localhost:8787/health 2>&1 || true
+          curl -v http://localhost:3333/health 2>&1 || true
           echo ""
           echo "=== Proxy Process ==="
           ps aux | grep wrangler || true
           echo ""
           echo "=== Test getAccessToken Endpoint (expect error - no valid code) ==="
-          curl -v -X POST http://localhost:8787/proxy/getAccessToken \
+          curl -v -X POST http://localhost:3333/proxy/getAccessToken \
             -H "Content-Type: application/json" \
             -H "Origin: http://127.0.0.1:3333" \
             -d '{"code":"test_invalid_code","redirect_uri":"http://127.0.0.1:3333"}' 2>&1 || true
@@ -124,7 +124,7 @@ jobs:
           npx playwright test -x
         working-directory: admin
         env:
-          VITE_PROXY_URL: 'http://localhost:8787'
+          VITE_PROXY_URL: 'http://localhost:3333'
           VITE_EEN_CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
           VITE_REDIRECT_URI: 'http://127.0.0.1:3333'
           ADMIN_TEST_USER: ${{ secrets.ADMIN_TEST_USER }}

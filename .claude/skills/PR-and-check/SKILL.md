@@ -19,8 +19,8 @@ description: Use this skill when you are requested to create a PR for a feature 
   - run: `npm test` in the `proxy` directory
   - if tests fail, analyse the failure, report findings, and stop
 - Start the local proxy for integration tests
-  - check if proxy is running: `lsof -i :8787 | grep LISTEN`
-  - terminate existing proxy if running: `lsof -i :8787 -t | xargs kill`
+  - check if proxy is running: `lsof -i :3333 | grep LISTEN`
+  - terminate existing proxy if running: `lsof -i :3333 -t | xargs kill`
   - start proxy in background: run `npm run dev` in the `proxy` directory with `run_in_background: true`
   - wait a few seconds for the proxy to start, then verify it's running
 - Run the remaining test suites sequentially - these can not run in parallel as the apps use the same port 3333
@@ -28,7 +28,7 @@ description: Use this skill when you are requested to create a PR for a feature 
   - run the demo1 tests: `npx playwright test` in the `demo1` directory
   - if any test fails, analyse the failure, report findings, and stop
 - Cleanup: terminate the local proxy after tests complete
-  - `lsof -i :8787 -t | xargs kill`
+  - `lsof -i :3333 -t | xargs kill`
 
 ## 4. Create PR
 - Get version numbers for the PR body:

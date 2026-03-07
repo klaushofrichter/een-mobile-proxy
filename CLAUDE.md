@@ -4,39 +4,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-EEN OAuth Proxy — a Cloudflare Worker that securely handles OAuth authentication with Eagle Eye Networks (EEN). It keeps CLIENT_SECRET server-side, stores refresh tokens in Cloudflare KV, and serves two Vue 3 frontend apps (admin + demo1) deployed to GitHub Pages.
+EEN Mobile Proxy — a Cloudflare Worker OAuth proxy for native mobile apps integrating with Eagle Eye Networks (EEN). It keeps CLIENT_SECRET server-side, stores refresh tokens in Cloudflare KV, and serves a Vue 3 admin dashboard as embedded static assets.
 
 ## Architecture
 
 ```
-GitHub Pages (admin & demo1 Vue apps)
-        │ HTTPS + CORS
+iOS / Android App
+        │ HTTPS + Bearer Token
         ▼
 Cloudflare Worker (proxy/src/index.js)
    ├── Cloudflare KV (session/token storage)
+   ├── Static Assets (admin SPA)
    └── EEN OAuth API (eagleeyenetworks.com)
 ```
 
 - **proxy/** — Single-file Cloudflare Worker (`src/index.js`) handling OAuth token exchange, session management, admin endpoints, rate limiting, and SSRF protection
-- **admin/** — Vue 3 + Pinia + TailwindCSS 4 admin dashboard for session management
-- **demo1/** — Vue 3 + Pinia + TailwindCSS 4 demo app showing OAuth login flow
+- **admin/** — Vue 3 + Pinia + TailwindCSS 4 admin dashboard for session management, served as static assets by the Worker
 - **scripts/** — Build, deploy, and test automation
 
-The proxy is the only component with access to CLIENT_SECRET. Frontend apps communicate via session cookies (HttpOnly, Secure, SameSite=None) or header-based auth (`Authorization: Bearer <sessionId>`).
+The proxy is the only component with access to CLIENT_SECRET. Mobile clients communicate via header-based auth (`Authorization: Bearer <sessionId>`). No cookies are used.
 
 ### Frontend Pattern
 
-Both admin and demo1 follow the same Vue 3 structure:
+The admin app follows this Vue 3 structure:
 - **Pinia stores** (`src/stores/auth.js`) — composition API style, manage auth state, token refresh, session tracking
-- **Services** (`src/services/`) — API call wrappers (auth.js in both; admin.js + admin.test.js in admin; user.js + proxy.js in demo1)
-- **CSP plugin** (`vite-plugin-csp.js`) — shared Vite plugin that injects `connect-src` at build time based on `VITE_PROXY_URL`
-- Auth stores validate `hostname` from EEN token responses against a domain allowlist before storing
+- **Services** (`src/services/`) — API call wrappers (auth.js, admin.js, admin.test.js)
+- **CSP plugin** (`vite-plugin-csp.js`) — Vite plugin that injects `connect-src` at build time based on `VITE_PROXY_URL`
+- Auth store validates `hostname` from EEN token responses against a domain allowlist before storing
 
 ## Commands
 
 ### Proxy (Cloudflare Worker)
 ```bash
-cd proxy && npm run dev          # Start local dev server on port 8787
+cd proxy && npm run dev          # Start local dev server on port 3333
 cd proxy && npm test             # Run all proxy tests (vitest)
 cd proxy && npx vitest run test/security.test.js  # Run a single test file
 cd proxy && npm run test:watch   # Watch mode
@@ -52,20 +52,10 @@ cd admin && npm test             # Playwright E2E tests (builds admin, starts pr
 cd admin && npm run test:unit    # Vitest unit tests
 ```
 
-### Demo1 (Vue 3)
-```bash
-cd demo1 && npm run dev          # Dev server on 127.0.0.1:3333
-cd demo1 && npm run dev:prod     # Dev server with production config
-cd demo1 && npm run build        # Production build
-cd demo1 && npm test             # Playwright E2E tests
-```
-
 ### All Tests
 ```bash
-npm test                         # Runs scripts/run-all-tests.sh (proxy + demo1 + admin sequentially)
+npm test                         # Runs scripts/run-all-tests.sh (proxy + admin sequentially)
 ```
-
-Admin and demo1 share port 3333 — they cannot run simultaneously (this is intentional due to OAuth redirect URI constraints).
 
 ## Testing
 
@@ -75,16 +65,16 @@ Admin and demo1 share port 3333 — they cannot run simultaneously (this is inte
 
 ## Key Conventions
 
-- **Single-file worker**: All proxy logic lives in `proxy/src/index.js` (~1435 lines). No module splitting.
+- **Single-file worker**: All proxy logic lives in `proxy/src/index.js` (~1680 lines). No module splitting.
 - **Version bumping**: Husky pre-commit hook auto-increments patch version in package.json for changed directories. It also checks proxy deployment status (skip with `SKIP_DEPLOYMENT_CHECK=1`).
-- **Version numbers differ** across proxy, admin, and demo1 — this is intentional.
-- **Environment files**: Proxy uses `.dev.vars` (secrets for both local dev and deployment). Frontend apps use `.env` and `.env.prod` with `VITE_` prefix.
+- **Version numbers differ** across proxy and admin — this is intentional.
+- **Environment files**: Proxy uses `.dev.vars` (secrets for both local dev and deployment). Admin uses `.env` (auto-generated from `proxy/.dev.vars` via `scripts/generate-admin-env.sh`) with `VITE_` prefix.
 - **Node 20+** required (Wrangler v4, Vite 7).
 
 ## Deployment
 
 - Proxy deploys to Cloudflare Workers via `proxy/scripts/deploy.js` (reads secrets from `proxy/.dev.vars`)
-- Admin/demo1 deploy to GitHub Pages under `/een-oauth-proxy/` and `/een-oauth-proxy/demo1/`
+- Admin SPA is embedded in the Worker as static assets (`admin/dist/`)
 - CI/CD via GitHub Actions: PR gets AI review + tests; merge to production triggers deploy with automatic rollback on failure
 
 ## Commit Message Conventions
@@ -99,4 +89,3 @@ Admin and demo1 share port 3333 — they cannot run simultaneously (this is inte
 
 - No branch protection on `develop` branch (intentional)
 - Version jumps between commits are expected (not every version is committed)
-- Admin and demo1 sharing port 3333 is by design
