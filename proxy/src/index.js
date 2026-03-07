@@ -93,6 +93,13 @@ function parseEnvList(str) {
   return (str || '').split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 0)
 }
 
+/**
+ * Check if a KV key name is a special (non-session) key
+ */
+function isSpecialKVKey(name) {
+  return name.startsWith('DEPLOY_') || name.startsWith('RATE_LIMIT:') || name === 'DEBUG_MODE'
+}
+
 // Debug mode auto-disable timeout
 const DEBUG_MODE_TTL_SECONDS = 600 // 10 minutes
 
@@ -869,16 +876,11 @@ async function handleRevoke(request, env) {
 async function handleHealth(env) {
   // Get version from KV if available, otherwise return package version
   let version = 'unknown'
-  let debugMode = false
   try {
-    const [deployVersion, debugModeExpiresAt] = await Promise.all([
-      env.EEN_OAUTH_SESSIONS.get('DEPLOY_VERSION'),
-      env.EEN_OAUTH_SESSIONS.get('DEBUG_MODE')
-    ])
+    const deployVersion = await env.EEN_OAUTH_SESSIONS.get('DEPLOY_VERSION')
     if (deployVersion) {
       version = deployVersion
     }
-    debugMode = debugModeExpiresAt ? parseInt(debugModeExpiresAt, 10) > Date.now() : false
   } catch (e) {
     // KV might not be available in some contexts
     debugError(env, 'Failed to get version from KV:', e)
@@ -887,8 +889,7 @@ async function handleHealth(env) {
   return jsonResponse({
     status: 'ok',
     version: version,
-    timestamp: new Date().toISOString(),
-    debugMode
+    timestamp: new Date().toISOString()
   })
 }
 
@@ -901,21 +902,9 @@ async function handleHealth(env) {
  * GET /admin/version
  */
 async function handleAdminVersion(request, env) {
-  // Require authenticated session
-  const sessionId = getSessionId(request, env)
-  if (!sessionId) {
-    return jsonResponse({ error: 'Authentication required' }, 401)
-  }
-
-  const sessionDataStr = await env.EEN_OAUTH_SESSIONS.get(sessionId)
-  if (!sessionDataStr) {
-    return jsonResponse({ error: 'Session expired or invalid' }, 401)
-  }
-
-  // Check if user is admin
-  const sessionData = JSON.parse(sessionDataStr)
-  if (!isAdminUser(sessionData.userEmail, env)) {
-    return jsonResponse({ error: 'Admin access required' }, 403)
+  const adminCheck = await checkAdminAccess(request, env)
+  if (adminCheck.error) {
+    return jsonResponse({ error: adminCheck.error }, adminCheck.status)
   }
 
   const version = await env.EEN_OAUTH_SESSIONS.get('DEPLOY_VERSION')
@@ -937,10 +926,7 @@ async function handleAdminSessionsCount(request, env) {
 
   const { keys, truncated } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
 
-  // Filter out special keys (DEPLOY_*, RATE_LIMIT:*, DEBUG_MODE)
-  const sessionKeys = keys.filter(
-    key => !key.name.startsWith('DEPLOY_') && !key.name.startsWith('RATE_LIMIT:') && key.name !== 'DEBUG_MODE'
-  )
+  const sessionKeys = keys.filter(key => !isSpecialKVKey(key.name))
 
   return jsonResponse({
     sessionCount: sessionKeys.length,
@@ -964,13 +950,7 @@ async function handleAdminRemoveSessions(request, env) {
 
   let deletedCount = 0
   for (const key of keys) {
-    // Skip current session and special keys (DEPLOY_*, RATE_LIMIT:*, DEBUG_MODE)
-    if (
-      key.name === currentSessionId ||
-      key.name.startsWith('DEPLOY_') ||
-      key.name.startsWith('RATE_LIMIT:') ||
-      key.name === 'DEBUG_MODE'
-    ) {
+    if (key.name === currentSessionId || isSpecialKVKey(key.name)) {
       continue
     }
 
@@ -1004,8 +984,7 @@ async function handleAdminRevokeAll(request, env) {
   let errorCount = 0
 
   for (const key of keys) {
-    // Skip special keys (DEPLOY_*, RATE_LIMIT:*, DEBUG_MODE)
-    if (key.name.startsWith('DEPLOY_') || key.name.startsWith('RATE_LIMIT:') || key.name === 'DEBUG_MODE') {
+    if (isSpecialKVKey(key.name)) {
       continue
     }
 
@@ -1140,7 +1119,7 @@ async function handleAdminDebugStatus(request, env) {
   for (const key of keys) {
     if (key.name.startsWith('RATE_LIMIT:')) {
       rateLimitKeys.push(key.name)
-    } else if (key.name.startsWith('DEPLOY_') || key.name === 'DEBUG_MODE') {
+    } else if (isSpecialKVKey(key.name)) {
       specialKeys.push(key.name)
     } else {
       sessions.push(key.name)
@@ -1156,14 +1135,22 @@ async function handleAdminDebugStatus(request, env) {
   lines.push(`  Special keys: ${specialKeys.length}`)
   lines.push('')
 
+  // Fetch all detail values in parallel (up to 10 sessions, all special keys, up to 10 rate limit keys)
+  const sessionSlice = sessions.slice(0, 10)
+  const rateLimitSlice = rateLimitKeys.slice(0, 10)
+  const [sessionValues, specialValues, rateLimitValues] = await Promise.all([
+    Promise.all(sessionSlice.map(id => env.EEN_OAUTH_SESSIONS.get(id).catch(() => null))),
+    Promise.all(specialKeys.map(k => env.EEN_OAUTH_SESSIONS.get(k).catch(() => null))),
+    Promise.all(rateLimitSlice.map(k => env.EEN_OAUTH_SESSIONS.get(k).catch(() => null)))
+  ])
+
   // Show up to 10 session details
-  const sessionLimit = Math.min(sessions.length, 10)
-  if (sessionLimit > 0) {
-    lines.push(`Sessions (showing ${sessionLimit} of ${sessions.length}):`)
-    for (let i = 0; i < sessionLimit; i++) {
-      const sessionId = sessions[i]
+  if (sessionSlice.length > 0) {
+    lines.push(`Sessions (showing ${sessionSlice.length} of ${sessions.length}):`)
+    for (let i = 0; i < sessionSlice.length; i++) {
+      const sessionId = sessionSlice[i]
       try {
-        const dataStr = await env.EEN_OAUTH_SESSIONS.get(sessionId)
+        const dataStr = sessionValues[i]
         if (dataStr) {
           const data = JSON.parse(dataStr)
           const age = data.createdAt ? Math.round((Date.now() - data.createdAt) / 60000) : '?'
@@ -1184,8 +1171,9 @@ async function handleAdminDebugStatus(request, env) {
   if (specialKeys.length > 0) {
     lines.push('')
     lines.push('Special keys:')
-    for (const key of specialKeys) {
-      const value = await env.EEN_OAUTH_SESSIONS.get(key)
+    for (let i = 0; i < specialKeys.length; i++) {
+      const key = specialKeys[i]
+      const value = specialValues[i]
       if (key === 'DEBUG_MODE') {
         const exp = parseInt(value, 10)
         const remaining = Math.round((exp - Date.now()) / 1000)
@@ -1200,10 +1188,8 @@ async function handleAdminDebugStatus(request, env) {
   if (rateLimitKeys.length > 0) {
     lines.push('')
     lines.push(`Rate limit entries: ${rateLimitKeys.length}`)
-    const limit = Math.min(rateLimitKeys.length, 10)
-    for (let i = 0; i < limit; i++) {
-      const value = await env.EEN_OAUTH_SESSIONS.get(rateLimitKeys[i])
-      lines.push(`  ${rateLimitKeys[i]} = ${value}`)
+    for (let i = 0; i < rateLimitSlice.length; i++) {
+      lines.push(`  ${rateLimitSlice[i]} = ${rateLimitValues[i]}`)
     }
     if (rateLimitKeys.length > 10) {
       lines.push(`  ... and ${rateLimitKeys.length - 10} more`)

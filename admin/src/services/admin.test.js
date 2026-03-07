@@ -167,7 +167,7 @@ describe('Admin Service - getRateLimitStats', () => {
       json: () => Promise.reject(new Error('Parse error'))
     })
 
-    await expect(getRateLimitStats()).rejects.toThrow('Failed to get rate limit stats')
+    await expect(getRateLimitStats()).rejects.toThrow('Request to /admin/rateLimitStats failed')
   })
 
   it('should use relative URL and auth headers', async () => {

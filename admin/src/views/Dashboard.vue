@@ -466,19 +466,21 @@ const githubRepoUrl = computed(() => {
 })
 const proxyUrl = window.location.origin
 
+function formatTime(date) {
+  const h = date.getHours().toString().padStart(2, '0')
+  const m = date.getMinutes().toString().padStart(2, '0')
+  const s = date.getSeconds().toString().padStart(2, '0')
+  return `${h}:${m}:${s}`
+}
+
 const lastHealthCheckText = computed(() => {
   if (!lastHealthCheck.value) return 'Never'
-  const date = new Date(lastHealthCheck.value)
-  const hours = date.getHours().toString().padStart(2, '0')
-  const minutes = date.getMinutes().toString().padStart(2, '0')
-  const seconds = date.getSeconds().toString().padStart(2, '0')
-  return `${hours}:${minutes}:${seconds}`
+  return formatTime(new Date(lastHealthCheck.value))
 })
 
 // Add entry to activity log
 function addLogEntry(message, type = 'info') {
-  const now = new Date()
-  const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`
+  const time = formatTime(new Date())
 
   activityLog.value.unshift({ time, message, type })
 
@@ -527,18 +529,22 @@ function stopDebugModeCountdown() {
   debugModeCountdown.value = 0
 }
 
+// Apply debug mode state from API response
+function applyDebugModeState(data) {
+  debugModeEnabled.value = data.enabled
+  debugModeExpiresAt.value = data.expiresAt || null
+  if (data.enabled && data.expiresAt) {
+    debugModeCountdown.value = Math.max(0, Math.round((data.expiresAt - Date.now()) / 1000))
+    startDebugModeCountdown()
+  } else {
+    stopDebugModeCountdown()
+  }
+}
+
 // Fetch debug mode state
 async function fetchDebugMode() {
   try {
-    const data = await getDebugMode()
-    debugModeEnabled.value = data.enabled
-    debugModeExpiresAt.value = data.expiresAt || null
-    if (data.enabled && data.expiresAt) {
-      debugModeCountdown.value = Math.max(0, Math.round((data.expiresAt - Date.now()) / 1000))
-      startDebugModeCountdown()
-    } else {
-      stopDebugModeCountdown()
-    }
+    applyDebugModeState(await getDebugMode())
   } catch {
     // Silently ignore - debug mode defaults to off
   }
@@ -549,15 +555,7 @@ async function toggleDebugMode() {
   togglingDebugMode.value = true
   const newState = !debugModeEnabled.value
   try {
-    const data = await setDebugMode(newState)
-    debugModeEnabled.value = data.enabled
-    debugModeExpiresAt.value = data.expiresAt || null
-    if (data.enabled && data.expiresAt) {
-      debugModeCountdown.value = Math.max(0, Math.round((data.expiresAt - Date.now()) / 1000))
-      startDebugModeCountdown()
-    } else {
-      stopDebugModeCountdown()
-    }
+    applyDebugModeState(await setDebugMode(newState))
     addLogEntry(`Debug mode ${newState ? 'enabled (10 min)' : 'disabled'}`, 'success')
   } catch (e) {
     addLogEntry(`Failed to toggle debug mode: ${e.message}`, 'error')
