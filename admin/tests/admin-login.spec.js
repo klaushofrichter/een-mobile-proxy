@@ -115,7 +115,7 @@ test.describe('Admin Login and Health', () => {
     // Skip if admin access not available (returns null)
     if (sessionCount === null) {
       console.log('⚠️ SKIPPING: Admin access not available for session count')
-      console.log('Ensure ADMIN_TEST_USER email is in ADMIN_EMAILS in proxy config')
+      console.log('Ensure TEST_USER email is in ADMIN_EMAILS in proxy config')
       test.skip()
       return
     }

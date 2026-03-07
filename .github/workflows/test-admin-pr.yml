@@ -37,8 +37,8 @@ jobs:
           echo "=== Secrets Check (existence only) ==="
           if [ -n "${{ secrets.VITE_EEN_CLIENT_ID }}" ]; then echo "✅ VITE_EEN_CLIENT_ID is set"; else echo "❌ VITE_EEN_CLIENT_ID is NOT set"; fi
           if [ -n "${{ secrets.EEN_CLIENT_SECRET }}" ]; then echo "✅ EEN_CLIENT_SECRET is set"; else echo "❌ EEN_CLIENT_SECRET is NOT set"; fi
-          if [ -n "${{ secrets.ADMIN_TEST_USER }}" ]; then echo "✅ ADMIN_TEST_USER is set"; else echo "❌ ADMIN_TEST_USER is NOT set"; fi
-          if [ -n "${{ secrets.ADMIN_TEST_PASSWORD }}" ]; then echo "✅ ADMIN_TEST_PASSWORD is set"; else echo "❌ ADMIN_TEST_PASSWORD is NOT set"; fi
+          if [ -n "${{ secrets.TEST_USER }}" ]; then echo "✅ TEST_USER is set"; else echo "❌ TEST_USER is NOT set"; fi
+          if [ -n "${{ secrets.TEST_PASSWORD }}" ]; then echo "✅ TEST_PASSWORD is set"; else echo "❌ TEST_PASSWORD is NOT set"; fi
 
       - name: Install admin dependencies
         run: npm ci
@@ -67,7 +67,7 @@ jobs:
         env:
           CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.EEN_CLIENT_SECRET }}
-          ADMIN_EMAILS: ${{ secrets.ADMIN_TEST_USER }}
+          ADMIN_EMAILS: ${{ secrets.TEST_USER }}
 
       - name: Start local proxy
         run: |
@@ -127,8 +127,8 @@ jobs:
           VITE_PROXY_URL: 'http://localhost:3333'
           VITE_EEN_CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
           VITE_REDIRECT_URI: 'http://127.0.0.1:3333'
-          ADMIN_TEST_USER: ${{ secrets.ADMIN_TEST_USER }}
-          ADMIN_TEST_PASSWORD: ${{ secrets.ADMIN_TEST_PASSWORD }}
+          TEST_USER: ${{ secrets.TEST_USER }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
 
       - name: Show proxy logs
         if: always()

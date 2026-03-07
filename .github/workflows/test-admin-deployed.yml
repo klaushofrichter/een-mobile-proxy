@@ -46,8 +46,8 @@ jobs:
           VITE_PROXY_URL: ${{ vars.VITE_PROXY_URL }}
           VITE_EEN_CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
           VITE_REDIRECT_URI: 'http://127.0.0.1:3333'
-          ADMIN_TEST_USER: ${{ secrets.ADMIN_TEST_USER }}
-          ADMIN_TEST_PASSWORD: ${{ secrets.ADMIN_TEST_PASSWORD }}
+          TEST_USER: ${{ secrets.TEST_USER }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
 
       - name: Upload test results
         uses: actions/upload-artifact@v4

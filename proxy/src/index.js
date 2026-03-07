@@ -196,8 +196,12 @@ async function debugLogRequest(request, url, env) {
     if (now - cachedDebugModeTimestamp > DEBUG_MODE_CACHE_TTL) {
       const expiresAt = await env.EEN_OAUTH_SESSIONS.get('DEBUG_MODE')
       cachedDebugModeExpiresAt = expiresAt ? parseInt(expiresAt, 10) : 0
+      const wasEnabled = cachedDebugMode
       cachedDebugMode = cachedDebugModeExpiresAt > now
       cachedDebugModeTimestamp = now
+      if (wasEnabled && !cachedDebugMode) {
+        console.log('[DEBUG] Debug mode auto-disabled (TTL expired)')
+      }
     }
     if (!cachedDebugMode || cachedDebugModeExpiresAt <= now) return
 

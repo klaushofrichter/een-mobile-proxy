@@ -281,8 +281,8 @@ Generate with: `./scripts/generate-admin-env.sh`
 | `VITE_EEN_CLIENT_ID` | `CLIENT_ID` | EEN OAuth Client ID |
 | `VITE_GITHUB_REPO` | `GITHUB_REPO` | GitHub repo URL (for version links) |
 | `VITE_GITHUB_BRANCH` | `GITHUB_BRANCH` | Git branch (for version links) |
-| `ADMIN_TEST_USER` | `TEST_USER` | Test admin email (Playwright) |
-| `ADMIN_TEST_PASSWORD` | `TEST_PASSWORD` | Test admin password (Playwright) |
+| `TEST_USER` | `TEST_USER` | Test admin email (Playwright) |
+| `TEST_PASSWORD` | `TEST_PASSWORD` | Test admin password (Playwright) |
 | `TEST_NON_ADMIN_USER` | `TEST_NON_ADMIN_USER` | Non-admin email for rejection tests |
 | `TEST_NON_ADMIN_PASSWORD` | `TEST_NON_ADMIN_PASSWORD` | Non-admin password for rejection tests |
 

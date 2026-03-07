@@ -54,8 +54,8 @@ cat > "$TARGET" << EOF
 VITE_EEN_CLIENT_ID=${CLIENT_ID}
 
 # Admin test credentials (must be an admin user)
-ADMIN_TEST_USER=${TEST_USER}
-ADMIN_TEST_PASSWORD=${TEST_PASSWORD}
+TEST_USER=${TEST_USER}
+TEST_PASSWORD=${TEST_PASSWORD}
 
 # Non-admin test credentials (for rejection tests)
 TEST_NON_ADMIN_USER=${TEST_NON_ADMIN_USER}

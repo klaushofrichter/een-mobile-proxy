@@ -30,10 +30,10 @@ export function isLocalProxy() {
  * @returns {{ username: string, password: string }}
  */
 export function getAdminCredentials() {
-  const username = process.env.ADMIN_TEST_USER
-  const password = process.env.ADMIN_TEST_PASSWORD
+  const username = process.env.TEST_USER
+  const password = process.env.TEST_PASSWORD
   if (!username || !password) {
-    throw new Error('ADMIN_TEST_USER and ADMIN_TEST_PASSWORD must be set in .env')
+    throw new Error('TEST_USER and TEST_PASSWORD must be set in .env')
   }
   return { username, password }
 }
