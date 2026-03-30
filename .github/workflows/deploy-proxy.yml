@@ -15,7 +15,7 @@ on:
         type: boolean
   push:
     branches: [production]
-    paths: ['proxy/**']
+    paths: ['proxy/**', 'admin/**']
 
 env:
   PROXY_URL: https://een-mobile-proxy.klaushofrichter.workers.dev
@@ -166,8 +166,7 @@ jobs:
           echo "Setting ALLOWED_SCHEMES..."
           printf '%s' "${{ secrets.ALLOWED_SCHEMES }}" | npx wrangler secret put ALLOWED_SCHEMES
 
-          echo "Setting ENVIRONMENT..."
-          printf '%s' "${{ secrets.ENVIRONMENT }}" | npx wrangler secret put ENVIRONMENT
+          # ENVIRONMENT is set in wrangler.toml as a plain text binding, not a secret
 
           echo "Setting ALLOWED_API_DOMAINS..."
           printf '%s' "${{ secrets.ALLOWED_API_DOMAINS }}" | npx wrangler secret put ALLOWED_API_DOMAINS
