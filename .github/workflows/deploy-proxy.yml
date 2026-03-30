@@ -89,11 +89,21 @@ jobs:
           DEPLOYED_VERSION="${{ steps.deployed.outputs.deployed_version }}"
           FORCE_DEPLOY="${{ inputs.force_deploy }}"
 
+          # Check if admin files changed in this push (triggers deploy even if proxy version matches)
+          ADMIN_CHANGED="false"
+          if git diff HEAD~1 --name-only 2>/dev/null | grep -q '^admin/'; then
+            ADMIN_CHANGED="true"
+            echo "Admin files changed in this push"
+          fi
+
           if [ "$FORCE_DEPLOY" = "true" ]; then
             echo "::warning::Force deploy requested - bypassing version check"
             echo "should_deploy=true" >> $GITHUB_OUTPUT
           elif [ "$PACKAGE_VERSION" != "$DEPLOYED_VERSION" ]; then
             echo "Version mismatch: $PACKAGE_VERSION != $DEPLOYED_VERSION"
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          elif [ "$ADMIN_CHANGED" = "true" ]; then
+            echo "Admin files changed — deploying to update embedded SPA"
             echo "should_deploy=true" >> $GITHUB_OUTPUT
           else
             echo "Versions match: $PACKAGE_VERSION = $DEPLOYED_VERSION"
