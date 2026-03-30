@@ -55,6 +55,13 @@ jobs:
           VITE_GITHUB_BRANCH: production
           VITE_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: Verify admin build output
+        run: |
+          if [ ! -f admin/dist/index.html ]; then
+            echo "::error::admin/dist/index.html not found — admin build may have failed"
+            exit 1
+          fi
+
       - name: Get proxy version from package.json
         id: version
         run: |

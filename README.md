@@ -279,7 +279,7 @@ GitHub Actions workflows handle:
 | `RATE_LIMIT_ADMIN` | Max `/admin/*` requests per window | `60` |
 | `RATE_LIMIT_UNKNOWN` | Max requests for unidentified clients | `5` |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token (deployment only) | — |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (deployment and admin dashboard links) | — |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (deployment and admin dashboard links; embedded in public frontend bundle as `VITE_CLOUDFLARE_ACCOUNT_ID`) | — |
 | `GITHUB_REPO` | GitHub repo URL (for admin version links) | — |
 | `GITHUB_BRANCH` | Git branch name (for admin version links) | — |
 
