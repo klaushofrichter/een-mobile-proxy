@@ -57,6 +57,7 @@ jobs:
           # Quote values to handle special characters like # which would start a comment
           printf 'CLIENT_ID="%s"\n' "$CLIENT_ID" > .dev.vars
           printf 'CLIENT_SECRET="%s"\n' "$CLIENT_SECRET" >> .dev.vars
+          printf 'ALLOWED_SCHEMES="%s"\n' "$ALLOWED_SCHEMES" >> .dev.vars
           echo "✅ .dev.vars created"
           echo "=== .dev.vars contents (masked) ==="
           sed 's/=.*/=***/' .dev.vars
@@ -64,6 +65,7 @@ jobs:
         env:
           CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.EEN_CLIENT_SECRET }}
+          ALLOWED_SCHEMES: ${{ secrets.ALLOWED_SCHEMES }}
 
       - name: Start local proxy
         run: |

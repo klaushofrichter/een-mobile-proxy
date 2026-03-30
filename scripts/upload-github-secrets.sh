@@ -100,7 +100,7 @@ upload_secret "TEST_USER" "TEST_USER"
 upload_secret "TEST_PASSWORD" "TEST_PASSWORD"
 upload_secret "TEST_NON_ADMIN_USER" "TEST_NON_ADMIN_USER"
 upload_secret "TEST_NON_ADMIN_PASSWORD" "TEST_NON_ADMIN_PASSWORD"
-# The test user must be in ADMIN_EMAILS to have admin access for admin app tests
+# TEST_USER must be in ADMIN_EMAILS for admin access; TEST_NON_ADMIN_USER must NOT be in ADMIN_EMAILS
 
 echo ""
 echo "--- API Keys ---"

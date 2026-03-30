@@ -139,6 +139,12 @@ jobs:
           echo "Setting ADMIN_EMAILS..."
           printf '%s' "${{ secrets.ADMIN_EMAILS }}" | npx wrangler secret put ADMIN_EMAILS
 
+          echo "Setting ALLOWED_SCHEMES..."
+          printf '%s' "${{ secrets.ALLOWED_SCHEMES }}" | npx wrangler secret put ALLOWED_SCHEMES
+
+          echo "Setting ENVIRONMENT..."
+          printf '%s' "${{ secrets.ENVIRONMENT }}" | npx wrangler secret put ENVIRONMENT
+
           echo "Setting ALLOWED_API_DOMAINS..."
           printf '%s' "${{ secrets.ALLOWED_API_DOMAINS }}" | npx wrangler secret put ALLOWED_API_DOMAINS
 
