@@ -37,10 +37,34 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: proxy/package-lock.json
+          cache-dependency-path: |
+            proxy/package-lock.json
+            admin/package-lock.json
 
-      - name: Install dependencies
-        run: cd proxy && npm ci
+      - name: Install proxy dependencies
+        run: npm ci
+        working-directory: proxy
+
+      - name: Install admin dependencies
+        run: npm ci
+        working-directory: admin
+
+      - name: Build admin SPA
+        run: npm run build
+        working-directory: admin
+        env:
+          VITE_EEN_CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
+          VITE_GITHUB_REPO: https://github.com/${{ github.repository }}
+          VITE_GITHUB_BRANCH: ${{ github.ref_name }}
+          VITE_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Verify admin build output
+        run: |
+          if [ ! -f admin/dist/index.html ]; then
+            echo "::error::admin/dist/index.html not found — admin build may have failed"
+            exit 1
+          fi
+          ls admin/dist/assets/*.js > /dev/null 2>&1 || { echo "::error::No JS assets in admin/dist/assets/"; exit 1; }
 
       - name: Get proxy version from package.json
         id: version

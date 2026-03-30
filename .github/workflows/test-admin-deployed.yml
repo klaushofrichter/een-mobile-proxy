@@ -2,7 +2,7 @@ name: Test Deployed Admin App
 
 on:
   workflow_run:
-    workflows: ["Deploy Admin to GitHub Pages"]
+    workflows: ["Deploy Proxy to Cloudflare"]
     types:
       - completed
   workflow_dispatch:

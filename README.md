@@ -151,7 +151,7 @@ Required values in `proxy/.dev.vars`:
 CLIENT_ID=your-een-client-id
 CLIENT_SECRET=your-een-client-secret
 ADMIN_EMAILS=admin@example.com
-ALLOWED_SCHEMES=myapp,myotherapp
+ALLOWED_SCHEMES=myapp
 ALLOWED_API_DOMAINS=eagleeyenetworks.com
 ENVIRONMENT=development
 ```
@@ -228,7 +228,7 @@ cd admin && npm test
 
 ### Test Details
 
-- **Proxy unit tests** use Vitest with `@cloudflare/vitest-pool-workers` (Miniflare). Covers OAuth flows, admin endpoints, auth headers, rate limiting, SSRF protection, security vulnerabilities, workflow integration, and performance.
+- **Proxy unit tests** use Vitest with `@cloudflare/vitest-pool-workers` (Miniflare). Covers OAuth flows, admin endpoints, auth headers, CORS, rate limiting, SSRF protection, security vulnerabilities, workflow integration, and performance.
 - **Admin E2E tests** use Playwright. The admin SPA is served by the proxy on port 3333 (not a separate Vite dev server). Requires test credentials in `admin/.env` — generate with `./scripts/generate-admin-env.sh`. Destructive tests (remove sessions, revoke all) only run against localhost.
 
 ## Deployment
@@ -249,9 +249,13 @@ The deploy script builds the admin SPA, deploys the Worker, sets secrets, and st
 - **`production`** — protected branch; merges require passing status checks (review, CodeQL, branch rules, tests)
 
 GitHub Actions workflows handle:
-- AI code review (Claude + Gemini) on PRs to production
-- Automated testing on PRs to production
+- AI code review (Claude on PRs to develop and production; Gemini on PRs to production)
+- CodeQL security analysis on PRs
+- Branch protection validation on PRs
+- Automated admin E2E testing on PRs to production
 - Proxy deployment to Cloudflare Workers on merge to production, with automatic rollback on failure
+- Post-deploy verification tests against the live proxy
+- Automated release creation with changelog
 - Slack notifications for deployments and releases
 
 ## Environment Variables Reference
@@ -274,6 +278,10 @@ GitHub Actions workflows handle:
 | `RATE_LIMIT_OAUTH` | Max `/proxy/*` requests per window | `60` |
 | `RATE_LIMIT_ADMIN` | Max `/admin/*` requests per window | `60` |
 | `RATE_LIMIT_UNKNOWN` | Max requests for unidentified clients | `5` |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token (deployment only) | — |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (deployment and admin dashboard links; embedded in public frontend bundle as `VITE_CLOUDFLARE_ACCOUNT_ID`) | — |
+| `GITHUB_REPO` | GitHub repo URL (for admin version links) | — |
+| `GITHUB_BRANCH` | Git branch name (for admin version links) | — |
 
 ### Admin (`admin/.env` — auto-generated from `proxy/.dev.vars`)
 

@@ -312,11 +312,13 @@ async function listAllKVKeys(kvNamespace, options = {}, env = null) {
   } while (cursor && allKeys.length < MAX_KEYS)
 
   // Trim to MAX_KEYS if a batch pushed us over the limit
+  let wasCapped = false
   if (allKeys.length > MAX_KEYS) {
     allKeys.length = MAX_KEYS
+    wasCapped = true
   }
 
-  const truncated = allKeys.length >= MAX_KEYS && !!cursor
+  const truncated = wasCapped || (allKeys.length >= MAX_KEYS && !!cursor)
   if (truncated && env) {
     debugError(env, `listAllKVKeys truncated at ${MAX_KEYS} keys (prefix: ${options.prefix || 'none'})`)
   }
