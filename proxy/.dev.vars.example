@@ -9,9 +9,14 @@ CLIENT_SECRET=your-een-client-secret
 # Admin users (comma-separated email addresses)
 ADMIN_EMAILS=admin@example.com
 
-# Allowed CORS origins (comma-separated URLs)
-# Note: localhost is automatically allowed in development mode
-ALLOWED_ORIGINS=https://your-username.github.io
+# Allowed custom URL schemes for mobile redirect URIs (comma-separated)
+# Example: myapp,myotherapp allows redirect URIs like myapp://callback
+ALLOWED_SCHEMES=myapp
+
+# Allowed API domains for SSRF protection (comma-separated)
+# Only requests to these domains are allowed in httpsBaseUrl
+# Defaults to eagleeyenetworks.com if not set
+ALLOWED_API_DOMAINS=eagleeyenetworks.com
 
 # Environment
 ENVIRONMENT=development
@@ -29,10 +34,23 @@ REFRESH_TOKEN_TTL=86400
 # RATE_LIMIT_UNKNOWN: max requests per window for unidentified clients (default: 5)
 #   - In development, clients without CF-Connecting-IP use X-Forwarded-For
 #   - In production, missing CF-Connecting-IP triggers this restrictive limit
-# Set to 0 to disable rate limiting for a specific category
 RATE_LIMIT_ENABLED=true
 RATE_LIMIT_WINDOW=60
 RATE_LIMIT_HEALTH=60
 RATE_LIMIT_OAUTH=30
 RATE_LIMIT_ADMIN=60
 RATE_LIMIT_UNKNOWN=5
+
+# Cloudflare credentials (required for deployment via npm run deploy)
+# CLOUDFLARE_API_TOKEN=your-cloudflare-api-token
+# CLOUDFLARE_ACCOUNT_ID=your-cloudflare-account-id
+
+# GitHub repository info (used by generate-admin-env.sh for version links)
+# GITHUB_REPO=https://github.com/your-username/een-mobile-proxy
+# GITHUB_BRANCH=develop
+
+# Test credentials (used by generate-admin-env.sh for Playwright E2E tests)
+# TEST_USER=your-admin-email@example.com
+# TEST_PASSWORD=your-admin-password
+# TEST_NON_ADMIN_USER=your-non-admin-email@example.com
+# TEST_NON_ADMIN_PASSWORD=your-non-admin-password

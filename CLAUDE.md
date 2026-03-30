@@ -29,7 +29,7 @@ The proxy is the only component with access to CLIENT_SECRET. Mobile clients com
 The admin app follows this Vue 3 structure:
 - **Pinia stores** (`src/stores/auth.js`) — composition API style, manage auth state, token refresh, session tracking
 - **Services** (`src/services/`) — API call wrappers (auth.js, admin.js, admin.test.js)
-- **CSP plugin** (`vite-plugin-csp.js`) — Vite plugin that injects `connect-src` at build time based on `VITE_PROXY_URL`
+- **CSP plugin** (`vite-plugin-csp.js`) — Vite plugin that injects `connect-src` at build time with EEN OAuth domains
 - Auth store validates `hostname` from EEN token responses against a domain allowlist before storing
 
 ## Commands
@@ -65,7 +65,7 @@ npm test                         # Runs scripts/run-all-tests.sh (proxy + admin 
 
 ## Key Conventions
 
-- **Single-file worker**: All proxy logic lives in `proxy/src/index.js` (~1680 lines). No module splitting.
+- **Single-file worker**: All proxy logic lives in `proxy/src/index.js` (~1670 lines). No module splitting.
 - **Version bumping**: Husky pre-commit hook auto-increments patch version in package.json for changed directories. It also checks proxy deployment status (skip with `SKIP_DEPLOYMENT_CHECK=1`).
 - **Version numbers differ** across proxy and admin — this is intentional.
 - **Environment files**: Proxy uses `.dev.vars` (secrets for both local dev and deployment). Admin uses `.env` (auto-generated from `proxy/.dev.vars` via `scripts/generate-admin-env.sh`) with `VITE_` prefix.

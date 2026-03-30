@@ -59,7 +59,14 @@
                   :class="healthStatus === 'ok' ? 'bg-green-500' : 'bg-red-500'"
                 ></span>
                 <span :class="['text-sm font-medium', isDarkMode ? 'text-white' : 'text-gray-900']">Proxy Health</span>
-                <span :class="['text-xs font-mono', isDarkMode ? 'text-gray-500' : 'text-gray-400']">{{ proxyUrl }}</span>
+                <a
+                  v-if="cloudflareDashboardUrl"
+                  :href="cloudflareDashboardUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  :class="['text-xs font-mono underline hover:opacity-80', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+                >{{ proxyUrl }}</a>
+                <span v-else :class="['text-xs font-mono', isDarkMode ? 'text-gray-500' : 'text-gray-400']">{{ proxyUrl }}</span>
               </div>
               <div class="flex items-center space-x-2">
                 <button
@@ -465,6 +472,11 @@ const githubRepoUrl = computed(() => {
   return `${baseUrl}/tree/${branch}`
 })
 const proxyUrl = window.location.origin
+const cloudflareDashboardUrl = computed(() => {
+  const accountId = import.meta.env.VITE_CLOUDFLARE_ACCOUNT_ID
+  if (!accountId || !proxyUrl.startsWith('https')) return null
+  return `https://dash.cloudflare.com/${accountId}/workers/services/view/een-mobile-proxy/production/observability`
+})
 
 function formatTime(date) {
   const h = date.getHours().toString().padStart(2, '0')

@@ -67,7 +67,7 @@ Cloudflare Worker (proxy/src/index.js)
 een-mobile-proxy/
 ├── proxy/           # Cloudflare Worker OAuth proxy
 │   ├── src/
-│   │   └── index.js # All proxy logic (~1680 lines)
+│   │   └── index.js # All proxy logic (~1670 lines)
 │   ├── test/        # Vitest test suites
 │   ├── scripts/     # Deploy and version scripts
 │   └── wrangler.toml
@@ -281,6 +281,7 @@ Generate with: `./scripts/generate-admin-env.sh`
 | `VITE_EEN_CLIENT_ID` | `CLIENT_ID` | EEN OAuth Client ID |
 | `VITE_GITHUB_REPO` | `GITHUB_REPO` | GitHub repo URL (for version links) |
 | `VITE_GITHUB_BRANCH` | `GITHUB_BRANCH` | Git branch (for version links) |
+| `VITE_CLOUDFLARE_ACCOUNT_ID` | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (for dashboard links) |
 | `TEST_USER` | `TEST_USER` | Test admin email (Playwright) |
 | `TEST_PASSWORD` | `TEST_PASSWORD` | Test admin password (Playwright) |
 | `TEST_NON_ADMIN_USER` | `TEST_NON_ADMIN_USER` | Non-admin email for rejection tests |

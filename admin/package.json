@@ -1,7 +1,7 @@
 {
   "name": "een-oauth-admin",
   "displayName": "EEN Mobile Proxy Admin",
-  "version": "1.1.12",
+  "version": "1.1.13",
   "private": true,
   "type": "module",
   "scripts": {

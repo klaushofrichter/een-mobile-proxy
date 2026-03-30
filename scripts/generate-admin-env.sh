@@ -45,6 +45,7 @@ TEST_NON_ADMIN_USER=$(read_var TEST_NON_ADMIN_USER)
 TEST_NON_ADMIN_PASSWORD=$(read_var TEST_NON_ADMIN_PASSWORD)
 GITHUB_REPO=$(read_var GITHUB_REPO)
 GITHUB_BRANCH=$(read_var GITHUB_BRANCH)
+CLOUDFLARE_ACCOUNT_ID=$(read_var CLOUDFLARE_ACCOUNT_ID)
 
 cat > "$TARGET" << EOF
 # Auto-generated from proxy/.dev.vars — do not edit directly
@@ -64,6 +65,9 @@ TEST_NON_ADMIN_PASSWORD=${TEST_NON_ADMIN_PASSWORD}
 # GitHub repository info (for version links)
 VITE_GITHUB_REPO=${GITHUB_REPO}
 VITE_GITHUB_BRANCH=${GITHUB_BRANCH}
+
+# Cloudflare account ID (for dashboard links)
+VITE_CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
 EOF
 
 echo -e "${GREEN}Generated $TARGET from $SOURCE${NC}"
