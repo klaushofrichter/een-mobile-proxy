@@ -76,7 +76,7 @@ upload_secret() {
     fi
 
     echo -n "Uploading $gh_secret_name... "
-    if echo "$value" | gh secret set "$gh_secret_name" 2>/dev/null; then
+    if printf '%s' "$value" | gh secret set "$gh_secret_name" 2>/dev/null; then
         echo -e "${GREEN}✓${NC}"
     else
         echo -e "${RED}✗ Failed${NC}"
