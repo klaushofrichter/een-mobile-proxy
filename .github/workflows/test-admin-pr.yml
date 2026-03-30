@@ -52,6 +52,12 @@ jobs:
         run: npx playwright install chromium
         working-directory: admin
 
+      - name: Build admin SPA
+        run: npm run build
+        working-directory: admin
+        env:
+          VITE_EEN_CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
+
       - name: Create proxy dev vars
         run: |
           echo "=== Creating .dev.vars ==="
