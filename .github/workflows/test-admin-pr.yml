@@ -43,15 +43,13 @@ jobs:
           printf 'CLIENT_ID="%s"\n' "$CLIENT_ID" > .dev.vars
           printf 'CLIENT_SECRET="%s"\n' "$CLIENT_SECRET" >> .dev.vars
           printf 'ADMIN_EMAILS="%s"\n' "$ADMIN_EMAILS" >> .dev.vars
-          printf 'ALLOWED_SCHEMES="http,%s"\n' "$ALLOWED_SCHEMES" >> .dev.vars
-          printf 'ENVIRONMENT="%s"\n' "$ENVIRONMENT" >> .dev.vars
+          printf 'ALLOWED_SCHEMES="http"\n' >> .dev.vars
+          printf 'ENVIRONMENT="development"\n' >> .dev.vars
         working-directory: proxy
         env:
           CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.EEN_CLIENT_SECRET }}
           ADMIN_EMAILS: ${{ secrets.TEST_USER }}
-          ALLOWED_SCHEMES: ${{ secrets.ALLOWED_SCHEMES }}
-          ENVIRONMENT: ${{ secrets.ENVIRONMENT }}
 
       - name: Run Playwright tests
         run: npx playwright test -x
@@ -62,6 +60,13 @@ jobs:
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
           TEST_NON_ADMIN_USER: ${{ secrets.TEST_NON_ADMIN_USER }}
           TEST_NON_ADMIN_PASSWORD: ${{ secrets.TEST_NON_ADMIN_PASSWORD }}
+
+      - name: Show proxy health on failure
+        if: failure()
+        run: |
+          curl -s http://127.0.0.1:3333/health 2>&1 || echo "Proxy not reachable"
+          echo "---"
+          ps aux | grep wrangler | grep -v grep || echo "No wrangler process found"
 
       - name: Upload test results
         uses: actions/upload-artifact@v4

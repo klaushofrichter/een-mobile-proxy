@@ -1088,7 +1088,8 @@ async function handleAdminSetDebugMode(request, env) {
   cachedDebugModeExpiresAt = expiresAt || 0
   cachedDebugModeTimestamp = now
 
-  debugLog(env, `Debug mode ${body.enabled ? 'enabled (expires in 10min)' : 'disabled'} by admin user`)
+  // Always log admin actions for audit trail, regardless of debug mode
+  console.log(`[AUDIT] Debug mode ${body.enabled ? 'enabled (expires in 10min)' : 'disabled'} by ${adminCheck.sessionData.userEmail}`)
 
   const response = { enabled: body.enabled }
   if (expiresAt) {
