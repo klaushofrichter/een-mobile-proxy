@@ -7,7 +7,7 @@
 #   PROXY_URL              - Override proxy URL (default: production)
 #   SKIP_DEPLOYMENT_CHECK  - Set to 1 to skip deployment check
 
-PROXY_URL="${PROXY_URL:-https://een-oauth-proxy.klaushofrichter.workers.dev}"
+PROXY_URL="${PROXY_URL:-https://een-mobile-proxy.klaushofrichter.workers.dev}"
 
 increment_version() {
     local folder="$1"
@@ -40,18 +40,11 @@ STAGED_FILES=$(git diff --cached --name-only)
 
 # Check which folders have staged changes
 proxy_has_changes=$(echo "$STAGED_FILES" | grep -q "^proxy/" && echo "1" || echo "0")
-demo1_has_changes=$(echo "$STAGED_FILES" | grep -q "^demo1/" && echo "1" || echo "0")
 admin_has_changes=$(echo "$STAGED_FILES" | grep -q "^admin/" && echo "1" || echo "0")
 
 # Increment versions for folders with changes
 if [ "$proxy_has_changes" = "1" ]; then
     if ! increment_version "proxy"; then
-        exit 1
-    fi
-fi
-
-if [ "$demo1_has_changes" = "1" ]; then
-    if ! increment_version "demo1"; then
         exit 1
     fi
 fi

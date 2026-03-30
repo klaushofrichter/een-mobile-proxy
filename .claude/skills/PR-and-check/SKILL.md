@@ -25,14 +25,13 @@ description: Use this skill when you are requested to create a PR for a feature 
   - wait a few seconds for the proxy to start, then verify it's running
 - Run the remaining test suites sequentially - these can not run in parallel as the apps use the same port 3333
   - run the admin tests: `npm test` in the `admin` directory
-  - run the demo1 tests: `npx playwright test` in the `demo1` directory
   - if any test fails, analyse the failure, report findings, and stop
 - Cleanup: terminate the local proxy after tests complete
   - `lsof -i :3333 -t | xargs kill`
 
 ## 4. Create PR
 - Get version numbers for the PR body:
-  - `jq -r .version proxy/package.json` (and similarly for admin, demo1)
+  - `jq -r .version proxy/package.json` (and similarly for admin)
 - Create a well-formatted PR from the feature branch to develop:
   - use `gh pr create --base develop --title "<title>" --body "<body>"` with a HEREDOC for the body
   - highlight the changes and the purpose of the feature branch

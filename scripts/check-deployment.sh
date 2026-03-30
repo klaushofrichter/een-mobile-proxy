@@ -14,7 +14,7 @@ if ! command -v node &> /dev/null; then
     exit 1
 fi
 
-PROXY_URL="${PROXY_URL:-https://een-oauth-proxy.klaushofrichter.workers.dev}"
+PROXY_URL="${PROXY_URL:-https://een-mobile-proxy.klaushofrichter.workers.dev}"
 
 # Validate PROXY_URL format to prevent command injection
 if [[ ! "$PROXY_URL" =~ ^https?:// ]]; then

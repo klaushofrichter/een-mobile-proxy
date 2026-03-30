@@ -59,7 +59,6 @@ jobs:
           printf 'CLIENT_ID="%s"\n' "$CLIENT_ID" > .dev.vars
           printf 'CLIENT_SECRET="%s"\n' "$CLIENT_SECRET" >> .dev.vars
           printf 'ADMIN_EMAILS="%s"\n' "$ADMIN_EMAILS" >> .dev.vars
-          printf 'ALLOWED_ORIGINS="%s"\n' "http://127.0.0.1:3333" >> .dev.vars
           echo "✅ .dev.vars created"
           echo "=== .dev.vars contents (masked) ==="
           sed 's/=.*/=***/' .dev.vars
