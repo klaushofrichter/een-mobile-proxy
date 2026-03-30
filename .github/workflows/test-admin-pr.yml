@@ -43,7 +43,7 @@ jobs:
           printf 'CLIENT_ID="%s"\n' "$CLIENT_ID" > .dev.vars
           printf 'CLIENT_SECRET="%s"\n' "$CLIENT_SECRET" >> .dev.vars
           printf 'ADMIN_EMAILS="%s"\n' "$ADMIN_EMAILS" >> .dev.vars
-          printf 'ALLOWED_SCHEMES="%s"\n' "$ALLOWED_SCHEMES" >> .dev.vars
+          printf 'ALLOWED_SCHEMES="http,%s"\n' "$ALLOWED_SCHEMES" >> .dev.vars
         working-directory: proxy
         env:
           CLIENT_ID: ${{ secrets.VITE_EEN_CLIENT_ID }}
