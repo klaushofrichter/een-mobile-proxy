@@ -953,20 +953,14 @@ async function handleAdminRemoveSessions(request, env) {
   const currentSessionId = getSessionId(request, env)
   const { keys, truncated } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
 
-  let deletedCount = 0
-  for (const key of keys) {
-    if (key.name === currentSessionId || isSpecialKVKey(key.name)) {
-      continue
-    }
+  const toDelete = keys.filter(k => k.name !== currentSessionId && !isSpecialKVKey(k.name))
+  await Promise.all(toDelete.map(k => env.EEN_OAUTH_SESSIONS.delete(k.name)))
 
-    await env.EEN_OAUTH_SESSIONS.delete(key.name)
-    deletedCount++
-  }
-
+  const sessionCount = keys.filter(k => !isSpecialKVKey(k.name)).length
   return jsonResponse({
     message: 'Sessions removed successfully',
-    deletedSessions: deletedCount,
-    remainingSessions: keys.filter(k => !isSpecialKVKey(k.name)).length - deletedCount,
+    deletedSessions: toDelete.length,
+    remainingSessions: truncated ? null : Math.max(0, sessionCount - toDelete.length),
     ...(truncated && { truncated })
   })
 }
