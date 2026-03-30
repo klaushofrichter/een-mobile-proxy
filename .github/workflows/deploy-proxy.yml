@@ -15,7 +15,7 @@ on:
         type: boolean
   push:
     branches: [production]
-    paths: ['proxy/**']
+    paths: ['proxy/**', 'admin/**']
 
 env:
   PROXY_URL: https://een-mobile-proxy.klaushofrichter.workers.dev
@@ -89,11 +89,21 @@ jobs:
           DEPLOYED_VERSION="${{ steps.deployed.outputs.deployed_version }}"
           FORCE_DEPLOY="${{ inputs.force_deploy }}"
 
+          # Check if admin files changed in this push (triggers deploy even if proxy version matches)
+          ADMIN_CHANGED="false"
+          if git diff HEAD~1 --name-only 2>/dev/null | grep -q '^admin/'; then
+            ADMIN_CHANGED="true"
+            echo "Admin files changed in this push"
+          fi
+
           if [ "$FORCE_DEPLOY" = "true" ]; then
             echo "::warning::Force deploy requested - bypassing version check"
             echo "should_deploy=true" >> $GITHUB_OUTPUT
           elif [ "$PACKAGE_VERSION" != "$DEPLOYED_VERSION" ]; then
             echo "Version mismatch: $PACKAGE_VERSION != $DEPLOYED_VERSION"
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          elif [ "$ADMIN_CHANGED" = "true" ]; then
+            echo "Admin files changed — deploying to update embedded SPA"
             echo "should_deploy=true" >> $GITHUB_OUTPUT
           else
             echo "Versions match: $PACKAGE_VERSION = $DEPLOYED_VERSION"
@@ -166,8 +176,7 @@ jobs:
           echo "Setting ALLOWED_SCHEMES..."
           printf '%s' "${{ secrets.ALLOWED_SCHEMES }}" | npx wrangler secret put ALLOWED_SCHEMES
 
-          echo "Setting ENVIRONMENT..."
-          printf '%s' "${{ secrets.ENVIRONMENT }}" | npx wrangler secret put ENVIRONMENT
+          # ENVIRONMENT is set in wrangler.toml as a plain text binding, not a secret
 
           echo "Setting ALLOWED_API_DOMAINS..."
           printf '%s' "${{ secrets.ALLOWED_API_DOMAINS }}" | npx wrangler secret put ALLOWED_API_DOMAINS
