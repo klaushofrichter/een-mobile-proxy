@@ -243,12 +243,15 @@ cd proxy && npm run deploy
 
 The deploy script builds the admin SPA, deploys the Worker, sets secrets, and stores the version in KV.
 
-### CI/CD
+### Branching & CI/CD
+
+- **`develop`** — main development branch (unprotected)
+- **`production`** — protected branch; merges require passing status checks (review, CodeQL, branch rules, tests)
 
 GitHub Actions workflows handle:
-- AI code review (Claude + Gemini) on PRs
+- AI code review (Claude + Gemini) on PRs to production
 - Automated testing on PRs to production
-- Proxy deployment to Cloudflare Workers with automatic rollback on failure
+- Proxy deployment to Cloudflare Workers on merge to production, with automatic rollback on failure
 - Slack notifications for deployments and releases
 
 ## Environment Variables Reference

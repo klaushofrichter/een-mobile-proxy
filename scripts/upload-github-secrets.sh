@@ -76,7 +76,7 @@ upload_secret() {
     fi
 
     echo -n "Uploading $gh_secret_name... "
-    if echo "$value" | gh secret set "$gh_secret_name" 2>/dev/null; then
+    if printf '%s' "$value" | gh secret set "$gh_secret_name" 2>/dev/null; then
         echo -e "${GREEN}✓${NC}"
     else
         echo -e "${RED}✗ Failed${NC}"
@@ -98,7 +98,9 @@ echo ""
 echo "--- Test Credentials ---"
 upload_secret "TEST_USER" "TEST_USER"
 upload_secret "TEST_PASSWORD" "TEST_PASSWORD"
-# The test user must be in ADMIN_EMAILS to have admin access for admin app tests
+upload_secret "TEST_NON_ADMIN_USER" "TEST_NON_ADMIN_USER"
+upload_secret "TEST_NON_ADMIN_PASSWORD" "TEST_NON_ADMIN_PASSWORD"
+# TEST_USER must be in ADMIN_EMAILS for admin access; TEST_NON_ADMIN_USER must NOT be in ADMIN_EMAILS
 
 echo ""
 echo "--- API Keys ---"
@@ -108,8 +110,9 @@ upload_secret "GEMINI_API_KEY" "GEMINI_API_KEY"
 echo ""
 echo "--- Proxy Configuration ---"
 upload_secret "ADMIN_EMAILS" "ADMIN_EMAILS"
-upload_secret "ALLOWED_ORIGINS" "ALLOWED_ORIGINS"
+upload_secret "ALLOWED_SCHEMES" "ALLOWED_SCHEMES"
 upload_secret "ALLOWED_API_DOMAINS" "ALLOWED_API_DOMAINS"
+upload_secret "ENVIRONMENT" "ENVIRONMENT"
 upload_secret "REFRESH_TOKEN_TTL" "REFRESH_TOKEN_TTL"
 upload_secret "MAX_KV_KEYS" "MAX_KV_KEYS"
 

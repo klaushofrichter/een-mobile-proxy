@@ -311,6 +311,11 @@ async function listAllKVKeys(kvNamespace, options = {}, env = null) {
     cursor = result.list_complete ? undefined : result.cursor
   } while (cursor && allKeys.length < MAX_KEYS)
 
+  // Trim to MAX_KEYS if a batch pushed us over the limit
+  if (allKeys.length > MAX_KEYS) {
+    allKeys.length = MAX_KEYS
+  }
+
   const truncated = allKeys.length >= MAX_KEYS && !!cursor
   if (truncated && env) {
     debugError(env, `listAllKVKeys truncated at ${MAX_KEYS} keys (prefix: ${options.prefix || 'none'})`)
@@ -862,7 +867,7 @@ async function handleRevoke(request, env) {
     await env.EEN_OAUTH_SESSIONS.delete(sessionId)
   }
 
-  return jsonResponse({ message: 'Token revoked successfully' })
+  return jsonResponse({ message: 'Token revoked successfully' }, 200, { 'Cache-Control': 'no-store' })
 }
 
 // ============================================================================
@@ -948,20 +953,14 @@ async function handleAdminRemoveSessions(request, env) {
   const currentSessionId = getSessionId(request, env)
   const { keys, truncated } = await listAllKVKeys(env.EEN_OAUTH_SESSIONS, {}, env)
 
-  let deletedCount = 0
-  for (const key of keys) {
-    if (key.name === currentSessionId || isSpecialKVKey(key.name)) {
-      continue
-    }
+  const toDelete = keys.filter(k => k.name !== currentSessionId && !isSpecialKVKey(k.name))
+  await Promise.all(toDelete.map(k => env.EEN_OAUTH_SESSIONS.delete(k.name)))
 
-    await env.EEN_OAUTH_SESSIONS.delete(key.name)
-    deletedCount++
-  }
-
+  const sessionCount = keys.filter(k => !isSpecialKVKey(k.name)).length
   return jsonResponse({
     message: 'Sessions removed successfully',
-    deletedSessions: deletedCount,
-    remainingSessions: 1,
+    deletedSessions: toDelete.length,
+    remainingSessions: truncated ? null : Math.max(0, sessionCount - toDelete.length),
     ...(truncated && { truncated })
   })
 }
@@ -1083,7 +1082,8 @@ async function handleAdminSetDebugMode(request, env) {
   cachedDebugModeExpiresAt = expiresAt || 0
   cachedDebugModeTimestamp = now
 
-  console.log(`[DEBUG] Debug mode ${body.enabled ? 'enabled (expires in 10min)' : 'disabled'} by ${adminCheck.sessionData.userEmail}`)
+  // Always log admin actions for audit trail, regardless of debug mode
+  console.log(`[AUDIT] Debug mode ${body.enabled ? 'enabled (expires in 10min)' : 'disabled'} by ${adminCheck.sessionData.userEmail}`)
 
   const response = { enabled: body.enabled }
   if (expiresAt) {
@@ -1429,21 +1429,25 @@ async function handleAdminRateLimitStats(request, env) {
     }
   }
 
-  // Fetch actual counts for current entries
-  for (const key of rateLimitKeys) {
-    try {
-      const countStr = await env.EEN_OAUTH_SESSIONS.get(key.name)
-      const count = countStr ? parseInt(countStr, 10) : 0
-      const parts = key.name.split(':')
-      if (parts.length >= 4) {
-        const category = parts[1]
-        if (stats.byCategory[category]) {
-          stats.byCategory[category].count += count
-        }
+  // Fetch actual counts for current entries (parallel to avoid N+1)
+  const kvResults = await Promise.all(
+    rateLimitKeys.map(key =>
+      env.EEN_OAUTH_SESSIONS.get(key.name)
+        .then(val => ({ name: key.name, value: val }))
+        .catch(e => {
+          debugError(env, 'Failed to fetch rate limit stat:', key.name, e.message)
+          return { name: key.name, value: null }
+        })
+    )
+  )
+  for (const { name, value } of kvResults) {
+    const count = value ? parseInt(value, 10) : 0
+    const parts = name.split(':')
+    if (parts.length >= 4) {
+      const category = parts[1]
+      if (stats.byCategory[category]) {
+        stats.byCategory[category].count += count
       }
-    } catch (e) {
-      // Log error but continue processing other keys
-      debugError(env, 'Failed to fetch rate limit stat:', key.name, e.message)
     }
   }
 
